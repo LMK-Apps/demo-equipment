@@ -151,13 +151,28 @@ const daysBetween = (a, b) => Math.round((new Date(b + "T00:00:00") - new Date(a
 const EQ_STATUS = { available:["사용 가능","p-ok"], onloan:["대여 중","p-info"], inspect:["점검 중","p-warn"], repair:["수리 중","p-bad"], retired:["폐기",""] };
 const LOAN_STATUS = { reserved:["예약","p-acc"], out:["출고","p-info"], checking:["반납 확인 중","p-warn"], done:["반납 완료","p-ok"], cancelled:["취소",""] };
 const OUT_STATUS = { pending:["요청 전","p-warn"], requested:["요청 완료","p-acc"], in_transit:["배송 중","p-info"], delivered:["도착","p-ok"] };
-const PICK_STATUS = { scheduled:["회수 예정",""], pending:["회수 요청 전","p-warn"], requested:["회수 요청 완료","p-acc"], done:["회수 완료","p-ok"] };
+const PICK_STATUS = { scheduled:["회수 예정",""], pending:["회수 요청 전","p-warn"], requested:["회수 요청 완료","p-acc"], done:["회수 완료","p-ok"], cancelled:["회수 취소",""] };
+const RETURN_METHODS = { drop_munjeong:"직접 반납 – 문정", drop_uiwang:"직접 반납 – 의왕", pickup:"물류사 회수 요청" };
 const USER_STATUS = { pending:["승인 대기","p-warn"], active:["사용 중","p-ok"], disabled:["사용 중지",""] };
 const CATS = ["BLS","ALS","환자 시뮬레이터","술기 트레이너","소프트웨어","기타"];
 const LOCS = ["문정","의왕"];
 const PURPOSES = ["고객 데모","전시회","교육·워크숍","학회","내부 교육","기타"];
 const CONDS = { ok:"정상", minor:"경미한 손상", broken:"파손", missing:"구성품 누락" };
 const ACTIVE = s => s === "reserved" || s === "out";
+const CHECK_PILL = { ok:"p-ok", minor:"p-warn", broken:"p-bad", missing:"p-bad" };
+const locGroup = loc => LOCS.includes(loc) ? loc : "기타";
+function locPicker(px, cur) {
+  const etc = !!cur && !LOCS.includes(cur);
+  return `<label class="f"><span>보관 위치</span><select id="${px}Loc">${LOCS.map(c => `<option ${cur === c ? "selected" : ""}>${c}</option>`).join("")}<option value="__etc" ${etc ? "selected" : ""}>기타 (직접 기록)</option></select></label>
+    <label class="f" id="${px}LocEtcWrap" ${etc ? "" : "hidden"}><span>기타 위치</span><input id="${px}LocEtc" value="${esc(etc ? cur : "")}" placeholder="예: 물류사 창고, OO병원"></label>`;
+}
+function bindLocPicker(m, px) { $(`#${px}Loc`, m).addEventListener("change", ev => { $(`#${px}LocEtcWrap`, m).hidden = ev.target.value !== "__etc"; }); }
+function locValue(m, px) { const v = $(`#${px}Loc`, m).value; return v === "__etc" ? $(`#${px}LocEtc`, m).value.trim() : v; }
+function checkCell(e) {
+  if (!e.last_check) return `<span class="meta">기록 없음</span>`;
+  const who = e.last_check_source === "self" ? "반납자 자가점검" : "관리자 확인";
+  return `<span class="pill ${CHECK_PILL[e.last_check] || ""}">${esc(CONDS[e.last_check])}</span><div class="meta">${who} · ${fmtT(e.last_check_at)}${e.last_check_note ? `<br>${esc(e.last_check_note)}` : ""}</div>`;
+}
 const pill = (map, k) => { const [t, c] = map[k] || [k || "–", ""]; return `<span class="pill ${c}">${esc(t)}</span>`; };
 
 if (!window.supabase || SUPABASE_KEY.includes("REPLACE_ME")) {
@@ -171,7 +186,7 @@ let session = null, profile = null;
 let me = { id: null, isAdmin: false };
 let equipment = [], loans = [], shipments = [], people = [];
 let view = (location.hash || "").slice(1) || "home";
-let filters = { eqQ: "", eqCat: "", ledgerQ: "", ledgerSt: "open" };
+let filters = { eqQ: "", eqCat: "", eqLoc: "", ledgerQ: "", ledgerSt: "open" };
 let draft = { start: todayStr(), due: addDays(todayStr(), 7), picks: new Set() };
 
 const isOverdue = l => l.status === "out" && l.due_date < todayStr();
@@ -276,31 +291,40 @@ function vHome() {
     <div class="panel"><h3>연체</h3><div class="list">${out.length ? out.map(l => loanLine(l, `<span class="pill p-bad">${daysBetween(l.due_date, t)}일 지남</span>`)).join("") : `<div class="empty">연체된 장비가 없어요.</div>`}</div></div>
     <div class="panel"><h3>출고 예정 (오늘·내일)</h3><div class="list">${startSoon.length ? startSoon.map(l => loanLine(l, me.isAdmin ? `<button class="btn sm pri" data-act="checkout" data-id="${l.id}">출고 처리</button>` : pill(LOAN_STATUS, l.status))).join("") : `<div class="empty">예정된 출고가 없어요.</div>`}</div></div>
     <div class="panel"><h3>오늘 반납 예정</h3><div class="list">${dueToday.length ? dueToday.map(l => loanLine(l)).join("") : `<div class="empty">오늘 반납 예정인 장비가 없어요.</div>`}</div></div>
-    <div class="panel"><h3>반납 점검 대기</h3><div class="list">${checking.length ? checking.map(l => loanLine(l, me.isAdmin ? `<button class="btn sm pri" data-act="inspect" data-id="${l.id}">점검</button>` : pill(LOAN_STATUS, l.status))).join("") : `<div class="empty">점검을 기다리는 장비가 없어요.</div>`}</div></div>
+    <div class="panel"><h3>반납 점검 대기</h3><div class="list">${checking.length ? checking.map(l => loanLine(l, me.isAdmin ? `<button class="btn sm pri" data-act="inspect" data-id="${l.id}">반납 확인</button>` : pill(LOAN_STATUS, l.status))).join("") : `<div class="empty">점검을 기다리는 장비가 없어요.</div>`}</div></div>
   </div>`;
 }
 
 function vEquip() {
   const q = filters.eqQ.trim().toLowerCase();
-  const list = equipment.filter(e => (!filters.eqCat || e.category === filters.eqCat) && (!q || `${e.asset_no} ${e.name} ${e.item_no} ${e.serial_no}`.toLowerCase().includes(q)));
+  const list = equipment.filter(e => (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.asset_no} ${e.name} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q)));
   const t = todayStr();
+  const byLoc = [...LOCS, "기타"].map(k => [k, equipment.filter(e => locGroup(e.location) === k && e.status !== "retired").length]);
+  const needRepair = equipment.filter(e => e.status === "repair").length;
   return `
-  <div class="head"><div class="grow"><h2>장비</h2><p class="sub">장비 ${equipment.length}대. 행을 누르면 예약 일정과 구성품을 볼 수 있어요.</p></div>
+  <div class="head"><div class="grow"><h2>장비</h2><p class="sub">장비 ${equipment.length}대. 보관 위치와 최근 점검 결과는 반납 신청과 관리자 점검 때 자동으로 바뀌어요. 행을 누르면 자세히 볼 수 있어요.</p></div>
     ${me.isAdmin ? `<button class="btn pri" data-act="eqNew">장비 등록</button>` : ""}</div>
+  <div class="stats">${byLoc.map(([k, n]) => `<div class="stat"><b>${n}</b><span>${k} 보관</span></div>`).join("")}
+    <div class="stat ${needRepair ? "alert" : ""}"><b>${needRepair}</b><span>수리 필요</span></div></div>
   <div class="toolbar">
-    <input id="eqQ" type="search" placeholder="제품명·자산번호·품목번호 검색" value="${esc(filters.eqQ)}" style="flex:1;min-width:200px">
+    <input id="eqQ" type="search" placeholder="제품명·자산번호·위치 검색" value="${esc(filters.eqQ)}" style="flex:1;min-width:200px">
+    <select id="eqLoc"><option value="">전체 위치</option>${[...LOCS, "기타"].map(c => `<option ${filters.eqLoc === c ? "selected" : ""}>${c}</option>`).join("")}</select>
     <select id="eqCat"><option value="">전체 분류</option>${CATS.map(c => `<option ${filters.eqCat === c ? "selected" : ""}>${c}</option>`).join("")}</select>
   </div>
   ${equipment.length === 0 ? `<div class="panel"><div class="empty">아직 등록된 장비가 없어요. ${me.isAdmin ? "‘장비 등록’으로 첫 장비를 추가해 주세요." : "장비 관리자가 장비를 등록하면 여기에 나타나요."}</div></div>` : `
   <div class="tbl-wrap"><table>
-    <thead><tr><th>자산번호</th><th>제품명</th><th>분류</th><th>위치</th><th>상태</th><th>다음 예약</th></tr></thead>
+    <thead><tr><th>자산번호</th><th>제품명</th><th>분류</th><th>보관 위치</th><th>상태</th><th>최근 점검</th><th>다음 예약</th></tr></thead>
     <tbody>${list.map(e => {
       const next = loans.filter(l => l.equipment_id === e.id && ACTIVE(l.status) && l.due_date >= t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
+      const cur = e.status === "onloan" ? loans.find(l => l.equipment_id === e.id && l.status === "out") : null;
       return `<tr data-act="eqView" data-id="${e.id}" style="cursor:pointer">
         <td class="mono">${esc(e.asset_no)}</td><td>${esc(e.name)}<div class="meta">${esc(e.item_no || "")}</div></td>
-        <td>${esc(e.category)}</td><td>${esc(e.location)}</td><td>${pill(EQ_STATUS, e.status)}</td>
+        <td>${esc(e.category)}</td>
+        <td>${esc(e.location)}${cur ? `<div class="meta">지금: ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</div>` : ""}</td>
+        <td>${pill(EQ_STATUS, e.status)}</td>
+        <td>${checkCell(e)}</td>
         <td class="mono">${next ? `${fmtD(next.start_date)}–${fmtD(next.due_date)}` : "–"}</td></tr>`;
-    }).join("") || `<tr><td colspan="6" class="empty">검색 결과가 없어요.</td></tr>`}</tbody>
+    }).join("") || `<tr><td colspan="7" class="empty">조건에 맞는 장비가 없어요.</td></tr>`}</tbody>
   </table></div>`}`;
 }
 
@@ -368,14 +392,14 @@ function vMine() {
   const past = mine.filter(l => !open.includes(l)).slice(0, 30);
   const actions = l => {
     if (l.status === "reserved") return `<button class="btn sm" data-act="extend" data-id="${l.id}">연장</button><button class="btn sm danger" data-act="cancel" data-id="${l.id}">취소</button>`;
-    if (l.status === "out") return `<button class="btn sm" data-act="extend" data-id="${l.id}">연장</button><button class="btn sm pri" data-act="return" data-id="${l.id}">반납</button>`;
+    if (l.status === "out") return `<button class="btn sm" data-act="extend" data-id="${l.id}">연장</button><button class="btn sm pri" data-act="return" data-id="${l.id}">반납 신청</button>`;
     return "";
   };
   const line = l => { const e = eqById(l.equipment_id) || {}, ri = reqInfo(l); return `<div class="row"><div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(e.asset_no)}</span>
       <div class="meta"><span class="mono">${esc(l.loan_no)}</span> · ${esc(l.customer || l.purpose)}${ri ? ` · ${esc(ri)}` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? " · 배송" : ""}</div></div>
       ${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)} ${actions(l)}</div>`; };
   return `
-  <div class="head"><div class="grow"><h2>내 신청</h2><p class="sub">반납을 누르면 ‘반납 확인 중’이 되고, 장비 관리자가 상태를 점검하면 반납이 완료돼요.</p></div></div>
+  <div class="head"><div class="grow"><h2>내 신청</h2><p class="sub">반납을 누르면 반납 방법과 장비 상태를 적는 반납 신청서가 열려요. 장비 관리자가 점검하면 반납이 완료돼요.</p></div></div>
   <div class="panel"><h3>진행 중 ${open.length}건</h3><div class="list">${open.map(line).join("") || `<div class="empty">진행 중인 신청이 없어요. ‘출납 신청’에서 장비를 빌려 보세요.</div>`}</div></div>
   <div class="panel"><h3>지난 신청</h3><div class="list">${past.map(line).join("") || `<div class="empty">지난 신청이 없어요.</div>`}</div></div>`;
 }
@@ -383,19 +407,19 @@ function vMine() {
 function groupBy(arr, k) { const m = new Map(); for (const x of arr) { if (!m.has(x[k])) m.set(x[k], []); m.get(x[k]).push(x); } return [...m.values()]; }
 
 function vShip() {
-  const groups = groupBy(loans.filter(l => l.delivery && l.status !== "cancelled"), "loan_no").sort((a, b) => a[0].start_date.localeCompare(b[0].start_date));
-  const openG = groups.filter(g => { const o = shipOf(g[0].loan_no, "outbound"), p = shipOf(g[0].loan_no, "pickup"); return (o && o.status !== "delivered") || (p && p.status !== "done"); });
+  const groups = groupBy(loans.filter(l => l.status !== "cancelled" && (l.delivery || shipOf(l.loan_no, "pickup"))), "loan_no").sort((a, b) => a[0].start_date.localeCompare(b[0].start_date));
+  const openG = groups.filter(g => { const o = shipOf(g[0].loan_no, "outbound"), p = shipOf(g[0].loan_no, "pickup"); return (o && o.status !== "delivered") || (p && !["done", "cancelled"].includes(p.status)); });
   const card = g => {
-    const l = g[0], o = shipOf(l.loan_no, "outbound") || {}, p = shipOf(l.loan_no, "pickup");
+    const l = g[0], o = shipOf(l.loan_no, "outbound") || {}, p = shipOf(l.loan_no, "pickup"), c = o.id ? o : (p || {});
     return `<div class="panel">
       <div class="head"><div class="grow"><h3><span class="mono">${esc(l.loan_no)}</span> · ${esc(l.customer || l.purpose)}</h3>
         <div class="meta">${g.map(x => `${esc(eqById(x.equipment_id)?.name)} (${esc(eqById(x.equipment_id)?.asset_no)})`).join(", ")}</div></div>
         ${[...new Set(g.map(x => x.status))].map(k => pill(LOAN_STATUS, k)).join(" ")}</div>
-      <div class="meta">수령 ${esc(o.recipient)} · ${esc(o.phone)} · ${esc(o.address)}</div>
-      <div class="row"><div class="main"><b>출고 배송</b><div class="meta">도착 희망 ${fmtD(o.requested_date)}${o.carrier ? ` · ${esc(o.carrier)}` : ""}${o.tracking_no ? ` · 운송장 <span class="mono">${esc(o.tracking_no)}</span>` : ""}</div></div>
+      <div class="meta">${o.id ? "수령" : "회수 담당"} ${esc(c.recipient)} · ${esc(c.phone)} · ${esc(c.address)}</div>
+      ${o.id ? `<div class="row"><div class="main"><b>출고 배송</b><div class="meta">도착 희망 ${fmtD(o.requested_date)}${o.carrier ? ` · ${esc(o.carrier)}` : ""}${o.tracking_no ? ` · 운송장 <span class="mono">${esc(o.tracking_no)}</span>` : ""}</div></div>
         ${pill(OUT_STATUS, o.status)}
         <button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="outbound">요청 메일</button>
-        ${me.isAdmin && o.id ? `<button class="btn sm" data-act="shipEdit" data-sid="${o.id}">상태·운송장</button>` : ""}</div>
+        ${me.isAdmin ? `<button class="btn sm" data-act="shipEdit" data-sid="${o.id}">상태·운송장</button>` : ""}</div>` : ""}
       ${p ? `<div class="row"><div class="main"><b>회수</b><div class="meta">회수 희망 ${fmtD(p.requested_date)}${p.tracking_no ? ` · 운송장 <span class="mono">${esc(p.tracking_no)}</span>` : ""}</div></div>
         ${pill(PICK_STATUS, p.status)}
         <button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="pickup">회수 메일</button>
@@ -403,7 +427,7 @@ function vShip() {
     </div>`;
   };
   return `
-  <div class="head"><div class="grow"><h2>배송 요청</h2><p class="sub">‘요청 메일’로 물류사에 보낼 문안을 복사하고, 보낸 뒤 상태를 ‘요청 완료’로 바꿔 주세요. 회수 요청은 반납을 등록하면 ‘요청 전’으로 바뀌어요.</p></div></div>
+  <div class="head"><div class="grow"><h2>배송 요청</h2><p class="sub">‘요청 메일’로 물류사에 보낼 문안을 복사하고, 보낸 뒤 상태를 ‘요청 완료’로 바꿔 주세요. 회수 요청은 반납 신청에서 ‘물류사 회수 요청’을 고르면 ‘요청 전’으로 바뀌어요.</p></div></div>
   ${openG.length ? openG.map(card).join("") : `<div class="panel"><div class="empty">처리할 배송 요청이 없어요. 출납 신청에서 ‘배송 필요’를 체크하면 여기에 나타나요.</div></div>`}`;
 }
 
@@ -420,8 +444,8 @@ function vLedger() {
   const act = l => {
     if (!me.isAdmin) return "";
     if (l.status === "reserved") return `<button class="btn sm pri" data-act="checkout" data-id="${l.id}">출고</button>`;
-    if (l.status === "out") return `<button class="btn sm" data-act="return" data-id="${l.id}">반납 등록</button>`;
-    if (l.status === "checking") return `<button class="btn sm pri" data-act="inspect" data-id="${l.id}">점검</button>`;
+    if (l.status === "out") return `<button class="btn sm" data-act="return" data-id="${l.id}">반납 신청</button>`;
+    if (l.status === "checking") return `<button class="btn sm pri" data-act="inspect" data-id="${l.id}">반납 확인</button>`;
     return "";
   };
   return `
@@ -442,7 +466,7 @@ function vLedger() {
       <td>${l.delivery && o ? pill(OUT_STATUS, o.status) : "–"}</td>
       <td>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</td>
       <td class="mono">${fmtT(l.checkout_at)}</td>
-      <td>${l.returned_at ? `<span class="mono">${fmtT(l.returned_at)}</span>` : "–"}${l.return_condition ? `<div class="meta">${esc(CONDS[l.return_condition])}${l.return_note ? ` · ${esc(l.return_note)}` : ""}</div>` : ""}</td>
+      <td>${l.returned_at ? `<span class="mono">${fmtT(l.returned_at)}</span>` : "–"}${l.return_method ? `<div class="meta">${esc(RETURN_METHODS[l.return_method])} · 자가점검 ${esc(CONDS[l.return_self_check] || "–")}${l.return_self_note ? ` (${esc(l.return_self_note)})` : ""}</div>` : ""}${l.return_condition ? `<div class="meta">점검 ${esc(CONDS[l.return_condition])}${l.return_note ? ` · ${esc(l.return_note)}` : ""}</div>` : ""}</td>
       <td>${act(l)}</td></tr>`; }).join("") || `<tr><td colspan="10" class="empty">조건에 맞는 기록이 없어요.</td></tr>`}</tbody>
   </table></div>`;
 }
@@ -525,18 +549,58 @@ function eqForm(e) {
   });
 }
 
+function verdictHtml(cond) {
+  const repair = cond === "broken" || cond === "missing";
+  return `<div><h3>장비 판정</h3><div class="fields" style="margin-top:6px">
+    <label class="check"><input type="radio" name="vd" value="ok" ${repair ? "" : "checked"}> 사용 가능</label>
+    <label class="check"><input type="radio" name="vd" value="repair" ${repair ? "checked" : ""}> 수리 필요</label></div>
+    <div class="meta">파손·구성품 누락이면 ‘수리 필요’로 자동 선택돼요. 필요하면 바꿔 주세요.</div></div>`;
+}
+function bindVerdict(m, condName) {
+  let touched = false;
+  m.querySelectorAll('input[name="vd"]').forEach(r => r.addEventListener("change", () => touched = true));
+  m.querySelectorAll(`input[name="${condName}"]`).forEach(r => r.addEventListener("change", () => {
+    if (touched || !r.checked) return;
+    const rep = r.value === "broken" || r.value === "missing";
+    m.querySelector(`input[name="vd"][value="${rep ? "repair" : "ok"}"]`).checked = true;
+  }));
+}
+function eqCheck(e) {
+  const lent = e.status === "onloan" || e.status === "inspect";
+  modal(`<h2>상태 점검 기록</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(e.asset_no)}</span>) · 실사나 수리 후 확인처럼 출납과 관계없는 점검을 기록해요.</p>
+    <div class="fields">${Object.entries(CONDS).map(([k, t]) => `<label class="check"><input type="radio" name="kc" value="${k}" ${(e.last_check || "ok") === k ? "checked" : ""}> ${t}</label>`).join("")}</div>
+    <label class="f"><span>점검 메모</span><textarea id="kNote"></textarea></label>
+    ${lent ? `<div class="notice">지금 ${esc(EQ_STATUS[e.status][0])} 상태라서 장비 상태는 바꾸지 않고 점검 결과만 기록해요.</div>` : verdictHtml(e.last_check || "ok")}
+    <div class="fields">${locPicker("k", e.location)}</div>
+    <div class="notice bad" id="kErr" hidden></div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="kOk">기록</button></div>`, m => {
+    bindLocPicker(m, "k"); if (!lent) bindVerdict(m, "kc");
+    const b = $("#kOk", m);
+    b.addEventListener("click", () => {
+      const cond = m.querySelector('input[name="kc"]:checked').value, note = $("#kNote", m).value.trim(), loc = locValue(m, "k"), err = $("#kErr", m);
+      if (cond !== "ok" && !note) { err.textContent = "손상이나 누락이 있으면 내용을 메모에 적어 주세요."; err.hidden = false; return; }
+      if (!loc) { err.textContent = "기타를 골랐다면 위치를 직접 입력해 주세요."; err.hidden = false; return; }
+      const d = { last_check: cond, last_check_note: note, last_check_source: "admin", last_check_by: me.id, last_check_at: new Date().toISOString(), location: loc };
+      if (!lent) d.status = m.querySelector('input[name="vd"]:checked').value === "repair" ? "repair" : (e.status === "repair" ? "available" : e.status);
+      busy(b, async () => { await must(sb.from("equipment").update(d).eq("id", e.id)); closeModal(); toast("점검 결과를 기록했어요."); await refresh(); });
+    });
+  });
+}
+
 function eqView(id) {
   const e = eqById(id); if (!e) return;
   const t = todayStr();
   const sched = loans.filter(l => l.equipment_id === id && ACTIVE(l.status)).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const hist = loans.filter(l => l.equipment_id === id && l.status === "done").sort((a, b) => (b.returned_at || "").localeCompare(a.returned_at || "")).slice(0, 5);
   modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta"><span class="mono">${esc(e.asset_no)}</span> · ${esc(e.item_no || "품목번호 없음")} · S/N ${esc(e.serial_no || "–")} · ${esc(e.location)}</div></div>${pill(EQ_STATUS, e.status)}</div>
+    <div><h3>최근 점검</h3><div style="margin-top:4px">${checkCell(e)}</div></div>
     <div><h3>구성품</h3><div class="meta" style="white-space:pre-wrap">${esc(e.components || "등록된 구성품이 없어요.")}</div></div>
     <div><h3>예약 일정</h3><div class="list">${sched.map(l => `<div class="row"><div class="main"><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}</span> · ${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)}</div>${l.status === "out" && l.due_date < t ? `<span class="pill p-bad">연체</span>` : pill(LOAN_STATUS, l.status)}</div>`).join("") || `<div class="empty">잡힌 예약이 없어요.</div>`}</div></div>
     <div><h3>최근 반납</h3><div class="list">${hist.map(l => `<div class="row"><div class="main"><span class="mono">${fmtT(l.returned_at)}</span> · ${esc(nameOf(l.requester_id))}</div><span class="pill ${l.return_condition === "ok" ? "p-ok" : "p-warn"}">${esc(CONDS[l.return_condition] || "–")}</span></div>`).join("") || `<div class="empty">반납 기록이 없어요.</div>`}</div></div>
     ${e.note ? `<div class="meta">메모: ${esc(e.note)}</div>` : ""}
-    <div class="actions"><button class="btn" data-close-btn>닫기</button>${me.isAdmin ? `<button class="btn" id="eEdit">수정</button>` : ""}<button class="btn pri" id="eReq" ${["repair","retired","inspect"].includes(e.status) ? "disabled" : ""}>이 장비 신청</button></div>`, m => {
+    <div class="actions"><button class="btn" data-close-btn>닫기</button>${me.isAdmin ? `<button class="btn" id="eCheck">상태 점검 기록</button><button class="btn" id="eEdit">수정</button>` : ""}<button class="btn pri" id="eReq" ${["repair","retired","inspect"].includes(e.status) ? "disabled" : ""}>이 장비 신청</button></div>`, m => {
     $("#eEdit", m)?.addEventListener("click", () => eqForm(e));
+    $("#eCheck", m)?.addEventListener("click", () => eqCheck(e));
     $("#eReq", m).addEventListener("click", () => { draft.picks = new Set([id]); closeModal(); go("request"); });
   });
 }
@@ -586,24 +650,95 @@ function extend(l) {
   });
 }
 
+function returnForm(l) {
+  const e = eqById(l.equipment_id) || {};
+  const pick = shipOf(l.loan_no, "pickup"), out = shipOf(l.loan_no, "outbound");
+  const src = pick || out || {};
+  const pickDefault = (pick && pick.requested_date) || addDays(todayStr(), 1);
+  modal(`<h2>반납 신청</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(e.asset_no)}</span>) · ${esc(l.loan_no)} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</p>
+    <div><h3>반납 방법</h3><div class="fields" style="margin-top:6px">${Object.entries(RETURN_METHODS).map(([k, t]) => `<label class="check"><input type="radio" name="rm" value="${k}"> ${t}</label>`).join("")}</div></div>
+    <div class="ship-box" id="rpBox" hidden>
+      ${pick && pick.status !== "cancelled" ? `<div class="meta">이 신청에는 회수 정보가 이미 있어요. 회수 희망일만 확인해 주세요.<br>${esc(pick.recipient)} · ${esc(pick.phone)} · ${esc(pick.address)}</div>
+        <label class="f req"><span>회수 희망일</span><input type="date" id="rpDate" value="${esc(pickDefault)}"></label>` : `<div class="fields">
+        <label class="f req"><span>담당자</span><input id="rpName" value="${esc(src.recipient || "")}"></label>
+        <label class="f req"><span>연락처</span><input id="rpPhone" inputmode="tel" value="${esc(src.phone || "")}"></label>
+        <label class="f req wide"><span>회수 주소</span><input id="rpAddr" value="${esc(src.address || "")}"></label>
+        <label class="f req"><span>회수 희망일</span><input type="date" id="rpDate" value="${esc(pickDefault)}"></label>
+        <label class="f wide"><span>회수 메모</span><input id="rpMemo" placeholder="수거 위치, 연락 가능 시간 등"></label></div>`}
+    </div>
+    <div><h3>상태 자가점검</h3><div class="fields" style="margin-top:6px">${Object.entries(CONDS).map(([k, t]) => `<label class="check"><input type="radio" name="sc" value="${k}"> ${t}</label>`).join("")}</div></div>
+    ${e.components ? `<div class="meta" style="white-space:pre-wrap">구성품: ${esc(e.components)}</div>` : ""}
+    <label class="f"><span>자가점검 메모 (손상·누락이 있으면 꼭 적어 주세요)</span><textarea id="scNote"></textarea></label>
+    <div class="notice">반납 신청 후 장비 관리자가 상태를 점검하면 반납이 완료돼요.</div>
+    <div class="notice bad" id="rErr" hidden></div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="rOk">반납 신청</button></div>`, m => {
+    m.querySelectorAll('input[name="rm"]').forEach(r => r.addEventListener("change", () => { $("#rpBox", m).hidden = r.value !== "pickup" || !r.checked; }));
+    const b = $("#rOk", m);
+    b.addEventListener("click", async () => {
+      const err = $("#rErr", m), show = t => { err.textContent = t; err.hidden = false; };
+      err.hidden = true;
+      const method = m.querySelector('input[name="rm"]:checked')?.value;
+      const self = m.querySelector('input[name="sc"]:checked')?.value;
+      const note = $("#scNote", m).value.trim();
+      if (!method) return show("반납 방법을 골라 주세요.");
+      if (!self) return show("장비 상태를 골라 주세요.");
+      if (self !== "ok" && !note) return show("손상이나 누락이 있으면 내용을 메모에 적어 주세요.");
+      let pickup = null;
+      if (method === "pickup") {
+        const date = $("#rpDate", m)?.value;
+        if (!date) return show("회수 희망일을 골라 주세요.");
+        pickup = { date };
+        if ($("#rpName", m)) {
+          Object.assign(pickup, { recipient: $("#rpName", m).value.trim(), phone: $("#rpPhone", m).value.trim(), address: $("#rpAddr", m).value.trim(), memo: $("#rpMemo", m).value.trim() });
+          if (!pickup.recipient || !pickup.phone || !pickup.address) return show("담당자, 연락처, 회수 주소를 입력해 주세요.");
+        }
+      }
+      b.disabled = true;
+      const { error } = await sb.rpc("request_return", { p_loan_id: l.id, p_method: method, p_self_check: self, p_self_note: note, p_pickup: pickup });
+      b.disabled = false;
+      if (error) return show(errText(error));
+      closeModal(); toast(method === "pickup" ? "반납을 신청했어요. 배송 탭에서 물류사에 회수 요청 메일을 보내 주세요." : "반납을 신청했어요. 장비를 " + RETURN_METHODS[method].slice(8) + "에 가져다 놓아 주세요."); await refresh();
+    });
+  });
+}
+
 function inspect(l) {
   const e = eqById(l.equipment_id) || {};
-  modal(`<h2>반납 점검</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(e.asset_no)}</span>) · ${esc(nameOf(l.requester_id))} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</p>
-    ${e.components ? `<div><h3>구성품 기준</h3><div class="meta" style="white-space:pre-wrap">${esc(e.components)}</div></div>` : ""}
-    <div class="fields">${Object.entries(CONDS).map(([k, t], i) => `<label class="check"><input type="radio" name="cond" value="${k}" ${i === 0 ? "checked" : ""}> ${t}</label>`).join("")}</div>
-    <label class="f"><span>점검 메모 (손상·누락 내용)</span><textarea id="iNote"></textarea></label>
-    <div class="notice">정상·경미한 손상은 ‘사용 가능’, 파손·구성품 누락은 ‘수리 중’으로 장비 상태가 바뀌어요.</div>
+  const self = l.return_self_check, selfNote = l.return_self_note || "";
+  const defLoc = ({ drop_munjeong: "문정", drop_uiwang: "의왕" })[l.return_method] || e.location;
+  const defRepair = self === "broken" || self === "missing";
+  modal(`<h2>반납 확인</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(e.asset_no)}</span>) · ${esc(nameOf(l.requester_id))} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</p>
+    ${self ? `<div class="panel" style="gap:6px">
+      <h3>반납자 자가점검</h3>
+      <div><span class="pill ${CHECK_PILL[self] || ""}">${esc(CONDS[self])}</span> <span class="meta">${esc(RETURN_METHODS[l.return_method] || "–")} · ${fmtT(l.returned_at)}</span></div>
+      <div style="white-space:pre-wrap">${selfNote ? esc(selfNote) : `<span class="meta">메모 없음</span>`}</div>
+      <div class="meta">확인하면 → 장비 ${defRepair ? "<b>수리 필요</b>" : "<b>사용 가능</b>"} · 보관 위치 <b>${esc(defLoc)}</b></div>
+    </div>` : `<div class="notice">반납자 자가점검 기록이 없어요. 아래에서 직접 점검해 주세요.</div>`}
+    <div id="iEdit" ${self ? "hidden" : ""} style="display:flex;flex-direction:column;gap:14px">
+      ${e.components ? `<div><h3>구성품 기준</h3><div class="meta" style="white-space:pre-wrap">${esc(e.components)}</div></div>` : ""}
+      <div><h3>관리자 점검 결과</h3><div class="fields" style="margin-top:6px">${Object.entries(CONDS).map(([k, t]) => `<label class="check"><input type="radio" name="cond" value="${k}" ${(self || "ok") === k ? "checked" : ""}> ${t}</label>`).join("")}</div></div>
+      <label class="f"><span>점검 메모 (반납자 메모를 그대로 가져왔어요. 필요하면 고쳐 주세요)</span><textarea id="iNote">${esc(selfNote)}</textarea></label>
+      ${verdictHtml(self || "ok")}
+      <div class="fields">${locPicker("i", defLoc)}</div>
+    </div>
     <div class="notice bad" id="iErr" hidden></div>
-    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="iOk">점검 완료</button></div>`, m => {
+    <div class="actions"><button class="btn" data-close-btn>닫기</button>
+      ${self ? `<button class="btn" id="iEditBtn">내용 수정</button>` : ""}
+      <button class="btn pri" id="iOk">${self ? "자가점검대로 확인" : "점검 완료"}</button></div>`, m => {
+    bindLocPicker(m, "i"); bindVerdict(m, "cond");
     const b = $("#iOk", m);
+    $("#iEditBtn", m)?.addEventListener("click", ev => { $("#iEdit", m).hidden = false; ev.target.remove(); b.textContent = "수정한 내용으로 확인"; $("#iNote", m).focus(); });
     b.addEventListener("click", async () => {
-      const cond = m.querySelector('input[name="cond"]:checked').value, note = $("#iNote").value.trim(), err = $("#iErr");
-      if (cond !== "ok" && !note) { err.textContent = "손상이나 누락이 있으면 내용을 메모에 적어 주세요."; err.hidden = false; return; }
+      const cond = m.querySelector('input[name="cond"]:checked').value, note = $("#iNote", m).value.trim(), err = $("#iErr", m);
+      const repair = m.querySelector('input[name="vd"]:checked').value === "repair", loc = locValue(m, "i");
+      const show = t => { err.textContent = t; err.hidden = false; $("#iEdit", m).hidden = false; };
+      if (cond !== "ok" && !note) return show("손상이나 누락이 있으면 내용을 메모에 적어 주세요.");
+      if (!loc) return show("기타를 골랐다면 보관 위치를 직접 입력해 주세요.");
       b.disabled = true;
-      const { error } = await sb.from("loans").update({ status: "done", return_condition: cond, return_note: note }).eq("id", l.id);
+      const { error } = await sb.from("loans").update({ status: "done", return_condition: cond, return_note: note, repair_needed: repair, return_location: loc }).eq("id", l.id);
       b.disabled = false;
-      if (error) { err.textContent = errText(error); err.hidden = false; return; }
-      closeModal(); toast(["ok", "minor"].includes(cond) ? "반납을 완료했어요. 장비를 다시 빌릴 수 있어요." : "반납을 완료하고 장비를 수리 중으로 바꿨어요."); await refresh();
+      if (error) return show(errText(error));
+      closeModal(); toast(repair ? `반납을 확인하고 장비를 수리 필요로 표시했어요. (${loc})` : `반납을 확인했어요. 장비를 다시 빌릴 수 있어요. (${loc})`); await refresh();
     });
   });
 }
@@ -645,10 +780,10 @@ function shipEdit(sid) {
 }
 
 function exportCsv() {
-  const head = ["신청번호","자산번호","제품명","보관 위치","신청자","내부 요청자","외부 요청자","목적","고객사","시작일","반납 예정일","배송","상태","연체일","출고","반납","점검 결과","점검 메모","연장 횟수"];
+  const head = ["신청번호","자산번호","제품명","보관 위치","신청자","내부 요청자","외부 요청자","목적","고객사","시작일","반납 예정일","배송","상태","연체일","출고","반납","반납 방법","자가점검","자가점검 메모","점검 결과","점검 메모","연장 횟수"];
   const t = todayStr();
   const rows = [...loans].sort((a, b) => a.loan_no.localeCompare(b.loan_no)).map(l => { const e = eqById(l.equipment_id) || {}; return [l.loan_no, e.asset_no, e.name, e.location, nameOf(l.requester_id), l.internal_requester, l.external_requester, l.purpose, l.customer, l.start_date, l.due_date,
-    l.delivery ? "Y" : "N", LOAN_STATUS[l.status]?.[0] || l.status, isOverdue(l) ? daysBetween(l.due_date, t) : "", fmtT(l.checkout_at), fmtT(l.returned_at), CONDS[l.return_condition] || "", l.return_note || "", l.extension_count || 0]; });
+    l.delivery ? "Y" : "N", LOAN_STATUS[l.status]?.[0] || l.status, isOverdue(l) ? daysBetween(l.due_date, t) : "", fmtT(l.checkout_at), fmtT(l.returned_at), RETURN_METHODS[l.return_method] || "", CONDS[l.return_self_check] || "", l.return_self_note || "", CONDS[l.return_condition] || "", l.return_note || "", l.extension_count || 0]; });
   const csv = "﻿" + [head, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -668,8 +803,7 @@ document.addEventListener("click", e => {
     case "eqView": eqView(a.dataset.id); break;
     case "checkout": l && confirmBox("출고 처리", `${eqName}를 ${esc(nameOf(l.requester_id))}에게 출고해요. 구성품을 확인했는지 봐 주세요.<br><br>${esc(eqById(l.equipment_id)?.components || "")}`, "출고",
       async () => { await must(sb.from("loans").update({ status: "out" }).eq("id", l.id)); toast("출고 처리했어요."); }); break;
-    case "return": l && confirmBox("반납 등록", `${eqName} 반납을 등록해요. 장비 관리자가 상태를 점검하면 반납이 완료돼요.${l.delivery && shipOf(l.loan_no, "pickup") ? "<br><br>배송 건이라 회수 요청이 배송 탭에서 ‘요청 전’으로 바뀌어요." : ""}`, "반납 등록",
-      async () => { await must(sb.from("loans").update({ status: "checking" }).eq("id", l.id)); toast("반납을 등록했어요."); }); break;
+    case "return": l && returnForm(l); break;
     case "inspect": l && inspect(l); break;
     case "extend": l && extend(l); break;
     case "cancel": l && confirmBox("신청 취소", `${esc(l.loan_no)} · ${eqName} 예약을 취소해요.`, "예약 취소",
@@ -698,6 +832,7 @@ document.addEventListener("input", e => {
 document.addEventListener("change", e => {
   const id = e.target.id;
   if (id === "eqCat") { filters.eqCat = e.target.value; render(); }
+  else if (id === "eqLoc") { filters.eqLoc = e.target.value; render(); }
   else if (id === "lgSt") { filters.ledgerSt = e.target.value; render(); }
   else if (id === "rStart" || id === "rDue") {
     draft[id === "rStart" ? "start" : "due"] = e.target.value;
