@@ -118,6 +118,9 @@ button.kakao svg{width:18px;height:18px}
 .boot{padding:40px 0;color:var(--muted)}
 .ver{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.02em}
 .gate .ver{margin-top:4px}
+button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.log h3{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.log ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -125,7 +128,7 @@ button.kakao svg{width:18px;height:18px}
 <div id="gate" class="gate" hidden></div>
 <div id="app" hidden>
   <header class="top"><div class="wrap">
-    <div class="brand">데모장비 출납 <span class="tag">LMK DEMO POOL</span> <span class="ver" id="verTop"></span></div>
+    <div class="brand">데모장비 출납 <span class="tag">LMK DEMO POOL</span> <button class="ver" id="verTop" title="버전 기록 보기"></button></div>
     <div class="who"><span id="meName"></span><span class="role" id="meRole"></span><button class="btn sm" id="logout">로그아웃</button></div>
   </div></header>
   <nav class="tabs" aria-label="화면"><div class="wrap" role="tablist" id="tabs"></div></nav>
@@ -138,14 +141,42 @@ button.kakao svg{width:18px;height:18px}
 /* ===== 설정: Supabase 프로젝트 주소와 공개 키 (공개돼도 되는 값) ===== */
 const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
-/* 앱 버전: 고칠 때마다 올린다 (화면 확인용) */
-const APP_VERSION = "v1.4.0";
-const APP_BUILD = "2026-10-28";
+/* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
+const CHANGELOG = [
+  { v: "v1.4.0", date: "2026-10-28", db: "", items: [
+    "관리자 반납 확인을 한 번 클릭으로: 반납자 자가점검(상태·메모)을 그대로 넘겨받고 ‘자가점검대로 확인’ 버튼으로 끝냄",
+    "다를 때만 ‘내용 수정’으로 상태·메모·판정·보관 위치를 고쳐서 확인",
+    "‘점검’ 버튼 이름을 ‘반납 확인’으로 통일",
+    "로그인 화면과 메인 화면에 버전 표시, 버전을 누르면 이 기록이 열림",
+  ] },
+  { v: "v1.3.0", date: "2026-10-28", db: "migration_002_location_condition.sql", items: [
+    "장비 목록에 보관 위치별 대수(문정·의왕·기타)와 수리 필요 대수, 위치 필터 추가",
+    "장비 목록에 ‘최근 점검’ 열 추가 (반납자 자가점검 / 관리자 확인 구분)",
+    "관리자 점검 때 장비 판정(사용 가능·수리 필요)과 보관 위치 확정",
+    "관리자 수시 점검 기록 (실사, 수리 후 확인)",
+    "대여 중 장비에 지금 어디(고객사·신청자)에 있는지 표시",
+  ] },
+  { v: "v1.2.0", date: "2026-10-28", db: "migration_001_return_form.sql", items: [
+    "반납 신청서: 반납 방법(직접 반납 문정·의왕 / 물류사 회수)과 상태 자가점검",
+    "직접 반납하면 장비 보관 위치가 반납한 곳으로 바뀜",
+    "물류사 회수를 고르면 배송 탭에 회수 요청 생성, 묶음 전체를 직접 반납하면 예정 회수 취소",
+    "버그 수정: 배송 없던 건을 회수로 반납하면 배송 탭에 안 보이던 문제",
+  ] },
+  { v: "v1.1.0", date: "2026-10-28", db: "", items: [
+    "아이폰·안드로이드 홈 화면 아이콘과 앱 이름(‘데모장비’)",
+  ] },
+  { v: "v1.0.0", date: "2026-10-27", db: "supabase-schema.sql", items: [
+    "첫 배포: 카카오 로그인, 관리자 승인, 장비, 출납 신청(묶음·일정 충돌 차단), 내 신청, 배송 요청 메일, 출납 대장, CSV 내보내기",
+  ] },
+];
+const APP_VERSION = CHANGELOG[0].v;
+const APP_BUILD = CHANGELOG[0].date;
 /* ===================================================================== */
 
 (() => {
 const $ = (s, r = document) => r.querySelector(s);
 document.getElementById("verTop").textContent = `${APP_VERSION} · ${APP_BUILD}`;
+document.getElementById("verTop").dataset.act = "changelog";
 document.title = `데모장비 출납 ${APP_VERSION}`;
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const pad = n => String(n).padStart(2, "0");
@@ -225,7 +256,7 @@ function showGate(kind, extra = "") {
     disabled: `<h1>사용이 중지된 계정이에요</h1><p>다시 써야 한다면 장비 관리자에게 문의해 주세요.</p><button class="btn" id="gateLogout">로그아웃</button>`,
     error: `<h1>불러오지 못했어요</h1><p>${extra}</p><button class="btn pri" id="reload">다시 시도</button><button class="btn" id="gateLogout">로그아웃</button>`,
   }[kind];
-  g.innerHTML = `<div class="card">${body}<div class="ver">${APP_VERSION} · ${APP_BUILD}</div></div>`;
+  g.innerHTML = `<div class="card">${body}<div><button class="ver" data-act="changelog" title="버전 기록 보기">${APP_VERSION} · ${APP_BUILD}</button></div></div>`;
   $("#kakaoLogin")?.addEventListener("click", async () => {
     const { error } = await sb.auth.signInWithOAuth({ provider: "kakao", options: { redirectTo: location.origin + location.pathname } });
     if (error) fail(error);
@@ -508,6 +539,14 @@ function modal(html, onMount) {
   ov.addEventListener("click", e => { if (e.target === ov || e.target.closest("[data-close-btn]")) closeModal(); });
   onMount && onMount(ov.firstElementChild);
   const f = ov.querySelector("input:not([type=radio]),select,textarea,button"); f && f.focus();
+}
+function showChangelog() {
+  modal(`<h2>버전 기록</h2><p class="meta">지금 보고 있는 버전은 <b>${APP_VERSION}</b>이에요. 새로 올렸는데 번호가 그대로면 강력 새로 고침(PC: Ctrl+Shift+R)을 해 주세요.</p>
+    <div class="log" style="display:flex;flex-direction:column;gap:14px;max-height:60vh;overflow:auto">${CHANGELOG.map(c => `<div>
+      <h3><span class="mono">${esc(c.v)}</span><span class="meta">${esc(c.date)}</span>${c.v === APP_VERSION ? `<span class="pill p-acc">현재</span>` : ""}</h3>
+      <ul>${c.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>
+      ${c.db ? `<div class="meta" style="margin-top:4px">DB 변경: <span class="mono">${esc(c.db)}</span></div>` : ""}</div>`).join("")}</div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button></div>`);
 }
 function closeModal() { $("#modalRoot").innerHTML = ""; }
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
@@ -806,6 +845,7 @@ document.addEventListener("click", e => {
   const eqName = l ? `${esc(eqById(l.equipment_id)?.name)} (${esc(eqById(l.equipment_id)?.asset_no)})` : "";
   switch (a.dataset.act) {
     case "refresh": busy(a, () => refresh()); break;
+    case "changelog": showChangelog(); break;
     case "eqNew": eqForm(); break;
     case "eqView": eqView(a.dataset.id); break;
     case "checkout": l && confirmBox("출고 처리", `${eqName}를 ${esc(nameOf(l.requester_id))}에게 출고해요. 구성품을 확인했는지 봐 주세요.<br><br>${esc(eqById(l.equipment_id)?.components || "")}`, "출고",
