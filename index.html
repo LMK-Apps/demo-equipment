@@ -175,6 +175,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v1.9.0", date: "2026-10-28", db: "", items: [
+    "출납 신청 화면에 장비 검색(제품명·자산번호·품목번호), 분류·보관 위치 필터 추가",
+    "‘가능한 장비만 보기’로 수리·점검 중이거나 예약이 겹치는 장비 숨기기",
+    "고른 장비는 필터와 관계없이 목록에 남고, 선택한 장비 이름을 목록 아래에 표시",
+  ] },
   { v: "v1.8.0", date: "2026-10-28", db: "004_teams_notify.sql", items: [
     "Teams 채널 알림: 출납 신청(신청번호당 1건), 반납 신청(자가점검 포함)이 생기면 바로 알림",
     "평일 오전 9시 요약 알림: 연체, 오늘·내일 출고 예정, 오늘 반납 예정, 반납 확인 대기",
@@ -283,6 +288,7 @@ let equipment = [], loans = [], shipments = [], people = [];
 let view = (location.hash || "").slice(1) || "home";
 let filters = { eqQ: "", eqCat: "", eqLoc: "", ledgerQ: "", ledgerSt: "open" };
 let draft = { start: todayStr(), due: addDays(todayStr(), 7), picks: new Set() };
+let pickF = { q: "", cat: "", loc: "", avail: false };
 let cal = { ym: todayStr().slice(0, 7), mode: "month", mine: false, loc: "" };
 
 const isOverdue = l => l.status === "out" && l.due_date < todayStr();
@@ -359,6 +365,7 @@ function render() {
   const views = { home: vHome, cal: vCal, equip: vEquip, request: vRequest, mine: vMine, ship: vShip, ledger: vLedger, users: vUsers };
   if (!views[view] || (view === "users" && !me.isAdmin)) view = "home";
   $("#main").innerHTML = `<section data-view="${view}">${views[view]()}</section>`;
+  if (view === "request") applyPickFilter();
 }
 
 function loanLine(l, extra = "") {
@@ -534,7 +541,8 @@ function vRequest() {
     if (blocked) draft.picks.delete(e.id);
     const why = e.status === "repair" ? "수리 중" : e.status === "inspect" ? "점검 중" : c.length ? "예약 겹침" : "";
     const title = c.length ? `${c[0].loan_no} (${fmtD(c[0].start_date)}–${fmtD(c[0].due_date)})` : why;
-    return `<label class="${blocked ? "off" : ""}"><input type="checkbox" data-pick="${e.id}" ${draft.picks.has(e.id) ? "checked" : ""} ${blocked ? "disabled" : ""}>
+    const hay = `${e.name} ${e.asset_no} ${e.item_no} ${e.serial_no} ${e.location} ${e.category}`.toLowerCase();
+    return `<label class="${blocked ? "off" : ""}" data-hay="${esc(hay)}" data-cat="${esc(e.category)}" data-loc="${esc(locGroup(e.location))}" data-ok="${blocked ? "0" : "1"}"><input type="checkbox" data-pick="${e.id}" ${draft.picks.has(e.id) ? "checked" : ""} ${blocked ? "disabled" : ""}>
       <div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(e.asset_no)}</span><div class="meta">${esc(e.category)} · ${esc(e.location)}</div></div>
       ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
   }).join("");
@@ -548,8 +556,14 @@ function vRequest() {
         <label class="f req"><span>반납 예정일</span><input type="date" id="rDue" value="${esc(due)}" required></label>
       </div>
       ${badRange ? `<div class="notice bad">반납 예정일은 사용 시작일과 같거나 그 뒤여야 해요.</div>` : ""}
-      ${rows.length ? `<div class="pick" id="pickList">${pickHtml}</div>` : `<div class="empty">신청할 수 있는 장비가 없어요.</div>`}
-      <div class="meta" id="pickCount">선택 ${draft.picks.size}대</div>
+      ${rows.length ? `<div class="toolbar">
+        <input id="rQ" type="search" placeholder="제품명·자산번호 검색" value="${esc(pickF.q)}" style="flex:1;min-width:160px">
+        <select id="rCat" aria-label="분류"><option value="">전체 분류</option>${CATS.map(c => `<option ${pickF.cat === c ? "selected" : ""}>${c}</option>`).join("")}</select>
+        <select id="rLoc" aria-label="보관 위치"><option value="">전체 위치</option>${[...LOCS, "기타"].map(c => `<option ${pickF.loc === c ? "selected" : ""}>${c}</option>`).join("")}</select>
+        <label class="check"><input type="checkbox" id="rAvail" ${pickF.avail ? "checked" : ""}> 가능한 장비만</label>
+      </div>
+      <div class="pick" id="pickList">${pickHtml}<div class="empty" id="pickNone" hidden style="padding:12px">조건에 맞는 장비가 없어요. 검색어나 필터를 바꿔 주세요.</div></div>` : `<div class="empty">신청할 수 있는 장비가 없어요.</div>`}
+      <div class="meta" id="pickCount"></div>
     </div>
     <div class="panel">
       <h3>2. 사용 정보</h3>
@@ -576,6 +590,29 @@ function vRequest() {
       <div class="toolbar" style="justify-content:flex-end"><button class="btn pri" type="submit" id="reqSubmit">신청 저장</button></div>
     </div>
   </form>`;
+}
+
+function applyPickFilter() {
+  const list = $("#pickList"); if (!list) return;
+  const q = pickF.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let shown = 0, total = 0;
+  list.querySelectorAll("label[data-hay]").forEach(l => {
+    total++;
+    const picked = l.querySelector("input").checked;
+    const ok = picked || ((!q.length || q.every(w => l.dataset.hay.includes(w)))
+      && (!pickF.cat || l.dataset.cat === pickF.cat)
+      && (!pickF.loc || l.dataset.loc === pickF.loc)
+      && (!pickF.avail || l.dataset.ok === "1"));
+    l.hidden = !ok; if (ok) shown++;
+  });
+  $("#pickNone").hidden = shown > 0;
+  updatePickCount(shown, total);
+}
+function updatePickCount(shown, total) {
+  const c = $("#pickCount"); if (!c) return;
+  if (shown === undefined) { const ls = [...document.querySelectorAll("#pickList label[data-hay]")]; total = ls.length; shown = ls.filter(l => !l.hidden).length; }
+  const names = [...draft.picks].map(id => eqById(id)).filter(Boolean).map(e => `${e.name} (${e.asset_no})`);
+  c.innerHTML = `<b>선택 ${draft.picks.size}대</b>${names.length ? ` · ${esc(names.join(", "))}` : ""}<br><span>전체 ${total}대 중 ${shown}대 표시</span>`;
 }
 
 function vMine() {
@@ -732,7 +769,7 @@ function showChangelog() {
     <div class="actions"><button class="btn" data-close-btn>닫기</button></div>`);
 }
 function closeModal() { $("#modalRoot").innerHTML = ""; }
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); if (e.key === "Enter" && e.target.id === "rQ") e.preventDefault(); });
 async function busy(btn, fn) { if (btn) btn.disabled = true; try { await fn(); } catch (e) { fail(e); } finally { if (btn) btn.disabled = false; } }
 
 function confirmBox(title, body, okText, fn, danger) {
@@ -1063,6 +1100,7 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("input", e => {
   const id = e.target.id;
+  if (id === "rQ") { pickF.q = e.target.value; applyPickFilter(); return; }
   if (id === "eqQ" || id === "lgQ") {
     const pos = e.target.selectionStart;
     filters[id === "eqQ" ? "eqQ" : "ledgerQ"] = e.target.value; render();
@@ -1081,7 +1119,8 @@ document.addEventListener("change", e => {
     if (id === "rStart" && draft.due < draft.start) draft.due = draft.start;
     const keep = collectReqFields(); render(); restoreReqFields(keep);
   }
-  else if (e.target.dataset.pick) { e.target.checked ? draft.picks.add(e.target.dataset.pick) : draft.picks.delete(e.target.dataset.pick); const c = $("#pickCount"); if (c) c.textContent = `선택 ${draft.picks.size}대`; }
+  else if (e.target.dataset.pick) { e.target.checked ? draft.picks.add(e.target.dataset.pick) : draft.picks.delete(e.target.dataset.pick); updatePickCount(); }
+  else if (id === "rCat" || id === "rLoc" || id === "rAvail") { pickF[{ rCat: "cat", rLoc: "loc", rAvail: "avail" }[id]] = id === "rAvail" ? e.target.checked : e.target.value; applyPickFilter(); }
   else if (id === "rDelivery") { $("#shipBox").hidden = !e.target.checked; }
 });
 document.addEventListener("submit", e => { if (e.target.id === "reqForm") { e.preventDefault(); submitRequest(); } });
