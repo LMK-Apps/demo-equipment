@@ -175,6 +175,10 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v1.8.0", date: "2026-10-28", db: "", items: [
+    "보관 위치 순서를 의왕 → 문정으로 변경 (장비 화면 대수, 위치 필터, 위치 선택, 반납 방법, 일정 필터)",
+    "새 장비 등록 때 기본 보관 위치가 의왕으로 선택됨",
+  ] },
   { v: "v1.7.0", date: "2026-10-28", db: "003_kakao_name.sql", items: [
     "사용자 탭에 카카오 이름을 표시 이름과 함께 보여 줌 (이름을 바꿔도 누구인지 헷갈리지 않게)",
     "카카오에서 닉네임을 바꾸면 다음 로그인 때 카카오 이름만 자동 갱신 (표시 이름은 그대로)",
@@ -237,10 +241,10 @@ const EQ_STATUS = { available:["사용 가능","p-ok"], onloan:["대여 중","p-
 const LOAN_STATUS = { reserved:["예약","p-acc"], out:["출고","p-info"], checking:["반납 확인 중","p-warn"], done:["반납 완료","p-ok"], cancelled:["취소",""] };
 const OUT_STATUS = { pending:["요청 전","p-warn"], requested:["요청 완료","p-acc"], in_transit:["배송 중","p-info"], delivered:["도착","p-ok"] };
 const PICK_STATUS = { scheduled:["회수 예정",""], pending:["회수 요청 전","p-warn"], requested:["회수 요청 완료","p-acc"], done:["회수 완료","p-ok"], cancelled:["회수 취소",""] };
-const RETURN_METHODS = { drop_munjeong:"직접 반납 – 문정", drop_uiwang:"직접 반납 – 의왕", pickup:"물류사 회수 요청" };
+const RETURN_METHODS = { drop_uiwang:"직접 반납 – 의왕", drop_munjeong:"직접 반납 – 문정", pickup:"물류사 회수 요청" };
 const USER_STATUS = { pending:["승인 대기","p-warn"], active:["사용 중","p-ok"], disabled:["사용 중지",""] };
 const CATS = ["BLS","ALS","환자 시뮬레이터","술기 트레이너","소프트웨어","기타"];
-const LOCS = ["문정","의왕"];
+const LOCS = ["의왕","문정"];
 const PURPOSES = ["고객 데모","전시회","교육·워크숍","학회","내부 교육","기타"];
 const CONDS = { ok:"정상", minor:"경미한 손상", broken:"파손", missing:"구성품 누락" };
 const ACTIVE = s => s === "reserved" || s === "out";
