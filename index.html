@@ -121,6 +121,38 @@ button.kakao svg{width:18px;height:18px}
 button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .log h3{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .log ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{font:inherit;font-size:13px;font-weight:600;border:0;background:var(--surface);color:var(--muted);padding:7px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.calnav{display:flex;align-items:center;gap:8px}
+.calnav b{font-size:16px;min-width:96px;text-align:center;font-variant-numeric:tabular-nums}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.cal .dow{font-size:11.5px;font-weight:600;color:var(--muted);text-align:center;padding:6px 0;background:var(--sunk);border-bottom:1px solid var(--line)}
+.cal .day{min-height:104px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px;display:flex;flex-direction:column;gap:2px;min-width:0;cursor:pointer}
+.cal .day:nth-child(7n){border-right:0}
+.cal .day.out{background:var(--bg)}
+.cal .day.out .dn{opacity:.45}
+.cal .dn{font-size:12px;font-family:var(--mono);color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.cal .day.today .dn b{background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:0 6px}
+.cal .sun .dn b{color:var(--bad)} .cal .day.today.sun .dn b{color:var(--accent-ink)}
+.chip{font-size:11px;line-height:17px;padding:0 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;border:0;text-align:left;font-family:inherit;width:100%}
+.chip.cont{opacity:.55}
+.c-reserved{background:var(--accent-soft);color:var(--accent)} .c-out{background:var(--info-soft);color:var(--info)}
+.c-checking{background:var(--warn-soft);color:var(--warn)} .c-overdue{background:var(--bad-soft);color:var(--bad)} .c-done{background:var(--sunk);color:var(--muted)}
+.more{font-size:11px;color:var(--muted);padding-left:4px}
+.cnt{display:none;font-size:11px;font-weight:600;color:var(--accent);font-family:var(--mono)}
+@media (max-width:640px){.cal .day{min-height:56px}.cal .chip,.cal .more{display:none}.cnt{display:block}}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.tl td.d{padding:0;width:26px;min-width:26px;height:30px;border-left:1px solid var(--line);text-align:center;font-size:10.5px;font-weight:600;cursor:default}
+.tl th.d{padding:4px 0;width:26px;min-width:26px;text-align:center;font-family:var(--mono);font-size:10.5px}
+.tl .we{background:var(--sunk)} .tl th.today,.tl td.today{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.tl td.d[data-act]{cursor:pointer}
+.tl td.c-reserved{background:color-mix(in srgb,var(--accent) 32%,transparent)} .tl td.c-out{background:color-mix(in srgb,var(--info) 32%,transparent)}
+.tl td.c-overdue{background:color-mix(in srgb,var(--bad) 32%,transparent)} .tl td.c-checking{background:color-mix(in srgb,var(--warn) 32%,transparent)}
+.tl td.c-done{background:color-mix(in srgb,var(--muted) 22%,transparent)}
+.legend i.c-reserved{background:var(--accent)} .legend i.c-out{background:var(--info)} .legend i.c-overdue{background:var(--bad)} .legend i.c-checking{background:var(--warn)} .legend i.c-done{background:var(--muted)}
+.tl .eqc{position:sticky;left:0;background:var(--surface);z-index:1;min-width:150px;max-width:180px;white-space:normal}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -143,6 +175,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v1.5.0", date: "2026-10-28", db: "", items: [
+    "‘일정’ 탭 추가: 누가 어떤 장비를 언제 빌리는지 달력으로 보기",
+    "월간 달력과 장비별 타임라인 두 가지 보기, 내 신청만·보관 위치 필터",
+    "일정을 누르면 신청 상세(장비, 신청자·요청자, 기간, 상태, 배송) 확인",
+  ] },
   { v: "v1.4.0", date: "2026-10-28", db: "", items: [
     "관리자 반납 확인을 한 번 클릭으로: 반납자 자가점검(상태·메모)을 그대로 넘겨받고 ‘자가점검대로 확인’ 버튼으로 끝냄",
     "다를 때만 ‘내용 수정’으로 상태·메모·판정·보관 위치를 고쳐서 확인",
@@ -226,6 +263,7 @@ let equipment = [], loans = [], shipments = [], people = [];
 let view = (location.hash || "").slice(1) || "home";
 let filters = { eqQ: "", eqCat: "", eqLoc: "", ledgerQ: "", ledgerSt: "open" };
 let draft = { start: todayStr(), due: addDays(todayStr(), 7), picks: new Set() };
+let cal = { ym: todayStr().slice(0, 7), mode: "month", mine: false, loc: "" };
 
 const isOverdue = l => l.status === "out" && l.due_date < todayStr();
 const eqById = id => equipment.find(e => e.id === id);
@@ -284,7 +322,7 @@ async function refresh(quiet) {
 
 /* ---------- 탭 ---------- */
 const TABS = () => [
-  ["home","현황"], ["equip","장비"], ["request","출납 신청"], ["mine","내 신청"],
+  ["home","현황"], ["cal","일정"], ["equip","장비"], ["request","출납 신청"], ["mine","내 신청"],
   ["ship","배송", shipments.filter(s => s.status === "pending").length],
   ["ledger","출납 대장", loans.filter(isOverdue).length],
   ...(me.isAdmin ? [["users","사용자", people.filter(p => p.status === "pending").length]] : []),
@@ -298,7 +336,7 @@ function go(v) { view = v; try { history.replaceState(null, "", "#" + v); } catc
 /* ---------- 화면 ---------- */
 function render() {
   renderTabs();
-  const views = { home: vHome, equip: vEquip, request: vRequest, mine: vMine, ship: vShip, ledger: vLedger, users: vUsers };
+  const views = { home: vHome, cal: vCal, equip: vEquip, request: vRequest, mine: vMine, ship: vShip, ledger: vLedger, users: vUsers };
   if (!views[view] || (view === "users" && !me.isAdmin)) view = "home";
   $("#main").innerHTML = `<section data-view="${view}">${views[view]()}</section>`;
 }
@@ -331,6 +369,102 @@ function vHome() {
     <div class="panel"><h3>오늘 반납 예정</h3><div class="list">${dueToday.length ? dueToday.map(l => loanLine(l)).join("") : `<div class="empty">오늘 반납 예정인 장비가 없어요.</div>`}</div></div>
     <div class="panel"><h3>반납 확인 대기</h3><div class="list">${checking.length ? checking.map(l => loanLine(l, me.isAdmin ? `<button class="btn sm pri" data-act="inspect" data-id="${l.id}">반납 확인</button>` : pill(LOAN_STATUS, l.status))).join("") : `<div class="empty">확인을 기다리는 반납이 없어요.</div>`}</div></div>
   </div>`;
+}
+
+/* ---------- 일정 (달력) ---------- */
+const DOW = ["일","월","화","수","목","금","토"];
+const ds = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const loanEnd = l => isOverdue(l) ? (todayStr() > l.due_date ? todayStr() : l.due_date) : l.due_date;
+const calClass = l => isOverdue(l) ? "c-overdue" : ({ reserved: "c-reserved", out: "c-out", checking: "c-checking", done: "c-done" })[l.status] || "c-done";
+function calLoans() {
+  return loans.filter(l => l.status !== "cancelled"
+    && (!cal.mine || l.requester_id === me.id)
+    && (!cal.loc || locGroup(eqById(l.equipment_id)?.location) === cal.loc))
+    .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.loan_no.localeCompare(b.loan_no) || (eqById(a.equipment_id)?.asset_no || "").localeCompare(eqById(b.equipment_id)?.asset_no || ""));
+}
+const onDay = (list, d) => list.filter(l => l.start_date <= d && d <= loanEnd(l));
+const chipLabel = l => `${eqById(l.equipment_id)?.name || "?"} · ${nameOf(l.requester_id)}`;
+function vCal() {
+  const [y, m] = cal.ym.split("-").map(Number);
+  const first = new Date(y, m - 1, 1), last = new Date(y, m, 0);
+  const list = calLoans(), t = todayStr();
+  const monthLoans = list.filter(l => l.start_date <= ds(last) && loanEnd(l) >= ds(first));
+  const head = `
+  <div class="head"><div class="grow"><h2>일정</h2><p class="sub">누가 어떤 장비를 언제 쓰는지 보여 줘요. 일정을 누르면 자세히 볼 수 있어요.</p></div>
+    <button class="btn pri" data-go="request">출납 신청</button></div>
+  <div class="toolbar">
+    <div class="calnav"><button class="btn sm" data-act="calPrev" aria-label="이전 달">◀</button><b>${y}년 ${m}월</b><button class="btn sm" data-act="calNext" aria-label="다음 달">▶</button><button class="btn sm" data-act="calToday">이번 달</button></div>
+    <span style="flex:1"></span>
+    <div class="seg" role="group" aria-label="보기"><button data-act="calMode" data-v="month" aria-pressed="${cal.mode === "month"}">달력</button><button data-act="calMode" data-v="equip" aria-pressed="${cal.mode === "equip"}">장비별</button></div>
+    <select id="calLoc"><option value="">전체 위치</option>${[...LOCS, "기타"].map(c => `<option ${cal.loc === c ? "selected" : ""}>${c}</option>`).join("")}</select>
+    <label class="check"><input type="checkbox" id="calMine" ${cal.mine ? "checked" : ""}> 내 신청만</label>
+  </div>
+  <div class="legend"><span><i class="c-reserved"></i>예약</span><span><i class="c-out"></i>출고</span><span><i class="c-overdue"></i>연체</span><span><i class="c-checking"></i>반납 확인 중</span><span><i class="c-done"></i>반납 완료</span><span class="meta">· 이번 달 ${new Set(monthLoans.map(l => l.loan_no)).size}건, 장비 ${monthLoans.length}대</span></div>`;
+
+  if (cal.mode === "equip") {
+    const days = []; for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) days.push(new Date(d));
+    const eqs = equipment.filter(e => e.status !== "retired" && (!cal.loc || locGroup(e.location) === cal.loc))
+      .filter(e => !cal.mine || monthLoans.some(l => l.equipment_id === e.id))
+      .sort((a, b) => a.category.localeCompare(b.category) || a.asset_no.localeCompare(b.asset_no));
+    const rows = eqs.map(e => {
+      const mine = monthLoans.filter(l => l.equipment_id === e.id);
+      return `<tr><td class="eqc"><b>${esc(e.name)}</b><div class="meta mono">${esc(e.asset_no)} · ${esc(e.location)}</div></td>${days.map(d => {
+        const key = ds(d), l = mine.find(x => x.start_date <= key && key <= loanEnd(x));
+        const today = key === t ? "today " : "";
+        if (!l) return `<td class="d ${d.getDay() % 6 === 0 ? "we " : ""}${today}"></td>`;
+        const cls = today;
+        const startCell = key === l.start_date || key === ds(first);
+        return `<td class="d ${cls}${calClass(l)}" data-act="calLoan" data-id="${l.id}" title="${esc(chipLabel(l))} (${fmtD(l.start_date)}–${fmtD(l.due_date)})">${startCell ? esc((nameOf(l.requester_id) || "").slice(0, 2)) : ""}</td>`;
+      }).join("")}</tr>`;
+    }).join("");
+    return head + (eqs.length ? `<div class="tbl-wrap tl"><table><thead><tr><th class="eqc">장비</th>${days.map(d => `<th class="d ${d.getDay() % 6 === 0 ? "we " : ""}${ds(d) === t ? "today" : ""}">${d.getDate()}<div class="meta">${DOW[d.getDay()]}</div></th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="meta">막대 첫 칸에 신청자 이름 앞 두 글자가 보여요. 칸을 누르면 자세히 볼 수 있어요.</p>`
+      : `<div class="panel"><div class="empty">조건에 맞는 장비가 없어요.</div></div>`);
+  }
+
+  const start = new Date(first); start.setDate(1 - first.getDay());
+  const cells = [];
+  for (let d = new Date(start); cells.length < 42 && (d <= last || cells.length % 7); d.setDate(d.getDate() + 1)) {
+    const key = ds(d), items = onDay(monthLoans, key), inMonth = d.getMonth() === m - 1;
+    const chips = items.slice(0, 3).map(l => {
+      const cont = key !== l.start_date && d.getDay() !== 0;
+      return `<button class="chip ${calClass(l)}${cont ? " cont" : ""}" data-act="calLoan" data-id="${l.id}" title="${esc(chipLabel(l))} (${fmtD(l.start_date)}–${fmtD(l.due_date)})">${cont ? "↳ " : ""}${esc(chipLabel(l))}</button>`;
+    }).join("");
+    cells.push(`<div class="day${inMonth ? "" : " out"}${key === t ? " today" : ""}${d.getDay() === 0 ? " sun" : ""}" data-act="calDay" data-d="${key}">
+      <div class="dn"><b>${d.getDate()}</b><span class="cnt">${items.length || ""}</span></div>${chips}${items.length > 3 ? `<span class="more">+${items.length - 3}건 더</span>` : ""}</div>`);
+  }
+  return head + `<div class="cal">${DOW.map(w => `<div class="dow">${w}</div>`).join("")}${cells.join("")}</div>
+    <p class="meta">↳ 표시는 앞에서 이어지는 일정이에요. 휴대폰에서는 날짜를 누르면 그날 일정이 보여요.</p>`;
+}
+function calDay(key) {
+  const items = onDay(calLoans(), key);
+  modal(`<h2>${key.replace(/-/g, ".")} (${DOW[new Date(key + "T00:00:00").getDay()]}) 일정</h2>
+    <div class="list">${items.map(l => `<div class="row"><div class="main"><b>${esc(eqById(l.equipment_id)?.name)}</b> <span class="mono">${esc(eqById(l.equipment_id)?.asset_no)}</span>
+      <div class="meta">${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</div></div>
+      ${isOverdue(l) ? `<span class="pill p-bad">연체</span>` : pill(LOAN_STATUS, l.status)}<button class="btn sm" data-act="calLoan" data-id="${l.id}">자세히</button></div>`).join("") || `<div class="empty">이날은 일정이 없어요.</div>`}</div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button>${key >= todayStr() ? `<button class="btn pri" id="dReq">이날부터 신청</button>` : ""}</div>`, mm => {
+    $("#dReq", mm)?.addEventListener("click", () => { draft.start = key; if (draft.due < key) draft.due = addDays(key, 2); closeModal(); go("request"); });
+  });
+}
+function calLoan(id) {
+  const l = loans.find(x => x.id === id); if (!l) return;
+  const e = eqById(l.equipment_id) || {}, group = loans.filter(x => x.loan_no === l.loan_no && x.id !== l.id && x.status !== "cancelled");
+  const o = shipOf(l.loan_no, "outbound"), ri = reqInfo(l);
+  modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta"><span class="mono">${esc(e.asset_no)}</span> · ${esc(e.location)}</div></div>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</div>
+    <div class="fields">
+      <div><div class="meta">신청번호</div><div class="mono">${esc(l.loan_no)}</div></div>
+      <div><div class="meta">기간</div><div class="mono">${esc(l.start_date)} ~ ${esc(l.due_date)}${l.extension_count ? ` (연장 ${l.extension_count}회)` : ""}</div></div>
+      <div><div class="meta">신청자</div><div>${esc(nameOf(l.requester_id))}</div></div>
+      <div><div class="meta">요청자</div><div>${esc(ri || "–")}</div></div>
+      <div><div class="meta">목적</div><div>${esc(l.purpose)}</div></div>
+      <div><div class="meta">고객사·기관</div><div>${esc(l.customer || "–")}</div></div>
+      <div class="wide"><div class="meta">배송</div><div>${o ? `${esc(OUT_STATUS[o.status]?.[0] || o.status)} · ${esc(o.address)} (${fmtD(o.requested_date)} 도착 희망)` : "직접 수령"}</div></div>
+      ${l.note ? `<div class="wide"><div class="meta">메모</div><div style="white-space:pre-wrap">${esc(l.note)}</div></div>` : ""}
+      ${group.length ? `<div class="wide"><div class="meta">함께 신청한 장비</div><div>${group.map(x => `${esc(eqById(x.equipment_id)?.name)} (${esc(eqById(x.equipment_id)?.asset_no)})`).join(", ")}</div></div>` : ""}
+    </div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn" id="lLedger">출납 대장에서 보기</button></div>`, mm => {
+    $("#lLedger", mm).addEventListener("click", () => { filters.ledgerQ = l.loan_no; filters.ledgerSt = "all"; closeModal(); go("ledger"); });
+  });
 }
 
 function vEquip() {
@@ -846,6 +980,11 @@ document.addEventListener("click", e => {
   switch (a.dataset.act) {
     case "refresh": busy(a, () => refresh()); break;
     case "changelog": showChangelog(); break;
+    case "calPrev": case "calNext": { const [y, m] = cal.ym.split("-").map(Number); const d = new Date(y, m - 1 + (a.dataset.act === "calNext" ? 1 : -1), 1); cal.ym = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; render(); break; }
+    case "calToday": cal.ym = todayStr().slice(0, 7); render(); break;
+    case "calMode": cal.mode = a.dataset.v; render(); break;
+    case "calLoan": calLoan(a.dataset.id); break;
+    case "calDay": calDay(a.dataset.d); break;
     case "eqNew": eqForm(); break;
     case "eqView": eqView(a.dataset.id); break;
     case "checkout": l && confirmBox("출고 처리", `${eqName}를 ${esc(nameOf(l.requester_id))}에게 출고해요. 구성품을 확인했는지 봐 주세요.<br><br>${esc(eqById(l.equipment_id)?.components || "")}`, "출고",
@@ -880,6 +1019,8 @@ document.addEventListener("change", e => {
   const id = e.target.id;
   if (id === "eqCat") { filters.eqCat = e.target.value; render(); }
   else if (id === "eqLoc") { filters.eqLoc = e.target.value; render(); }
+  else if (id === "calLoc") { cal.loc = e.target.value; render(); }
+  else if (id === "calMine") { cal.mine = e.target.checked; render(); }
   else if (id === "lgSt") { filters.ledgerSt = e.target.value; render(); }
   else if (id === "rStart" || id === "rDue") {
     draft[id === "rStart" ? "start" : "due"] = e.target.value;
