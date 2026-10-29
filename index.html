@@ -125,6 +125,11 @@ label.f.req>span::after{content:" *";color:var(--bad)}
 .opt{text-align:left;font:inherit;font-size:18px;font-weight:600;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:20px 18px;cursor:pointer}
 .opt:hover{border-color:var(--accent)}
 .opt[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.memo-pick{display:flex;flex-direction:column;gap:14px}.memo-pick:empty{display:none}
+.m-grp{display:flex;flex-direction:column;gap:8px}.m-grp b{font-size:14px;font-weight:600}
+.m-chips{display:flex;flex-wrap:wrap;gap:8px}
+.mchip{font:inherit;font-size:14px;font-weight:500;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);border-radius:99px;padding:9px 14px;cursor:pointer}
+.mchip[aria-pressed="true"]{border-color:var(--bad);background:var(--bad-soft);color:var(--bad);font-weight:600}
 .flow textarea{font:inherit;font-size:16px;border:1.5px solid var(--line);border-radius:12px;padding:14px;background:var(--surface);color:var(--fg);resize:vertical}
 .flow-sum{display:flex;flex-direction:column}
 .sum-row{display:flex;justify-content:space-between;gap:16px;text-align:left;font:inherit;color:var(--fg);background:none;border:0;border-bottom:1px solid var(--line);padding:12px 2px;cursor:pointer}
@@ -256,133 +261,138 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
-  { v: "v0.106", date: "2026-10-29", items: [
+  { v: "v0.028", date: "2026-10-29", items: [
+    "버전 번호 규칙 변경: v0.001부터 배포할 때마다 0.001씩 (지금까지 배포 27번 → 이번이 28번째). 이전 번호는 모두 새 규칙으로 바꿈",
+    "반납 자가점검 정리: 분류마다 최대 5문항 (BLS 4, 환자 시뮬레이터 5, 소프트웨어 5, 그 밖 3)",
+    "‘아니오’를 고르면 메모 단계에서 문항별 문구(예: 충전기 없음, 얼굴 피부가 찢어짐)를 눌러 고르고, 없으면 직접 입력",
+  ] },
+  { v: "v0.027", date: "2026-10-29", items: [
     "배송 탭 회수 단계 정리: 버튼은 회수 요청 전 → 회수 요청 완료 → 회수 완료 3단계",
     "사용자가 반납 신청을 하기 전에는 버튼 대신 ‘반납 신청 전’ 표시 (이전 이름: 회수 예정)",
   ] },
-  { v: "v0.105", date: "2026-10-29", items: [
+  { v: "v0.026", date: "2026-10-29", items: [
     "배송 탭: 상태를 진행 단계 버튼으로 표시 (요청 전 → 요청 완료 → 배송 중 → 도착, 회수는 회수 예정 → 회수 요청 전 → 회수 요청 완료 → 회수 완료)",
     "지나간 단계는 옅은 초록 + ✓, 지금 단계는 진한 초록. 장비 관리자가 버튼을 누르면 바로 그 단계로 바뀜",
     "[상태·운송장] 버튼을 없애고, 운송장은 ‘운송장 입력’ 링크로 따로 입력",
   ] },
-  { v: "v0.104", date: "2026-10-29", items: [
+  { v: "v0.025", date: "2026-10-29", items: [
     "메뉴 이름 ‘출납 신청’을 ‘데모 신청’으로 변경 (탭, 화면 제목, 현황의 신청 버튼, 장비 이력)",
   ] },
-  { v: "v0.103", date: "2026-10-29", items: [
+  { v: "v0.024", date: "2026-10-29", items: [
     "배송 탭을 다시 윗줄(모든 사용자)로 옮김. 관리자 전용 줄은 출납 대장·통계·사용자",
   ] },
-  { v: "v0.102", date: "2026-10-29", items: [
+  { v: "v0.023", date: "2026-10-29", items: [
     "메뉴를 2줄로 나눔: 윗줄은 모든 사용자(현황·일정·장비·출납 신청·내 신청), 아랫줄은 장비 관리자 전용(배송·출납 대장·통계·사용자)",
     "관리자 메뉴 줄은 옅은 색과 ‘관리자’ 표시로 구분",
     "일반 사용자에게는 배송·출납 대장·통계 탭이 보이지 않음, 안내 문구도 그에 맞게 변경",
   ] },
-  { v: "v0.101", date: "2026-10-29", db: "008_pickup_edit.sql", items: [
+  { v: "v0.022", date: "2026-10-29", db: "008_pickup_edit.sql", items: [
     "반납 신청 때 회수 정보(담당자·연락처·주소·희망일·메모)를 고칠 수 있음. 배송 신청 때 적은 정보가 미리 채워짐",
     "물류사에 이미 회수를 요청한 경우에는 정보를 보여 주기만 하고, 장비 관리자에게 알려 달라고 안내",
     "마지막 확인 화면에 회수 주소와 희망일 표시",
   ] },
-  { v: "v0.100", date: "2026-10-29", items: [
+  { v: "v0.021", date: "2026-10-29", items: [
     "내 신청과 출납 대장에서 항목을 누르면 세부 정보 창이 열림",
     "세부 정보: 신청(기간·신청자·요청자·목적·고객사·함께 신청한 장비), 출고·배송, 반납(장소·방법·자가점검·관리자 확인·보관 위치·메모)",
     "세부 정보 창에서 출고, 연장, 예약 취소, 반납 신청, 반납 확인 바로 가능 (권한에 맞는 버튼만 표시)",
   ] },
-  { v: "v0.99", date: "2026-10-29", items: [
+  { v: "v0.020", date: "2026-10-29", items: [
     "모든 팝업 창 오른쪽 위에 ✕ 닫기 버튼 추가 (장비 정보, 반납 확인, 신청 수정 등)",
   ] },
-  { v: "v0.98", date: "2026-10-29", db: "007_return_place.sql", items: [
+  { v: "v0.019", date: "2026-10-29", db: "007_return_place.sql", items: [
     "반납 신청 첫 단계를 2단계로 나눔: ① 반납 장소(의왕 기본 / 문정) → ② 반납 방법(직접 반납 / 물류사 회수 요청)",
     "물류사 회수도 어디로 들어올지(의왕·문정) 기록, 회수 메일의 입고지와 관리자 확인 화면의 보관 위치에 자동 반영",
     "Teams 반납 알림에 회수 입고지 표시, ‘파손’을 ‘파손 또는 수리 필요’로 표시",
   ] },
-  { v: "v0.97", date: "2026-10-29", items: [
+  { v: "v0.018", date: "2026-10-29", items: [
     "장비 목록과 출납 대장을 표 대신 2줄 목록으로 변경 (1줄: 장비 이름·번호, 2줄: 위치·기간·점검 등 세부 정보)",
     "상태와 버튼은 오른쪽에 모아서 표시, 옆으로 스크롤하지 않아도 됨",
   ] },
-  { v: "v0.96", date: "2026-10-29", items: [
+  { v: "v0.017", date: "2026-10-29", items: [
     "반납 자가점검 질문을 장비 카테고리별로 다르게 표시 (공통 3문항 + BLS·환자 시뮬레이터·소프트웨어 추가 문항)",
     "공통 질문에서 ‘작은 흠’, ‘청소·소독’ 문항 삭제",
     "상태 이름 ‘파손’을 ‘파손 또는 수리 필요’로 변경 (기존 기록도 같은 이름으로 표시)",
   ] },
-  { v: "v0.95", date: "2026-10-29", items: [
+  { v: "v0.016", date: "2026-10-29", items: [
     "반납 신청을 한 화면에 질문 하나씩 넘기는 방식으로 변경 (반납 방법 → 회수 정보 → 자가점검 5문항 → 메모 → 마지막 확인)",
     "예/아니오를 누르면 다음 질문으로 바로 넘어감, 위쪽 진행 막대와 뒤로 가기 버튼",
     "마지막 확인 화면에서 항목을 누르면 그 질문으로 돌아가 고칠 수 있음",
   ] },
-  { v: "v0.94", date: "2026-10-29", items: [
+  { v: "v0.015", date: "2026-10-29", items: [
     "반납 자가점검을 질문 5개에 예/아니오로 답하는 방식으로 변경 (구성품, 깨짐, 작동, 작은 흠, 청소·소독)",
     "답에 따라 상태(정상/경미한 손상/파손/구성품 누락)가 자동으로 정해짐",
     "‘아니오’가 있으면 메모 필수, 관리자 확인 화면에 ‘아니오’ 항목이 그대로 넘어감",
   ] },
-  { v: "v0.93", date: "2026-10-29", items: [
+  { v: "v0.014", date: "2026-10-29", items: [
     "로그인·DB 연결 스크립트(supabase-js 2.117.3)를 외부 CDN 대신 앱 저장소에서 직접 제공",
     "스크립트 무결성 검사(SRI) 추가: 파일이 바뀌면 브라우저가 실행하지 않음",
     "자동 백업 설정의 GitHub 액션 버전 갱신 (Node 24, 지원 종료 경고 해소)",
   ] },
-  { v: "v0.92", date: "2026-10-29", db: "006_date_limits.sql", items: [
+  { v: "v0.013", date: "2026-10-29", db: "006_date_limits.sql", items: [
     "신청 날짜 제한: 사용 시작일은 오늘부터 1년 이내, 대여 기간은 최대 1달",
     "연장도 시작일부터 1달까지 (관리자는 예외로 더 길게 연장 가능)",
     "올해가 아닌 날짜는 연도까지 표시 (예: 2032/10/01), 신청 화면에 기간과 일수 미리 보기",
     "원인: 날짜 칸에 연도가 잘못 입력돼도(2032년 등) 저장되고, 화면에는 월/일만 보여 알아보기 어려웠음",
   ] },
-  { v: "v0.91", date: "2026-10-29", db: "005_equipment_history.sql", items: [
+  { v: "v0.012", date: "2026-10-29", db: "005_equipment_history.sql", items: [
     "장비 상세에 이력 추가: 등록, 출납 신청, 연장, 출고, 반납 신청(자가점검), 반납 확인(판정), 위치 변경, 수시 점검을 시간순으로 표시",
     "‘통계’ 탭 추가: 기간별 신청 건수, 대여 일수, 평균 대여 기간, 연체 반납 비율",
     "통계: 장비별 대여 횟수·일수·가동률·마지막 사용일, 미사용 장비, 목적별·고객사별·신청자별 건수",
   ] },
-  { v: "v0.90", date: "2026-10-28", db: "", items: [
+  { v: "v0.011", date: "2026-10-28", db: "", items: [
     "출납 신청 화면에 장비 검색(제품명·자산번호·품목번호), 분류·보관 위치 필터 추가",
     "‘가능한 장비만 보기’로 수리·점검 중이거나 예약이 겹치는 장비 숨기기",
     "버전 번호 체계 변경: 정식 운영 전까지 v0.xx로 표시, 고칠 때마다 0.01씩 올림 (이전 표기 v1.0.0~v1.9.0 → v0.80~v0.90)",
     "고른 장비는 필터와 관계없이 목록에 남고, 선택한 장비 이름을 목록 아래에 표시",
   ] },
-  { v: "v0.89", date: "2026-10-28", db: "004_teams_notify.sql", items: [
+  { v: "v0.010", date: "2026-10-28", db: "004_teams_notify.sql", items: [
     "Teams 채널 알림: 출납 신청(신청번호당 1건), 반납 신청(자가점검 포함)이 생기면 바로 알림",
     "평일 오전 9시 요약 알림: 연체, 오늘·내일 출고 예정, 오늘 반납 예정, 반납 확인 대기",
     "알림 카드의 ‘앱 열기’ 버튼으로 바로 앱 이동",
     "Teams 전송이 실패해도 신청·반납은 그대로 저장",
   ] },
-  { v: "v0.88", date: "2026-10-28", db: "", items: [
+  { v: "v0.009", date: "2026-10-28", db: "", items: [
     "보관 위치 순서를 의왕 → 문정으로 변경 (장비 화면 대수, 위치 필터, 위치 선택, 반납 방법, 일정 필터)",
     "새 장비 등록 때 기본 보관 위치가 의왕으로 선택됨",
   ] },
-  { v: "v0.87", date: "2026-10-28", db: "003_kakao_name.sql", items: [
+  { v: "v0.008", date: "2026-10-28", db: "003_kakao_name.sql", items: [
     "사용자 탭에 카카오 이름을 표시 이름과 함께 보여 줌 (이름을 바꿔도 누구인지 헷갈리지 않게)",
     "카카오에서 닉네임을 바꾸면 다음 로그인 때 카카오 이름만 자동 갱신 (표시 이름은 그대로)",
     "카카오 이름은 앱에서 고칠 수 없음 (관리자 포함)",
   ] },
-  { v: "v0.86", date: "2026-10-28", db: "", items: [
+  { v: "v0.007", date: "2026-10-28", db: "", items: [
     "관리자가 사용자 표시 이름을 실명·이니셜 등으로 바꿀 수 있음 (사용자 탭 ‘이름 수정’)",
     "승인 대기 사용자를 승인할 때 표시 이름을 함께 정할 수 있음",
     "바꾼 이름은 출납 대장, 일정, 신청 화면 등 모든 화면에 바로 반영",
   ] },
-  { v: "v0.85", date: "2026-10-28", db: "", items: [
+  { v: "v0.006", date: "2026-10-28", db: "", items: [
     "‘일정’ 탭 추가: 누가 어떤 장비를 언제 빌리는지 달력으로 보기",
     "월간 달력과 장비별 타임라인 두 가지 보기, 내 신청만·보관 위치 필터",
     "일정을 누르면 신청 상세(장비, 신청자·요청자, 기간, 상태, 배송) 확인",
   ] },
-  { v: "v0.84", date: "2026-10-28", db: "", items: [
+  { v: "v0.005", date: "2026-10-28", db: "", items: [
     "관리자 반납 확인을 한 번 클릭으로: 반납자 자가점검(상태·메모)을 그대로 넘겨받고 ‘자가점검대로 확인’ 버튼으로 끝냄",
     "다를 때만 ‘내용 수정’으로 상태·메모·판정·보관 위치를 고쳐서 확인",
     "‘점검’ 버튼 이름을 ‘반납 확인’으로 통일",
     "로그인 화면과 메인 화면에 버전 표시, 버전을 누르면 이 기록이 열림",
   ] },
-  { v: "v0.83", date: "2026-10-28", db: "002_location_condition.sql", items: [
+  { v: "v0.004", date: "2026-10-28", db: "002_location_condition.sql", items: [
     "장비 목록에 보관 위치별 대수(문정·의왕·기타)와 수리 필요 대수, 위치 필터 추가",
     "장비 목록에 ‘최근 점검’ 열 추가 (반납자 자가점검 / 관리자 확인 구분)",
     "관리자 점검 때 장비 판정(사용 가능·수리 필요)과 보관 위치 확정",
     "관리자 수시 점검 기록 (실사, 수리 후 확인)",
     "대여 중 장비에 지금 어디(고객사·신청자)에 있는지 표시",
   ] },
-  { v: "v0.82", date: "2026-10-28", db: "001_return_form.sql", items: [
+  { v: "v0.003", date: "2026-10-28", db: "001_return_form.sql", items: [
     "반납 신청서: 반납 방법(직접 반납 문정·의왕 / 물류사 회수)과 상태 자가점검",
     "직접 반납하면 장비 보관 위치가 반납한 곳으로 바뀜",
     "물류사 회수를 고르면 배송 탭에 회수 요청 생성, 묶음 전체를 직접 반납하면 예정 회수 취소",
     "버그 수정: 배송 없던 건을 회수로 반납하면 배송 탭에 안 보이던 문제",
   ] },
-  { v: "v0.81", date: "2026-10-28", db: "", items: [
+  { v: "v0.002", date: "2026-10-28", db: "", items: [
     "아이폰·안드로이드 홈 화면 아이콘과 앱 이름(‘데모장비’)",
   ] },
-  { v: "v0.80", date: "2026-10-27", db: "schema.sql", items: [
+  { v: "v0.001", date: "2026-10-27", db: "schema.sql", items: [
     "첫 배포: 카카오 로그인, 관리자 승인, 장비, 출납 신청(묶음·일정 충돌 차단), 내 신청, 배송 요청 메일, 출납 대장, CSV 내보내기",
   ] },
 ];
@@ -423,29 +433,33 @@ const CONDS = { ok:"정상", minor:"경미한 손상", broken:"파손 또는 수
 const ACTIVE = s => s === "reserved" || s === "out";
 const CHECK_PILL = { ok:"p-ok", minor:"p-warn", broken:"p-bad", missing:"p-bad" };
 // 반납 자가점검 질문. "아니오"면 cond 상태가 된다 (우선순위: missing > broken > minor). cond 없음 = 상태에는 영향 없음
-// 공통 질문 다음에 장비 카테고리별 질문이 붙는다. 문항을 바꾸려면 여기만 고친다.
-const CHECKS_COMMON = [
-  { k:"parts",  q:"구성품이 모두 들어 있나요?", cond:"missing" },
-  { k:"crack",  q:"깨지거나 금 간 곳이 없나요?", cond:"broken" },
-  { k:"work",   q:"전원·작동에 이상이 없나요?", sub:"전원이 없는 장비는 ‘예’를 골라 주세요.", cond:"broken" },
-];
+// 분류마다 전체 문항 목록(최대 5문항). pre = '아니오' 때 메모에서 고르는 문구. 문항을 바꾸려면 여기만 고친다.
+const CQ = {
+  parts: { k:"parts", q:"구성품이 모두 들어 있나요?", cond:"missing", pre:["충전기 없음","케이블 없음","소모품 부족","보관 가방·케이스 없음","부품 일부 없음"] },
+  crack: { k:"crack", q:"깨지거나 금 간 곳이 없나요?", cond:"broken", pre:["외관에 금이 감","부품이 깨짐","연결부가 헐거움"] },
+  work:  { k:"work", q:"전원·작동에 이상이 없나요?", sub:"전원이 없는 장비는 ‘예’를 골라 주세요.", cond:"broken", pre:["전원이 안 켜짐","일부 기능이 안 됨","무선 연결이 안 됨","오류 메시지가 뜸"] },
+};
+const CHECKS_DEFAULT = [CQ.parts, CQ.crack, CQ.work];
 const CHECKS_BY_CATEGORY = {
   "BLS": [
-    { k:"face",   q:"얼굴 피부에 찢어진 곳이 없나요?", cond:"broken" },
-    { k:"comp",   q:"가슴을 누르면 정상적으로 눌렸다가 돌아오나요?", cond:"broken" },
-    { k:"qcpr",   q:"QCPR 피드백(앱·SimPad 연결)이 정상인가요?", sub:"QCPR 기능이 없으면 ‘예’를 골라 주세요.", cond:"broken" },
+    CQ.parts,
+    { k:"crack", q:"깨지거나 찢어진 곳이 없나요?", sub:"본체와 얼굴 피부를 확인해 주세요.", cond:"broken", pre:["얼굴 피부가 찢어짐","몸통에 금이 감","부품이 깨짐"] },
+    { k:"comp", q:"가슴을 누르면 정상적으로 눌렸다가 돌아오나요?", cond:"broken", pre:["너무 뻑뻑함","눌린 뒤 안 돌아옴","누를 때 소리가 남"] },
+    { k:"qcpr", q:"QCPR 피드백(앱·SimPad 연결)이 정상인가요?", sub:"QCPR 기능이 없으면 ‘예’를 골라 주세요.", cond:"broken", pre:["앱 연결이 안 됨","SimPad 연결이 안 됨","피드백 값이 이상함"] },
   ],
   "환자 시뮬레이터": [
-    { k:"pc",     q:"운영 노트북은 종료하고, 충전기가 모두 있나요?", cond:"missing" },
-    { k:"monitor",q:"환자 모니터 노트북은 종료하고, 충전기가 모두 있나요?", cond:"missing" },
-    { k:"batt",   q:"배터리를 충전해 두었나요?" },
+    { ...CQ.parts, sub:"노트북 2대와 충전기도 확인해 주세요.", pre:["운영 노트북 충전기 없음","환자 모니터 노트북 충전기 없음","케이블 없음","부품 일부 없음"] },
+    CQ.crack, CQ.work,
+    { k:"pcoff", q:"노트북 2대(운영·환자 모니터)를 모두 종료했나요?", pre:["운영 노트북 종료 안 함","환자 모니터 노트북 종료 안 함"] },
+    { k:"batt", q:"배터리를 충전해 두었나요?", pre:["충전하지 못함","배터리가 빨리 닳음"] },
   ],
   "소프트웨어": [
-    { k:"logout", q:"데모 계정에서 로그아웃했나요?" },
-    { k:"data",   q:"고객 정보와 녹화 영상을 지웠나요?", sub:"고객이 입력한 데이터가 남지 않게 해 주세요." },
+    CQ.parts, CQ.crack, CQ.work,
+    { k:"logout", q:"데모 계정에서 로그아웃했나요?", pre:["로그아웃하지 못함","계정 정보를 모름"] },
+    { k:"data", q:"고객 정보와 녹화 영상을 지웠나요?", sub:"고객이 입력한 데이터가 남지 않게 해 주세요.", pre:["지우지 못함","지우는 방법을 모름"] },
   ],
 };
-const checksFor = e => [...CHECKS_COMMON, ...(CHECKS_BY_CATEGORY[e && e.category] || [])];
+const checksFor = e => CHECKS_BY_CATEGORY[e && e.category] || CHECKS_DEFAULT;
 const COND_RANK = { ok:0, minor:1, broken:2, missing:3 };
 const locGroup = loc => LOCS.includes(loc) ? loc : "기타";
 function locPicker(px, cur) {
@@ -1242,7 +1256,10 @@ function returnForm(l) {
   const pickLocked = pick && !["scheduled", "pending", "cancelled"].includes(pick.status);   // 물류사에 이미 요청함
   const bundle = loans.filter(x => x.loan_no === l.loan_no && x.id !== l.id && x.status !== "cancelled").length;
   const CHECKS = checksFor(e), n = CHECKS.length;
-  const st = { place: "의왕", how: null, ans: {} };
+  const st = { place: "의왕", how: null, ans: {}, pick: {} };
+  const nosOf = () => CHECKS.filter(q => st.ans[q.k] === "n");
+  const picksOf = () => nosOf().flatMap(q => st.pick[q.k] || []);
+  const hasMemo = () => !!($("#scNote")?.value.trim() || picksOf().length);
   const methodOf = () => st.how === "pickup" ? "pickup" : st.place === "문정" ? "drop_munjeong" : "drop_uiwang";
   const result = () => CHECKS.reduce((c, q) => st.ans[q.k] === "n" && q.cond && COND_RANK[q.cond] > COND_RANK[c] ? q.cond : c, "ok");
   const steps = () => ["place", "method", ...(st.how === "pickup" ? ["pickup"] : []), ...CHECKS.map(q => "q:" + q.k), "memo", "sum"];
@@ -1281,7 +1298,8 @@ function returnForm(l) {
     </section>`).join("")}
     <section data-step="memo" hidden>
       <p class="flow-k">메모</p><h2 class="flow-q" id="memoQ"></h2>
-      <textarea id="scNote" rows="5" placeholder="예: 충전 케이블 없음, 오른팔 피부 찢어짐"></textarea>
+      <div id="memoPick" class="memo-pick"></div>
+      <textarea id="scNote" rows="3" placeholder="고를 문구가 없으면 직접 적어 주세요"></textarea>
       <div class="flow-foot"><div class="notice bad" id="mErr" hidden></div><button class="btn pri big" id="memoNext">다음</button></div>
     </section>
     <section data-step="sum" hidden>
@@ -1299,8 +1317,16 @@ function returnForm(l) {
       $("#fBack", m).style.visibility = i === 0 ? "hidden" : "visible";
       if (id === "memo") {
         const bad = result() !== "ok";
-        $("#memoQ", m).textContent = bad ? "‘아니오’인 내용을 적어 주세요" : "전달할 내용이 있으면 적어 주세요";
-        $("#memoNext", m).textContent = bad || $("#scNote", m).value.trim() ? "다음" : "건너뛰기";
+        const nos = nosOf();
+        $("#memoQ", m).textContent = nos.length ? "어떤 문제인지 골라 주세요" : "전달할 내용이 있으면 적어 주세요";
+        $("#memoPick", m).innerHTML = nos.map(q => `<div class="m-grp"><b>${esc(q.q)}</b><div class="m-chips">${(q.pre || []).map(t => `<button type="button" class="mchip" data-q="${q.k}" data-t="${esc(t)}" aria-pressed="${(st.pick[q.k] || []).includes(t)}">${esc(t)}</button>`).join("")}</div></div>`).join("");
+        $("#memoPick", m).querySelectorAll(".mchip").forEach(c => c.addEventListener("click", () => {
+          const arr = st.pick[c.dataset.q] = st.pick[c.dataset.q] || [], t = c.dataset.t, i = arr.indexOf(t);
+          if (i < 0) arr.push(t); else arr.splice(i, 1);
+          c.setAttribute("aria-pressed", String(i < 0)); $("#mErr", m).hidden = true;
+          $("#memoNext", m).textContent = bad || hasMemo() ? "다음" : "건너뛰기";
+        }));
+        $("#memoNext", m).textContent = bad || hasMemo() ? "다음" : "건너뛰기";
       }
       if (id === "sum") paintSum();
       m.parentElement.scrollTop = 0;
@@ -1334,14 +1360,14 @@ function returnForm(l) {
       sec.querySelectorAll("[data-yn]").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
       setTimeout(next, 150);
     })));
-    $("#scNote", m).addEventListener("input", () => { $("#mErr", m).hidden = true; if (result() === "ok") $("#memoNext", m).textContent = $("#scNote", m).value.trim() ? "다음" : "건너뛰기"; });
+    $("#scNote", m).addEventListener("input", () => { $("#mErr", m).hidden = true; if (result() === "ok") $("#memoNext", m).textContent = hasMemo() ? "다음" : "건너뛰기"; });
     $("#memoNext", m).addEventListener("click", () => {
       const err = $("#mErr", m); err.hidden = true;
-      if (result() !== "ok" && !$("#scNote", m).value.trim()) { err.textContent = "‘아니오’를 고른 내용을 적어 주세요."; err.hidden = false; return; }
+      if (result() !== "ok" && !hasMemo()) { err.textContent = "문구를 고르거나 직접 적어 주세요."; err.hidden = false; return; }
       next();
     });
     const paintSum = () => {
-      const r = result(), memo = $("#scNote", m).value.trim();
+      const r = result(), memo = [...picksOf(), $("#scNote", m).value.trim()].filter(Boolean).join("\n");
       $("#sumBox", m).innerHTML = `
         <button class="sum-row" data-goto="place"><span>반납 장소</span><b>${esc(st.place)}</b></button>
         <button class="sum-row" data-goto="method"><span>반납 방법</span><b>${st.how === "pickup" ? "물류사 회수 요청" : "직접 반납"}</b></button>
@@ -1358,8 +1384,8 @@ function returnForm(l) {
       err.hidden = true;
       const method = methodOf(), memo = $("#scNote", m).value.trim();
       const self = result(), nos = CHECKS.filter(q => st.ans[q.k] === "n");
-      if (self !== "ok" && !memo) { back2sum = true; go("memo"); $("#mErr", m).textContent = "‘아니오’를 고른 내용을 적어 주세요."; $("#mErr", m).hidden = false; return; }
-      const note = [nos.length ? nos.map(q => `[아니오] ${q.q}`).join("\n") : `자가점검 ${n}개 모두 ‘예’`, memo].filter(Boolean).join("\n");
+      if (self !== "ok" && !hasMemo()) { back2sum = true; go("memo"); $("#mErr", m).textContent = "문구를 고르거나 직접 적어 주세요."; $("#mErr", m).hidden = false; return; }
+      const note = [nos.length ? nos.map(q => `[아니오] ${q.q}${(st.pick[q.k] || []).length ? ` → ${st.pick[q.k].join(", ")}` : ""}`).join("\n") : `자가점검 ${n}개 모두 ‘예’`, memo].filter(Boolean).join("\n");
       let pickup = null;
       if (method === "pickup") {
         pickup = { date: $("#rpDate", m)?.value || pick?.requested_date || null };
