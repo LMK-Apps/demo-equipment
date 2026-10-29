@@ -82,11 +82,39 @@ label.f.req>span::after{content:" *";color:var(--bad)}
 .fields .wide{grid-column:1/-1}
 .check{display:flex;gap:8px;align-items:center;font-weight:500}
 .check input{width:18px;height:18px;accent-color:var(--accent)}
-.qlist{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-.qrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
-.qrow .seg{flex:none}.qrow .seg button{padding:8px 14px;font-size:14px}
-.qrow.no{border-color:var(--bad, #c0392b)}
-.qrow.no .seg button[data-yn="n"][aria-pressed="true"]{background:var(--bad, #c0392b);color:#fff}
+.overlay.full{padding:0;align-items:stretch;background:var(--surface)}
+.modal.full{max-width:560px;margin:0 auto;min-height:100%;border:0;border-radius:0;padding:4px 20px calc(20px + env(safe-area-inset-bottom));gap:0}
+@media (min-width:640px){.overlay.full{padding:32px;align-items:center;background:rgba(10,14,12,.45)}.modal.full{min-height:0;height:min(760px,calc(100vh - 64px));border-radius:20px;border:1px solid var(--line)}}
+.flow{display:flex;flex-direction:column;flex:1;min-height:0}
+.flow-top{display:flex;align-items:center;gap:10px;height:52px}
+.icon-btn{border:0;background:none;color:var(--fg);font:inherit;font-size:22px;width:40px;height:40px;border-radius:10px;cursor:pointer;flex:none}
+.icon-btn:hover{background:var(--sunk)}
+.flow-bar{flex:1;height:6px;border-radius:99px;background:var(--sunk);overflow:hidden}
+.flow-bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .3s ease}
+.flow-eq{margin-top:2px}
+.flow section{display:flex;flex-direction:column;flex:1;gap:14px;padding-top:32px;animation:flowIn .22s ease}
+.flow section[hidden]{display:none}
+@keyframes flowIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.flow section{animation:none}.flow-bar i{transition:none}}
+.flow-k{margin:0;color:var(--accent);font-weight:700;font-size:15px}
+.flow-q{margin:0;font-size:26px;line-height:1.35;font-weight:700;letter-spacing:-.02em;word-break:keep-all}
+.flow-box{background:var(--sunk);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.flow-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px;padding-top:20px}
+.flow-yn{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:20px}
+.flow .big,.flow button.btn.big{font:inherit;font-size:18px;font-weight:700;min-height:58px;border-radius:14px;cursor:pointer;width:100%}
+.yn-y{border:0;background:var(--accent);color:var(--accent-ink)}
+.yn-n{border:0;background:var(--sunk);color:var(--fg)}
+.yn-n[aria-pressed="true"]{background:var(--bad);color:#fff}
+.flow-opts{display:flex;flex-direction:column;gap:10px}
+.opt{text-align:left;font:inherit;font-size:18px;font-weight:600;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:20px 18px;cursor:pointer}
+.opt:hover{border-color:var(--accent)}
+.opt[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.flow textarea{font:inherit;font-size:16px;border:1.5px solid var(--line);border-radius:12px;padding:14px;background:var(--surface);color:var(--fg);resize:vertical}
+.flow-sum{display:flex;flex-direction:column}
+.sum-row{display:flex;justify-content:space-between;gap:16px;text-align:left;font:inherit;color:var(--fg);background:none;border:0;border-bottom:1px solid var(--line);padding:12px 2px;cursor:pointer}
+.sum-row span{color:var(--muted)}.sum-row b{text-align:right;white-space:pre-wrap;flex:none;max-width:55%}
+.sum-row b.t-bad{color:var(--bad)}
+.sum-res{display:flex;justify-content:space-between;align-items:center;padding:14px 2px 4px;font-weight:600}
 button.btn{font:inherit;font-weight:600;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
 button.btn:hover{background:var(--sunk)}
 button.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -189,6 +217,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.95", date: "2026-10-29", items: [
+    "반납 신청을 한 화면에 질문 하나씩 넘기는 방식으로 변경 (반납 방법 → 회수 정보 → 자가점검 5문항 → 메모 → 마지막 확인)",
+    "예/아니오를 누르면 다음 질문으로 바로 넘어감, 위쪽 진행 막대와 뒤로 가기 버튼",
+    "마지막 확인 화면에서 항목을 누르면 그 질문으로 돌아가 고칠 수 있음",
+  ] },
   { v: "v0.94", date: "2026-10-29", items: [
     "반납 자가점검을 질문 5개에 예/아니오로 답하는 방식으로 변경 (구성품, 깨짐, 작동, 작은 흠, 청소·소독)",
     "답에 따라 상태(정상/경미한 손상/파손/구성품 누락)가 자동으로 정해짐",
@@ -1072,63 +1105,112 @@ function returnForm(l) {
   const pick = shipOf(l.loan_no, "pickup"), out = shipOf(l.loan_no, "outbound");
   const src = pick || out || {};
   const pickDefault = (pick && pick.requested_date) || addDays(todayStr(), 1);
-  modal(`<h2>반납 신청</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(e.asset_no)}</span>) · ${esc(l.loan_no)} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</p>
-    <div><h3>반납 방법</h3><div class="fields" style="margin-top:6px">${Object.entries(RETURN_METHODS).map(([k, t]) => `<label class="check"><input type="radio" name="rm" value="${k}"> ${t}</label>`).join("")}</div></div>
-    <div class="ship-box" id="rpBox" hidden>
-      ${pick && pick.status !== "cancelled" ? `<div class="meta">이 신청에는 회수 정보가 이미 있어요. 회수 희망일만 확인해 주세요.<br>${esc(pick.recipient)} · ${esc(pick.phone)} · ${esc(pick.address)}</div>
+  const hasPick = pick && pick.status !== "cancelled";
+  const n = RETURN_CHECKS.length;
+  const st = { method: null, ans: {} };
+  const result = () => RETURN_CHECKS.reduce((c, q) => st.ans[q.k] === "n" && q.cond && COND_RANK[q.cond] > COND_RANK[c] ? q.cond : c, "ok");
+  const steps = () => ["method", ...(st.method === "pickup" ? ["pickup"] : []), ...RETURN_CHECKS.map(q => "q:" + q.k), "memo", "sum"];
+  modal(`<div class="flow">
+    <div class="flow-top"><button class="icon-btn" id="fBack" aria-label="뒤로">←</button><div class="flow-bar" aria-hidden="true"><i id="fBar"></i></div><button class="icon-btn" data-close-btn aria-label="닫기">✕</button></div>
+    <div class="meta flow-eq">${esc(e.name)} · <span class="mono">${esc(e.asset_no)}</span></div>
+    <section data-step="method">
+      <p class="flow-k">반납 방법</p><h2 class="flow-q">어떻게 반납하나요?</h2>
+      <div class="flow-opts">${Object.entries(RETURN_METHODS).map(([k, t]) => `<button class="opt" data-m="${k}" aria-pressed="false">${esc(t)}</button>`).join("")}</div>
+    </section>
+    <section data-step="pickup" hidden>
+      <p class="flow-k">물류사 회수</p><h2 class="flow-q">회수 정보를 확인해 주세요</h2>
+      ${hasPick ? `<div class="meta">이 신청에는 회수 정보가 이미 있어요.<br>${esc(pick.recipient)} · ${esc(pick.phone)} · ${esc(pick.address)}</div>
         <label class="f req"><span>회수 희망일</span><input type="date" id="rpDate" value="${esc(pickDefault)}"></label>` : `<div class="fields">
         <label class="f req"><span>담당자</span><input id="rpName" value="${esc(src.recipient || "")}"></label>
         <label class="f req"><span>연락처</span><input id="rpPhone" inputmode="tel" value="${esc(src.phone || "")}"></label>
         <label class="f req wide"><span>회수 주소</span><input id="rpAddr" value="${esc(src.address || "")}"></label>
         <label class="f req"><span>회수 희망일</span><input type="date" id="rpDate" value="${esc(pickDefault)}"></label>
         <label class="f wide"><span>회수 메모</span><input id="rpMemo" placeholder="수거 위치, 연락 가능 시간 등"></label></div>`}
-    </div>
-    <div><h3>상태 자가점검</h3><p class="meta">질문마다 예 또는 아니오를 골라 주세요.</p>
-      <div class="qlist">${RETURN_CHECKS.map((c, i) => `<div class="qrow" data-q="${c.k}">
-        <div><b>${i + 1}. ${esc(c.q)}</b>${c.sub ? `<div class="meta">${esc(c.sub)}</div>` : ""}${c.k === "parts" && e.components ? `<div class="meta" style="white-space:pre-wrap">구성품: ${esc(e.components)}</div>` : ""}</div>
-        <div class="seg" role="group" aria-label="${esc(c.q)}"><button type="button" data-yn="y" aria-pressed="false">예</button><button type="button" data-yn="n" aria-pressed="false">아니오</button></div>
-      </div>`).join("")}</div>
-      <div class="meta" id="scRes" style="margin-top:8px"></div></div>
-    <label class="f"><span id="scNoteLbl">자가점검 메모 (선택)</span><textarea id="scNote"></textarea></label>
-    <div class="notice">반납 신청 후 장비 관리자가 상태를 점검하면 반납이 완료돼요.</div>
-    <div class="notice bad" id="rErr" hidden></div>
-    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="rOk">반납 신청</button></div>`, m => {
-    m.querySelectorAll('input[name="rm"]').forEach(r => r.addEventListener("change", () => { $("#rpBox", m).hidden = r.value !== "pickup" || !r.checked; }));
-    const ans = {};
-    const result = () => RETURN_CHECKS.reduce((c, q) => ans[q.k] === "n" && q.cond && COND_RANK[q.cond] > COND_RANK[c] ? q.cond : c, "ok");
-    const paint = () => {
-      const done = RETURN_CHECKS.every(q => ans[q.k]), r = result();
-      $("#scRes", m).innerHTML = done ? `자가점검 결과: <span class="pill ${CHECK_PILL[r]}">${esc(CONDS[r])}</span>` : `${Object.keys(ans).length}/${RETURN_CHECKS.length} 답변`;
-      $("#scNoteLbl", m).textContent = r === "ok" ? "자가점검 메모 (선택)" : "자가점검 메모 (‘아니오’인 내용을 꼭 적어 주세요)";
+      <div class="flow-foot"><div class="notice bad" id="rpErr" hidden></div><button class="btn pri big" id="rpNext">다음</button></div>
+    </section>
+    ${RETURN_CHECKS.map((q, i) => `<section data-step="q:${q.k}" hidden>
+      <p class="flow-k">자가점검 ${i + 1}/${n}</p><h2 class="flow-q">${esc(q.q)}</h2>
+      ${q.sub ? `<p class="meta">${esc(q.sub)}</p>` : ""}
+      ${q.k === "parts" && e.components ? `<div class="flow-box"><b>구성품</b><div style="white-space:pre-wrap">${esc(e.components)}</div></div>` : ""}
+      <div class="flow-yn"><button class="big yn-n" data-yn="n" aria-pressed="false">아니오</button><button class="big yn-y" data-yn="y" aria-pressed="false">예</button></div>
+    </section>`).join("")}
+    <section data-step="memo" hidden>
+      <p class="flow-k">메모</p><h2 class="flow-q" id="memoQ"></h2>
+      <textarea id="scNote" rows="5" placeholder="예: 충전 케이블 없음, 오른팔 피부 찢어짐"></textarea>
+      <div class="flow-foot"><div class="notice bad" id="mErr" hidden></div><button class="btn pri big" id="memoNext">다음</button></div>
+    </section>
+    <section data-step="sum" hidden>
+      <p class="flow-k">마지막 확인</p><h2 class="flow-q">이대로 반납 신청할까요?</h2>
+      <div id="sumBox" class="flow-sum"></div>
+      <div class="flow-foot"><div class="notice">반납 신청 후 장비 관리자가 상태를 점검하면 반납이 완료돼요.</div><div class="notice bad" id="rErr" hidden></div><button class="btn pri big" id="rOk">반납 신청</button></div>
+    </section></div>`, m => {
+    m.classList.add("full"); m.parentElement.classList.add("full");
+    let cur = "method", back2sum = false;
+    const go = id => {
+      cur = id;
+      m.querySelectorAll("section[data-step]").forEach(x => { x.hidden = x.dataset.step !== id; });
+      const list = steps(), i = list.indexOf(id);
+      $("#fBar", m).style.width = `${Math.round(((i + 1) / list.length) * 100)}%`;
+      $("#fBack", m).style.visibility = i === 0 ? "hidden" : "visible";
+      if (id === "memo") {
+        const bad = result() !== "ok";
+        $("#memoQ", m).textContent = bad ? "‘아니오’인 내용을 적어 주세요" : "전달할 내용이 있으면 적어 주세요";
+        $("#memoNext", m).textContent = bad || $("#scNote", m).value.trim() ? "다음" : "건너뛰기";
+      }
+      if (id === "sum") paintSum();
+      m.parentElement.scrollTop = 0;
     };
-    m.querySelectorAll(".qrow").forEach(row => row.querySelectorAll("[data-yn]").forEach(btn => btn.addEventListener("click", () => {
-      ans[row.dataset.q] = btn.dataset.yn;
-      row.querySelectorAll("[data-yn]").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
-      row.classList.toggle("no", btn.dataset.yn === "n");
-      paint();
+    const next = () => {
+      if (back2sum && !(cur === "method" && st.method === "pickup")) { back2sum = false; return go("sum"); }
+      const list = steps(); go(list[list.indexOf(cur) + 1]);
+    };
+    $("#fBack", m).addEventListener("click", () => { back2sum = false; const list = steps(), i = list.indexOf(cur); if (i > 0) go(list[i - 1]); });
+    m.querySelectorAll("[data-m]").forEach(btn => btn.addEventListener("click", () => {
+      st.method = btn.dataset.m;
+      m.querySelectorAll("[data-m]").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
+      setTimeout(next, 150);
+    }));
+    $("#rpNext", m).addEventListener("click", () => {
+      const err = $("#rpErr", m), show = t => { err.textContent = t; err.hidden = false; };
+      err.hidden = true;
+      if (!$("#rpDate", m).value) return show("회수 희망일을 골라 주세요.");
+      if ($("#rpName", m) && (!$("#rpName", m).value.trim() || !$("#rpPhone", m).value.trim() || !$("#rpAddr", m).value.trim())) return show("담당자, 연락처, 회수 주소를 입력해 주세요.");
+      next();
+    });
+    m.querySelectorAll("section[data-step^='q:']").forEach(sec => sec.querySelectorAll("[data-yn]").forEach(btn => btn.addEventListener("click", () => {
+      st.ans[sec.dataset.step.slice(2)] = btn.dataset.yn;
+      sec.querySelectorAll("[data-yn]").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
+      setTimeout(next, 150);
     })));
-    paint();
+    $("#scNote", m).addEventListener("input", () => { $("#mErr", m).hidden = true; if (result() === "ok") $("#memoNext", m).textContent = $("#scNote", m).value.trim() ? "다음" : "건너뛰기"; });
+    $("#memoNext", m).addEventListener("click", () => {
+      const err = $("#mErr", m); err.hidden = true;
+      if (result() !== "ok" && !$("#scNote", m).value.trim()) { err.textContent = "‘아니오’를 고른 내용을 적어 주세요."; err.hidden = false; return; }
+      next();
+    });
+    const paintSum = () => {
+      const r = result(), memo = $("#scNote", m).value.trim();
+      $("#sumBox", m).innerHTML = `
+        <button class="sum-row" data-goto="method"><span>반납 방법</span><b>${esc(RETURN_METHODS[st.method])}</b></button>
+        ${st.method === "pickup" ? `<button class="sum-row" data-goto="pickup"><span>회수 희망일</span><b>${fmtD($("#rpDate", m).value)}</b></button>` : ""}
+        ${RETURN_CHECKS.map((q, i) => `<button class="sum-row" data-goto="q:${q.k}"><span>${i + 1}. ${esc(q.q)}</span><b class="${st.ans[q.k] === "n" ? "t-bad" : ""}">${st.ans[q.k] === "n" ? "아니오" : "예"}</b></button>`).join("")}
+        <button class="sum-row" data-goto="memo"><span>메모</span><b>${memo ? esc(memo) : "없음"}</b></button>
+        <div class="sum-res">자가점검 결과 <span class="pill ${CHECK_PILL[r]}">${esc(CONDS[r])}</span></div>
+        <p class="meta">항목을 누르면 고칠 수 있어요.</p>`;
+      $("#sumBox", m).querySelectorAll("[data-goto]").forEach(x => x.addEventListener("click", () => { back2sum = true; go(x.dataset.goto); }));
+    };
     const b = $("#rOk", m);
     b.addEventListener("click", async () => {
       const err = $("#rErr", m), show = t => { err.textContent = t; err.hidden = false; };
       err.hidden = true;
-      const method = m.querySelector('input[name="rm"]:checked')?.value;
-      const memo = $("#scNote", m).value.trim();
-      if (!method) return show("반납 방법을 골라 주세요.");
-      const left = RETURN_CHECKS.findIndex(q => !ans[q.k]);
-      if (left >= 0) return show(`자가점검 ${left + 1}번 질문에 답해 주세요.`);
-      const self = result(), nos = RETURN_CHECKS.filter(q => ans[q.k] === "n");
-      if (self !== "ok" && !memo) return show("‘아니오’를 고른 내용을 메모에 적어 주세요.");
-      const note = [nos.length ? nos.map(q => `[아니오] ${q.q}`).join("\n") : `자가점검 ${RETURN_CHECKS.length}개 모두 ‘예’`, memo].filter(Boolean).join("\n");
+      const method = st.method, memo = $("#scNote", m).value.trim();
+      const self = result(), nos = RETURN_CHECKS.filter(q => st.ans[q.k] === "n");
+      if (self !== "ok" && !memo) { back2sum = true; go("memo"); $("#mErr", m).textContent = "‘아니오’를 고른 내용을 적어 주세요."; $("#mErr", m).hidden = false; return; }
+      const note = [nos.length ? nos.map(q => `[아니오] ${q.q}`).join("\n") : `자가점검 ${n}개 모두 ‘예’`, memo].filter(Boolean).join("\n");
       let pickup = null;
       if (method === "pickup") {
-        const date = $("#rpDate", m)?.value;
-        if (!date) return show("회수 희망일을 골라 주세요.");
-        pickup = { date };
-        if ($("#rpName", m)) {
-          Object.assign(pickup, { recipient: $("#rpName", m).value.trim(), phone: $("#rpPhone", m).value.trim(), address: $("#rpAddr", m).value.trim(), memo: $("#rpMemo", m).value.trim() });
-          if (!pickup.recipient || !pickup.phone || !pickup.address) return show("담당자, 연락처, 회수 주소를 입력해 주세요.");
-        }
+        pickup = { date: $("#rpDate", m).value };
+        if ($("#rpName", m)) Object.assign(pickup, { recipient: $("#rpName", m).value.trim(), phone: $("#rpPhone", m).value.trim(), address: $("#rpAddr", m).value.trim(), memo: $("#rpMemo", m).value.trim() });
       }
       b.disabled = true;
       const { error } = await sb.rpc("request_return", { p_loan_id: l.id, p_method: method, p_self_check: self, p_self_note: note, p_pickup: pickup });
@@ -1136,6 +1218,7 @@ function returnForm(l) {
       if (error) return show(errText(error));
       closeModal(); toast(method === "pickup" ? "반납을 신청했어요. 배송 탭에서 물류사에 회수 요청 메일을 보내 주세요." : "반납을 신청했어요. 장비를 " + RETURN_METHODS[method].slice(8) + "에 가져다 놓아 주세요."); await refresh();
     });
+    go("method");
   });
 }
 
