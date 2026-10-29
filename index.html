@@ -82,6 +82,11 @@ label.f.req>span::after{content:" *";color:var(--bad)}
 .fields .wide{grid-column:1/-1}
 .check{display:flex;gap:8px;align-items:center;font-weight:500}
 .check input{width:18px;height:18px;accent-color:var(--accent)}
+.qlist{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.qrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.qrow .seg{flex:none}.qrow .seg button{padding:8px 14px;font-size:14px}
+.qrow.no{border-color:var(--bad, #c0392b)}
+.qrow.no .seg button[data-yn="n"][aria-pressed="true"]{background:var(--bad, #c0392b);color:#fff}
 button.btn{font:inherit;font-weight:600;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
 button.btn:hover{background:var(--sunk)}
 button.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -184,6 +189,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.94", date: "2026-10-29", items: [
+    "반납 자가점검을 질문 5개에 예/아니오로 답하는 방식으로 변경 (구성품, 깨짐, 작동, 작은 흠, 청소·소독)",
+    "답에 따라 상태(정상/경미한 손상/파손/구성품 누락)가 자동으로 정해짐",
+    "‘아니오’가 있으면 메모 필수, 관리자 확인 화면에 ‘아니오’ 항목이 그대로 넘어감",
+  ] },
   { v: "v0.93", date: "2026-10-29", items: [
     "로그인·DB 연결 스크립트(supabase-js 2.117.3)를 외부 CDN 대신 앱 저장소에서 직접 제공",
     "스크립트 무결성 검사(SRI) 추가: 파일이 바뀌면 브라우저가 실행하지 않음",
@@ -289,6 +299,15 @@ const PURPOSES = ["고객 데모","전시회","교육·워크숍","학회","내�
 const CONDS = { ok:"정상", minor:"경미한 손상", broken:"파손", missing:"구성품 누락" };
 const ACTIVE = s => s === "reserved" || s === "out";
 const CHECK_PILL = { ok:"p-ok", minor:"p-warn", broken:"p-bad", missing:"p-bad" };
+// 반납 자가점검 질문. "아니오"면 cond 상태가 된다 (우선순위: missing > broken > minor). cond 없음 = 상태에는 영향 없음
+const RETURN_CHECKS = [
+  { k:"parts",  q:"구성품이 모두 들어 있나요?", cond:"missing" },
+  { k:"crack",  q:"깨지거나 금 간 곳이 없나요?", cond:"broken" },
+  { k:"work",   q:"전원·작동에 이상이 없나요?", sub:"전원이 없는 장비는 ‘예’를 골라 주세요.", cond:"broken" },
+  { k:"scratch",q:"긁힘·얼룩 같은 작은 흠이 없나요?", cond:"minor" },
+  { k:"clean",  q:"사용 후 청소·소독을 했나요?" },
+];
+const COND_RANK = { ok:0, minor:1, broken:2, missing:3 };
 const locGroup = loc => LOCS.includes(loc) ? loc : "기타";
 function locPicker(px, cur) {
   const etc = !!cur && !LOCS.includes(cur);
@@ -1064,23 +1083,43 @@ function returnForm(l) {
         <label class="f req"><span>회수 희망일</span><input type="date" id="rpDate" value="${esc(pickDefault)}"></label>
         <label class="f wide"><span>회수 메모</span><input id="rpMemo" placeholder="수거 위치, 연락 가능 시간 등"></label></div>`}
     </div>
-    <div><h3>상태 자가점검</h3><div class="fields" style="margin-top:6px">${Object.entries(CONDS).map(([k, t]) => `<label class="check"><input type="radio" name="sc" value="${k}"> ${t}</label>`).join("")}</div></div>
-    ${e.components ? `<div class="meta" style="white-space:pre-wrap">구성품: ${esc(e.components)}</div>` : ""}
-    <label class="f"><span>자가점검 메모 (손상·누락이 있으면 꼭 적어 주세요)</span><textarea id="scNote"></textarea></label>
+    <div><h3>상태 자가점검</h3><p class="meta">질문마다 예 또는 아니오를 골라 주세요.</p>
+      <div class="qlist">${RETURN_CHECKS.map((c, i) => `<div class="qrow" data-q="${c.k}">
+        <div><b>${i + 1}. ${esc(c.q)}</b>${c.sub ? `<div class="meta">${esc(c.sub)}</div>` : ""}${c.k === "parts" && e.components ? `<div class="meta" style="white-space:pre-wrap">구성품: ${esc(e.components)}</div>` : ""}</div>
+        <div class="seg" role="group" aria-label="${esc(c.q)}"><button type="button" data-yn="y" aria-pressed="false">예</button><button type="button" data-yn="n" aria-pressed="false">아니오</button></div>
+      </div>`).join("")}</div>
+      <div class="meta" id="scRes" style="margin-top:8px"></div></div>
+    <label class="f"><span id="scNoteLbl">자가점검 메모 (선택)</span><textarea id="scNote"></textarea></label>
     <div class="notice">반납 신청 후 장비 관리자가 상태를 점검하면 반납이 완료돼요.</div>
     <div class="notice bad" id="rErr" hidden></div>
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="rOk">반납 신청</button></div>`, m => {
     m.querySelectorAll('input[name="rm"]').forEach(r => r.addEventListener("change", () => { $("#rpBox", m).hidden = r.value !== "pickup" || !r.checked; }));
+    const ans = {};
+    const result = () => RETURN_CHECKS.reduce((c, q) => ans[q.k] === "n" && q.cond && COND_RANK[q.cond] > COND_RANK[c] ? q.cond : c, "ok");
+    const paint = () => {
+      const done = RETURN_CHECKS.every(q => ans[q.k]), r = result();
+      $("#scRes", m).innerHTML = done ? `자가점검 결과: <span class="pill ${CHECK_PILL[r]}">${esc(CONDS[r])}</span>` : `${Object.keys(ans).length}/${RETURN_CHECKS.length} 답변`;
+      $("#scNoteLbl", m).textContent = r === "ok" ? "자가점검 메모 (선택)" : "자가점검 메모 (‘아니오’인 내용을 꼭 적어 주세요)";
+    };
+    m.querySelectorAll(".qrow").forEach(row => row.querySelectorAll("[data-yn]").forEach(btn => btn.addEventListener("click", () => {
+      ans[row.dataset.q] = btn.dataset.yn;
+      row.querySelectorAll("[data-yn]").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
+      row.classList.toggle("no", btn.dataset.yn === "n");
+      paint();
+    })));
+    paint();
     const b = $("#rOk", m);
     b.addEventListener("click", async () => {
       const err = $("#rErr", m), show = t => { err.textContent = t; err.hidden = false; };
       err.hidden = true;
       const method = m.querySelector('input[name="rm"]:checked')?.value;
-      const self = m.querySelector('input[name="sc"]:checked')?.value;
-      const note = $("#scNote", m).value.trim();
+      const memo = $("#scNote", m).value.trim();
       if (!method) return show("반납 방법을 골라 주세요.");
-      if (!self) return show("장비 상태를 골라 주세요.");
-      if (self !== "ok" && !note) return show("손상이나 누락이 있으면 내용을 메모에 적어 주세요.");
+      const left = RETURN_CHECKS.findIndex(q => !ans[q.k]);
+      if (left >= 0) return show(`자가점검 ${left + 1}번 질문에 답해 주세요.`);
+      const self = result(), nos = RETURN_CHECKS.filter(q => ans[q.k] === "n");
+      if (self !== "ok" && !memo) return show("‘아니오’를 고른 내용을 메모에 적어 주세요.");
+      const note = [nos.length ? nos.map(q => `[아니오] ${q.q}`).join("\n") : `자가점검 ${RETURN_CHECKS.length}개 모두 ‘예’`, memo].filter(Boolean).join("\n");
       let pickup = null;
       if (method === "pickup") {
         const date = $("#rpDate", m)?.value;
