@@ -247,6 +247,9 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.103", date: "2026-10-29", items: [
+    "배송 탭을 다시 윗줄(모든 사용자)로 옮김. 관리자 전용 줄은 출납 대장·통계·사용자",
+  ] },
   { v: "v0.102", date: "2026-10-29", items: [
     "메뉴를 2줄로 나눔: 윗줄은 모든 사용자(현황·일정·장비·출납 신청·내 신청), 아랫줄은 장비 관리자 전용(배송·출납 대장·통계·사용자)",
     "관리자 메뉴 줄은 옅은 색과 ‘관리자’ 표시로 구분",
@@ -514,14 +517,14 @@ async function refresh(quiet) {
 // 윗줄: 모든 사용자 · 아랫줄: 장비 관리자만
 const TABS = () => [
   ["home","현황"], ["cal","일정"], ["equip","장비"], ["request","출납 신청"], ["mine","내 신청"],
+  ["ship","배송", shipments.filter(s => s.status === "pending").length],
 ];
 const ADMIN_TABS = () => [
-  ["ship","배송", shipments.filter(s => s.status === "pending").length],
   ["ledger","출납 대장", loans.filter(isOverdue).length],
   ["stats","통계"],
   ["users","사용자", people.filter(p => p.status === "pending").length],
 ];
-const ADMIN_VIEWS = ["ship", "ledger", "stats", "users"];
+const ADMIN_VIEWS = ["ledger", "stats", "users"];
 function renderTabs() {
   const btn = ([k, t, n]) => `<button role="tab" aria-selected="${view === k}" data-tab="${k}">${t}${n ? `<span class="count">${n}</span>` : ""}</button>`;
   $("#tabs").innerHTML = `<div class="tab-row">${TABS().map(btn).join("")}</div>`
