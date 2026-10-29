@@ -163,6 +163,7 @@ tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .r2-l1{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;min-width:0}
 .r2-title{font-size:14px;font-weight:600;min-width:0;overflow-wrap:anywhere}
 .r2-l1 .meta{flex:none}
+.id-tag{flex:none;display:inline-block;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 6px;vertical-align:1px}
 .r2-l2{display:flex;flex-wrap:wrap;font-size:12.5px;color:var(--muted);min-width:0}
 .r2-l2>span:not(:last-child)::after{content:"·";margin:0 7px;opacity:.6}
 .r2-l2 b{font-weight:600}
@@ -261,6 +262,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.031", date: "2026-10-29", db: "010_equipment_internal_id.sql", items: [
+    "장비마다 바뀌지 않는 내부 ID(EQ-0001 형식) 추가. 자산번호·제품명 등 다른 정보를 바꿔도 그대로",
+    "새 장비는 등록할 때 자동으로 다음 번호를 받고, 지운 장비 번호는 다시 쓰지 않음",
+    "장비 목록·장비 상세·신청 세부 정보에 표시, 검색과 출납 대장 CSV(장비 ID 열)에도 포함",
+  ] },
   { v: "v0.030", date: "2026-10-29", items: [
     "데모 신청 기본 사용 기간을 3일로 설정 (시작일 포함). 시작일을 바꾸면 반납 예정일이 자동으로 시작일 + 2일이 됨",
     "반납 예정일을 직접 고르면 시작일을 바꿔도 그 날짜를 유지 (시작일보다 앞이 되면 다시 3일로 맞춤)",
@@ -483,6 +489,7 @@ function checkCell(e) {
   return `<span class="pill ${CHECK_PILL[e.last_check] || ""}">${esc(CONDS[e.last_check])}</span><div class="meta">${who} · ${fmtT(e.last_check_at)}${e.last_check_note ? `<br>${esc(e.last_check_note)}` : ""}</div>`;
 }
 const condText = k => k ? `<b class="c-${k}">${esc(CONDS[k] || k)}</b>` : "기록 없음";
+const idTag = e => e && e.internal_id ? `<span class="id-tag" title="내부 ID (바뀌지 않음)">${esc(e.internal_id)}</span>` : "";
 const pill = (map, k) => { const [t, c] = map[k] || [k || "–", ""]; return `<span class="pill ${c}">${esc(t)}</span>`; };
 
 if (!window.supabase || SUPABASE_KEY.includes("REPLACE_ME")) {
@@ -707,7 +714,7 @@ function loanView(id) {
   const pre = t => `<span style="white-space:pre-wrap">${esc(t)}</span>`;
   const shipTxt = (x, map) => `${esc(map[x.status]?.[0] || x.status)} · ${esc(x.recipient || "")} ${esc(x.phone || "")} · ${esc(x.address || "")}${x.requested_date ? ` · 희망일 ${fmtD(x.requested_date)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.carrier || "")} ${esc(x.tracking_no)}</span>` : ""}`;
   modal(`<h2>${esc(e.name)}</h2>
-    <div class="lv-sub"><span class="meta"><span class="mono">${esc(e.asset_no)}</span> · <span class="mono">${esc(l.loan_no)}</span></span>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</div>
+    <div class="lv-sub"><span class="meta">${idTag(e)} <span class="mono">${esc(e.asset_no)}</span> · <span class="mono">${esc(l.loan_no)}</span></span>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</div>
     <div class="lv-sec"><h3>신청</h3><div class="fields">
       ${f("기간", `<span class="mono">${fmtD(l.start_date)} ~ ${fmtD(l.due_date)}</span> (${daysBetween(l.start_date, l.due_date) + 1}일)${l.extension_count ? ` · 연장 ${l.extension_count}회` : ""}`)}
       ${f("신청자", esc(nameOf(l.requester_id)))}
@@ -832,7 +839,7 @@ function vStats() {
 
 function vEquip() {
   const q = filters.eqQ.trim().toLowerCase();
-  const list = equipment.filter(e => (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.asset_no} ${e.name} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q)));
+  const list = equipment.filter(e => (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.asset_no} ${e.name} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q)));
   const t = todayStr();
   const byLoc = [...LOCS, "기타"].map(k => [k, equipment.filter(e => locGroup(e.location) === k && e.status !== "retired").length]);
   const needRepair = equipment.filter(e => e.status === "repair").length;
@@ -852,7 +859,7 @@ function vEquip() {
       const cur = e.status === "onloan" ? loans.find(l => l.equipment_id === e.id && l.status === "out") : null;
       return `<div class="r2" data-act="eqView" data-id="${e.id}">
         <div class="r2-main">
-          <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b><span class="mono meta">${esc(e.asset_no)}</span>${e.item_no ? `<span class="mono meta">${esc(e.item_no)}</span>` : ""}</div>
+          <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b>${idTag(e)}<span class="mono meta">${esc(e.asset_no)}</span>${e.item_no ? `<span class="mono meta">${esc(e.item_no)}</span>` : ""}</div>
           <div class="r2-l2"><span>${esc(e.category)}</span><span>보관 ${esc(e.location)}</span>${cur ? `<span>지금 ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</span>` : ""}<span>점검 ${condText(e.last_check)}${e.last_check_at ? ` ${fmtD(e.last_check_at.slice(0, 10))}` : ""}</span><span>다음 예약 ${next ? `<span class="mono">${fmtD(next.start_date)}–${fmtD(next.due_date)}</span>` : "없음"}</span></div>
         </div>
         <div class="r2-side">${pill(EQ_STATUS, e.status)}</div></div>`;
@@ -874,7 +881,7 @@ function vRequest() {
     if (blocked) draft.picks.delete(e.id);
     const why = e.status === "repair" ? "수리 중" : e.status === "inspect" ? "점검 중" : c.length ? "예약 겹침" : "";
     const title = c.length ? `${c[0].loan_no} (${fmtD(c[0].start_date)}–${fmtD(c[0].due_date)})` : why;
-    const hay = `${e.name} ${e.asset_no} ${e.item_no} ${e.serial_no} ${e.location} ${e.category}`.toLowerCase();
+    const hay = `${e.name} ${e.internal_id || ""} ${e.asset_no} ${e.item_no} ${e.serial_no} ${e.location} ${e.category}`.toLowerCase();
     return `<label class="${blocked ? "off" : ""}" data-hay="${esc(hay)}" data-cat="${esc(e.category)}" data-loc="${esc(locGroup(e.location))}" data-ok="${blocked ? "0" : "1"}"><input type="checkbox" data-pick="${e.id}" ${draft.picks.has(e.id) ? "checked" : ""} ${blocked ? "disabled" : ""}>
       <div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(e.asset_no)}</span><div class="meta">${esc(e.category)} · ${esc(e.location)}</div></div>
       ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
@@ -1009,7 +1016,7 @@ function vLedger() {
     if (st === "done" && l.status !== "done") return false;
     if (st === "cancelled" && l.status !== "cancelled") return false;
     const e = eqById(l.equipment_id) || {};
-    return !q || `${l.loan_no} ${e.asset_no} ${e.name} ${l.customer} ${nameOf(l.requester_id)} ${reqInfo(l)}`.toLowerCase().includes(q);
+    return !q || `${l.loan_no} ${e.internal_id || ""} ${e.asset_no} ${e.name} ${l.customer} ${nameOf(l.requester_id)} ${reqInfo(l)}`.toLowerCase().includes(q);
   }).sort((a, b) => b.start_date.localeCompare(a.start_date) || a.loan_no.localeCompare(b.loan_no));
   const act = l => {
     if (!me.isAdmin) return "";
@@ -1121,6 +1128,7 @@ function eqForm(e) {
   e = e || { asset_no: nextAssetNo(), name: "", item_no: "", serial_no: "", category: CATS[0], location: LOCS[0], status: "available", components: "", note: "" };
   const isEtc = !!e.location && !LOCS.includes(e.location);
   modal(`<h2>${e.id ? "장비 수정" : "장비 등록"}</h2>
+    ${e.internal_id ? `<p class="meta">내부 ID ${idTag(e)} · 다른 정보를 바꿔도 내부 ID는 바뀌지 않아요.</p>` : `<p class="meta">내부 ID(EQ-0000)는 저장할 때 자동으로 붙어요. 한 번 붙으면 바뀌지 않아요.</p>`}
     <form id="eqForm" class="fields">
       <label class="f req"><span>자산번호</span><input id="eAsset" value="${esc(e.asset_no)}" required></label>
       <label class="f req"><span>제품명</span><input id="eName" value="${esc(e.name)}" required></label>
@@ -1196,7 +1204,7 @@ function eqView(id) {
   const t = todayStr();
   const sched = loans.filter(l => l.equipment_id === id && ACTIVE(l.status)).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const hist = loans.filter(l => l.equipment_id === id && l.status === "done").sort((a, b) => (b.returned_at || "").localeCompare(a.returned_at || "")).slice(0, 5);
-  modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta"><span class="mono">${esc(e.asset_no)}</span> · ${esc(e.item_no || "품목번호 없음")} · S/N ${esc(e.serial_no || "–")} · ${esc(e.location)}</div></div>${pill(EQ_STATUS, e.status)}</div>
+  modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta">${idTag(e)} <span class="mono">${esc(e.asset_no)}</span> · ${esc(e.item_no || "품목번호 없음")} · S/N ${esc(e.serial_no || "–")} · ${esc(e.location)}</div></div>${pill(EQ_STATUS, e.status)}</div>
     <div><h3>최근 점검</h3><div style="margin-top:4px">${checkCell(e)}</div></div>
     <div><h3>구성품</h3><div class="meta" style="white-space:pre-wrap">${esc(e.components || "등록된 구성품이 없어요.")}</div></div>
     <div><h3>예약 일정</h3><div class="list">${sched.map(l => `<div class="row"><div class="main"><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}</span> · ${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)}</div>${l.status === "out" && l.due_date < t ? `<span class="pill p-bad">연체</span>` : pill(LOAN_STATUS, l.status)}</div>`).join("") || `<div class="empty">잡힌 예약이 없어요.</div>`}</div></div>
@@ -1491,9 +1499,9 @@ function shipEdit(sid) {
 }
 
 function exportCsv() {
-  const head = ["신청번호","자산번호","제품명","보관 위치","신청자","내부 요청자","외부 요청자","목적","고객사","시작일","반납 예정일","배송","상태","연체일","출고","반납","반납 방법","자가점검","자가점검 메모","점검 결과","점검 메모","연장 횟수"];
+  const head = ["신청번호","장비 ID","자산번호","제품명","보관 위치","신청자","내부 요청자","외부 요청자","목적","고객사","시작일","반납 예정일","배송","상태","연체일","출고","반납","반납 방법","자가점검","자가점검 메모","점검 결과","점검 메모","연장 횟수"];
   const t = todayStr();
-  const rows = [...loans].sort((a, b) => a.loan_no.localeCompare(b.loan_no)).map(l => { const e = eqById(l.equipment_id) || {}; return [l.loan_no, e.asset_no, e.name, e.location, nameOf(l.requester_id), l.internal_requester, l.external_requester, l.purpose, l.customer, l.start_date, l.due_date,
+  const rows = [...loans].sort((a, b) => a.loan_no.localeCompare(b.loan_no)).map(l => { const e = eqById(l.equipment_id) || {}; return [l.loan_no, e.internal_id || "", e.asset_no, e.name, e.location, nameOf(l.requester_id), l.internal_requester, l.external_requester, l.purpose, l.customer, l.start_date, l.due_date,
     l.delivery ? "Y" : "N", LOAN_STATUS[l.status]?.[0] || l.status, isOverdue(l) ? daysBetween(l.due_date, t) : "", fmtT(l.checkout_at), fmtT(l.returned_at), retLabel(l), CONDS[l.return_self_check] || "", l.return_self_note || "", CONDS[l.return_condition] || "", l.return_note || "", l.extension_count || 0]; });
   const csv = "﻿" + [head, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const a = document.createElement("a");
