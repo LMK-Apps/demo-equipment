@@ -163,6 +163,7 @@ tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .r2-l1{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;min-width:0}
 .r2-title{font-size:14px;font-weight:600;min-width:0;overflow-wrap:anywhere}
 .r2-l1 .meta{flex:none}
+.lbl-tag{flex:none;display:inline-block;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--fg);background:var(--sunk);border-radius:4px;padding:1px 6px;vertical-align:1px}
 .id-tag{flex:none;display:inline-block;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 6px;vertical-align:1px}
 .r2-l2{display:flex;flex-wrap:wrap;font-size:12.5px;color:var(--muted);min-width:0}
 .r2-l2>span:not(:last-child)::after{content:"·";margin:0 7px;opacity:.6}
@@ -262,6 +263,13 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.032", date: "2026-10-29", db: "011_real_equipment.sql", items: [
+    "실제 데모장비 80대 등록 (DEMO_SIM.xlsx). 테스트 장비·출납·배송·이력은 모두 삭제",
+    "분류를 4개로 정리: 시뮬레이터, BLS, MBL, Skill T. (L&T·MU·EZ·LGH는 Skill T., 메모에 제품군 표시)",
+    "자산번호는 비워 둘 수 있고 여러 장비가 같은 번호를 써도 됨. 장비 구분은 내부 ID",
+    "라벨 칸 추가 (RA1, SM3G 등): 장비 목록·상세·검색에 표시",
+    "화면과 Teams 알림의 장비 표시를 내부 ID(+라벨)로 변경",
+  ] },
   { v: "v0.031", date: "2026-10-29", db: "010_equipment_internal_id.sql", items: [
     "장비마다 바뀌지 않는 내부 ID(EQ-0001 형식) 추가. 자산번호·제품명 등 다른 정보를 바꿔도 그대로",
     "새 장비는 등록할 때 자동으로 다음 번호를 받고, 지운 장비 번호는 다시 쓰지 않음",
@@ -440,7 +448,7 @@ const placeOf = l => l.return_place || ({ drop_uiwang: "의왕", drop_munjeong: 
 // 반납 방법 표시: "직접 반납 – 의왕", "물류사 회수 → 문정"
 const retLabel = l => !l.return_method ? "" : l.return_method === "pickup" ? `물류사 회수 → ${placeOf(l) || "장소 미정"}` : `직접 반납 – ${placeOf(l)}`;
 const USER_STATUS = { pending:["승인 대기","p-warn"], active:["사용 중","p-ok"], disabled:["사용 중지",""] };
-const CATS = ["BLS","ALS","환자 시뮬레이터","술기 트레이너","소프트웨어","기타"];
+const CATS = ["시뮬레이터","BLS","MBL","Skill T."];
 const LOCS = ["의왕","문정"];
 const PURPOSES = ["고객 데모","전시회","교육·워크숍","학회","내부 교육","기타"];
 const CONDS = { ok:"정상", minor:"경미한 손상", broken:"파손 또는 수리 필요", missing:"구성품 누락" };
@@ -461,16 +469,11 @@ const CHECKS_BY_CATEGORY = {
     { k:"comp", q:"가슴을 누르면 정상적으로 눌렸다가 돌아오나요?", cond:"broken", pre:["너무 뻑뻑함","눌린 뒤 안 돌아옴","누를 때 소리가 남"] },
     { k:"qcpr", q:"QCPR 피드백(앱·SimPad 연결)이 정상인가요?", sub:"QCPR 기능이 없으면 ‘예’를 골라 주세요.", cond:"broken", pre:["앱 연결이 안 됨","SimPad 연결이 안 됨","피드백 값이 이상함"] },
   ],
-  "환자 시뮬레이터": [
+  "시뮬레이터": [
     { ...CQ.parts, sub:"노트북 2대와 충전기도 확인해 주세요.", pre:["운영 노트북 충전기 없음","환자 모니터 노트북 충전기 없음","케이블 없음","부품 일부 없음"] },
     CQ.crack, CQ.work,
     { k:"pcoff", q:"노트북 2대(운영·환자 모니터)를 모두 종료했나요?", pre:["운영 노트북 종료 안 함","환자 모니터 노트북 종료 안 함"] },
     { k:"batt", q:"배터리를 충전해 두었나요?", pre:["충전하지 못함","배터리가 빨리 닳음"] },
-  ],
-  "소프트웨어": [
-    CQ.parts, CQ.crack, CQ.work,
-    { k:"logout", q:"데모 계정에서 로그아웃했나요?", pre:["로그아웃하지 못함","계정 정보를 모름"] },
-    { k:"data", q:"고객 정보와 녹화 영상을 지웠나요?", sub:"고객이 입력한 데이터가 남지 않게 해 주세요.", pre:["지우지 못함","지우는 방법을 모름"] },
   ],
 };
 const checksFor = e => CHECKS_BY_CATEGORY[e && e.category] || CHECKS_DEFAULT;
@@ -489,6 +492,8 @@ function checkCell(e) {
   return `<span class="pill ${CHECK_PILL[e.last_check] || ""}">${esc(CONDS[e.last_check])}</span><div class="meta">${who} · ${fmtT(e.last_check_at)}${e.last_check_note ? `<br>${esc(e.last_check_note)}` : ""}</div>`;
 }
 const condText = k => k ? `<b class="c-${k}">${esc(CONDS[k] || k)}</b>` : "기록 없음";
+// 장비 짧은 표시: 내부 ID + 라벨 (자산번호는 겹치거나 비어 있을 수 있음)
+const eqNo = e => !e ? "" : [e.internal_id, e.label].filter(Boolean).join(" ");
 const idTag = e => e && e.internal_id ? `<span class="id-tag" title="내부 ID (바뀌지 않음)">${esc(e.internal_id)}</span>` : "";
 const pill = (map, k) => { const [t, c] = map[k] || [k || "–", ""]; return `<span class="pill ${c}">${esc(t)}</span>`; };
 
@@ -554,7 +559,7 @@ $("#logout").addEventListener("click", logout);
 /* ---------- 데이터 ---------- */
 async function loadAll() {
   const [e, l, s, p] = await Promise.all([
-    must(sb.from("equipment").select("*").order("asset_no")),
+    must(sb.from("equipment").select("*").order("internal_id")),
     must(sb.from("loans").select("*").order("start_date", { ascending: false }).limit(3000)),
     must(sb.from("shipments").select("*")),
     must(sb.from("profiles").select("id,display_name,kakao_name,role,status,created_at").order("created_at")),
@@ -597,7 +602,7 @@ function render() {
 
 function loanLine(l, extra = "") {
   const ri = reqInfo(l);
-  return `<div class="row"><div class="main"><b>${esc(eqById(l.equipment_id)?.name || "")}</b> <span class="mono">${esc(eqById(l.equipment_id)?.asset_no || "")}</span>
+  return `<div class="row"><div class="main"><b>${esc(eqById(l.equipment_id)?.name || "")}</b> <span class="mono">${esc(eqNo(eqById(l.equipment_id)))}</span>
     <div class="meta">${esc(l.customer || l.purpose)} · ${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? " · 배송" : ""}</div></div>${extra}</div>`;
 }
 
@@ -634,7 +639,7 @@ function calLoans() {
   return loans.filter(l => l.status !== "cancelled"
     && (!cal.mine || l.requester_id === me.id)
     && (!cal.loc || locGroup(eqById(l.equipment_id)?.location) === cal.loc))
-    .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.loan_no.localeCompare(b.loan_no) || (eqById(a.equipment_id)?.asset_no || "").localeCompare(eqById(b.equipment_id)?.asset_no || ""));
+    .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.loan_no.localeCompare(b.loan_no) || (eqById(a.equipment_id)?.internal_id || "").localeCompare(eqById(b.equipment_id)?.internal_id || ""));
 }
 const onDay = (list, d) => list.filter(l => l.start_date <= d && d <= loanEnd(l));
 const chipLabel = l => `${eqById(l.equipment_id)?.name || "?"} · ${nameOf(l.requester_id)}`;
@@ -659,10 +664,10 @@ function vCal() {
     const days = []; for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) days.push(new Date(d));
     const eqs = equipment.filter(e => e.status !== "retired" && (!cal.loc || locGroup(e.location) === cal.loc))
       .filter(e => !cal.mine || monthLoans.some(l => l.equipment_id === e.id))
-      .sort((a, b) => a.category.localeCompare(b.category) || a.asset_no.localeCompare(b.asset_no));
+      .sort((a, b) => a.category.localeCompare(b.category) || (a.internal_id || "").localeCompare(b.internal_id || ""));
     const rows = eqs.map(e => {
       const mine = monthLoans.filter(l => l.equipment_id === e.id);
-      return `<tr><td class="eqc"><b>${esc(e.name)}</b><div class="meta mono">${esc(e.asset_no)} · ${esc(e.location)}</div></td>${days.map(d => {
+      return `<tr><td class="eqc"><b>${esc(e.name)}</b><div class="meta mono">${esc(eqNo(e))} · ${esc(e.location)}</div></td>${days.map(d => {
         const key = ds(d), l = mine.find(x => x.start_date <= key && key <= loanEnd(x));
         const today = key === t ? "today " : "";
         if (!l) return `<td class="d ${d.getDay() % 6 === 0 ? "we " : ""}${today}"></td>`;
@@ -693,7 +698,7 @@ function vCal() {
 function calDay(key) {
   const items = onDay(calLoans(), key);
   modal(`<h2>${key.replace(/-/g, ".")} (${DOW[new Date(key + "T00:00:00").getDay()]}) 일정</h2>
-    <div class="list">${items.map(l => `<div class="row"><div class="main"><b>${esc(eqById(l.equipment_id)?.name)}</b> <span class="mono">${esc(eqById(l.equipment_id)?.asset_no)}</span>
+    <div class="list">${items.map(l => `<div class="row"><div class="main"><b>${esc(eqById(l.equipment_id)?.name)}</b> <span class="mono">${esc(eqNo(eqById(l.equipment_id)))}</span>
       <div class="meta">${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</div></div>
       ${isOverdue(l) ? `<span class="pill p-bad">연체</span>` : pill(LOAN_STATUS, l.status)}<button class="btn sm" data-act="calLoan" data-id="${l.id}">자세히</button></div>`).join("") || `<div class="empty">이날은 일정이 없어요.</div>`}</div>
     <div class="actions"><button class="btn" data-close-btn>닫기</button>${key >= todayStr() ? `<button class="btn pri" id="dReq">이날부터 신청</button>` : ""}</div>`, mm => {
@@ -714,7 +719,7 @@ function loanView(id) {
   const pre = t => `<span style="white-space:pre-wrap">${esc(t)}</span>`;
   const shipTxt = (x, map) => `${esc(map[x.status]?.[0] || x.status)} · ${esc(x.recipient || "")} ${esc(x.phone || "")} · ${esc(x.address || "")}${x.requested_date ? ` · 희망일 ${fmtD(x.requested_date)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.carrier || "")} ${esc(x.tracking_no)}</span>` : ""}`;
   modal(`<h2>${esc(e.name)}</h2>
-    <div class="lv-sub"><span class="meta">${idTag(e)} <span class="mono">${esc(e.asset_no)}</span> · <span class="mono">${esc(l.loan_no)}</span></span>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</div>
+    <div class="lv-sub"><span class="meta">${idTag(e)} <span class="mono">${esc(eqNo(e))}</span> · <span class="mono">${esc(l.loan_no)}</span></span>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</div>
     <div class="lv-sec"><h3>신청</h3><div class="fields">
       ${f("기간", `<span class="mono">${fmtD(l.start_date)} ~ ${fmtD(l.due_date)}</span> (${daysBetween(l.start_date, l.due_date) + 1}일)${l.extension_count ? ` · 연장 ${l.extension_count}회` : ""}`)}
       ${f("신청자", esc(nameOf(l.requester_id)))}
@@ -723,7 +728,7 @@ function loanView(id) {
       ${f("고객사·기관", esc(l.customer || "–"))}
       ${f("신청일", l.created_at ? `<span class="mono">${fmtT(l.created_at)}</span>` : "–")}
       ${l.note ? f("메모", pre(l.note), true) : ""}
-      ${group.length ? f("함께 신청한 장비", group.map(x => `${esc(eqById(x.equipment_id)?.name)} (<span class="mono">${esc(eqById(x.equipment_id)?.asset_no)}</span>)`).join(", "), true) : ""}
+      ${group.length ? f("함께 신청한 장비", group.map(x => `${esc(eqById(x.equipment_id)?.name)} (<span class="mono">${esc(eqNo(eqById(x.equipment_id)))}</span>)`).join(", "), true) : ""}
     </div></div>
     <div class="lv-sec"><h3>출고·배송</h3><div class="fields">
       ${f("출고", l.checkout_at ? `<span class="mono">${fmtT(l.checkout_at)}</span>` : "아직 출고 전")}
@@ -803,7 +808,7 @@ function vStats() {
     const ls = inP.filter(l => l.equipment_id === e.id), days = ls.reduce((n, l) => n + clip(l), 0);
     const last = used.filter(l => l.equipment_id === e.id).reduce((m, l) => l.start_date > m ? l.start_date : m, "");
     return { e, n: ls.length, days, util: Math.round(days / pDays * 100), last };
-  }).sort((a, b) => b.days - a.days || a.e.asset_no.localeCompare(b.e.asset_no));
+  }).sort((a, b) => b.days - a.days || (a.e.internal_id || "").localeCompare(b.e.internal_id || ""));
   const idle = per.filter(r => r.n === 0).length, maxDays = Math.max(1, ...per.map(r => r.days));
 
   const groups = (keyFn) => { const m = new Map(); for (const l of started) { const k = keyFn(l); if (!k) continue; if (!m.has(k)) m.set(k, new Set()); m.get(k).add(l.loan_no); } return [...m].map(([k, v]) => [k, v.size]).sort((a, b) => b[1] - a[1]).slice(0, 8); };
@@ -822,7 +827,7 @@ function vStats() {
   <div class="tbl-wrap"><table>
     <thead><tr><th>장비</th><th>보관 위치</th><th>대여 횟수</th><th>대여 일수</th><th>가동률</th><th>마지막 사용</th></tr></thead>
     <tbody>${per.map(r => `<tr data-act="eqView" data-id="${r.e.id}" style="cursor:pointer">
-      <td>${esc(r.e.name)}<div class="meta mono">${esc(r.e.asset_no)}</div></td>
+      <td>${esc(r.e.name)}<div class="meta mono">${esc(eqNo(r.e))}</div></td>
       <td>${esc(r.e.location)}</td>
       <td class="mono">${r.n}</td>
       <td><span class="bar" title="${esc(r.e.name)}: ${r.days}일">${r.days ? `<i style="width:${Math.round(r.days / maxDays * 140)}px"></i>` : ""}<span>${r.days}일</span></span></td>
@@ -839,7 +844,7 @@ function vStats() {
 
 function vEquip() {
   const q = filters.eqQ.trim().toLowerCase();
-  const list = equipment.filter(e => (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.asset_no} ${e.name} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q)));
+  const list = equipment.filter(e => (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q)));
   const t = todayStr();
   const byLoc = [...LOCS, "기타"].map(k => [k, equipment.filter(e => locGroup(e.location) === k && e.status !== "retired").length]);
   const needRepair = equipment.filter(e => e.status === "repair").length;
@@ -859,7 +864,7 @@ function vEquip() {
       const cur = e.status === "onloan" ? loans.find(l => l.equipment_id === e.id && l.status === "out") : null;
       return `<div class="r2" data-act="eqView" data-id="${e.id}">
         <div class="r2-main">
-          <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b>${idTag(e)}<span class="mono meta">${esc(e.asset_no)}</span>${e.item_no ? `<span class="mono meta">${esc(e.item_no)}</span>` : ""}</div>
+          <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b>${idTag(e)}${e.label ? `<span class="lbl-tag">${esc(e.label)}</span>` : ""}${e.asset_no ? `<span class="mono meta">${esc(eqNo(e))}</span>` : ""}${e.item_no ? `<span class="mono meta">${esc(e.item_no)}</span>` : ""}</div>
           <div class="r2-l2"><span>${esc(e.category)}</span><span>보관 ${esc(e.location)}</span>${cur ? `<span>지금 ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</span>` : ""}<span>점검 ${condText(e.last_check)}${e.last_check_at ? ` ${fmtD(e.last_check_at.slice(0, 10))}` : ""}</span><span>다음 예약 ${next ? `<span class="mono">${fmtD(next.start_date)}–${fmtD(next.due_date)}</span>` : "없음"}</span></div>
         </div>
         <div class="r2-side">${pill(EQ_STATUS, e.status)}</div></div>`;
@@ -874,16 +879,16 @@ function conflictsFor(eqId, start, due, ignoreId) {
 function vRequest() {
   const { start, due } = draft;
   const badRange = !start || !due || due < start || start > maxStart() || due > addMonth1(start);
-  const rows = equipment.filter(e => e.status !== "retired").sort((a, b) => a.category.localeCompare(b.category) || a.asset_no.localeCompare(b.asset_no));
+  const rows = equipment.filter(e => e.status !== "retired").sort((a, b) => a.category.localeCompare(b.category) || (a.internal_id || "").localeCompare(b.internal_id || ""));
   const pickHtml = rows.map(e => {
     const c = badRange ? [] : conflictsFor(e.id, start, due);
     const blocked = e.status === "repair" || e.status === "inspect" || c.length > 0;
     if (blocked) draft.picks.delete(e.id);
     const why = e.status === "repair" ? "수리 중" : e.status === "inspect" ? "점검 중" : c.length ? "예약 겹침" : "";
     const title = c.length ? `${c[0].loan_no} (${fmtD(c[0].start_date)}–${fmtD(c[0].due_date)})` : why;
-    const hay = `${e.name} ${e.internal_id || ""} ${e.asset_no} ${e.item_no} ${e.serial_no} ${e.location} ${e.category}`.toLowerCase();
+    const hay = `${e.name} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.item_no} ${e.serial_no} ${e.location} ${e.category}`.toLowerCase();
     return `<label class="${blocked ? "off" : ""}" data-hay="${esc(hay)}" data-cat="${esc(e.category)}" data-loc="${esc(locGroup(e.location))}" data-ok="${blocked ? "0" : "1"}"><input type="checkbox" data-pick="${e.id}" ${draft.picks.has(e.id) ? "checked" : ""} ${blocked ? "disabled" : ""}>
-      <div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(e.asset_no)}</span><div class="meta">${esc(e.category)} · ${esc(e.location)}</div></div>
+      <div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span><div class="meta">${esc(e.category)} · ${esc(e.location)}</div></div>
       ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
   }).join("");
   return `
@@ -954,7 +959,7 @@ function applyPickFilter() {
 function updatePickCount(shown, total) {
   const c = $("#pickCount"); if (!c) return;
   if (shown === undefined) { const ls = [...document.querySelectorAll("#pickList label[data-hay]")]; total = ls.length; shown = ls.filter(l => !l.hidden).length; }
-  const names = [...draft.picks].map(id => eqById(id)).filter(Boolean).map(e => `${e.name} (${e.asset_no})`);
+  const names = [...draft.picks].map(id => eqById(id)).filter(Boolean).map(e => `${e.name} (${eqNo(e)})`);
   c.innerHTML = `<b>선택 ${draft.picks.size}대</b>${names.length ? ` · ${esc(names.join(", "))}` : ""}<br><span>전체 ${total}대 중 ${shown}대 표시</span>`;
 }
 
@@ -967,7 +972,7 @@ function vMine() {
     if (l.status === "out") return `<button class="btn sm" data-act="extend" data-id="${l.id}">연장</button><button class="btn sm pri" data-act="return" data-id="${l.id}">반납 신청</button>`;
     return "";
   };
-  const line = l => { const e = eqById(l.equipment_id) || {}, ri = reqInfo(l); return `<div class="row clickable" data-act="loanView" data-id="${l.id}"><div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(e.asset_no)}</span>
+  const line = l => { const e = eqById(l.equipment_id) || {}, ri = reqInfo(l); return `<div class="row clickable" data-act="loanView" data-id="${l.id}"><div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span>
       <div class="meta"><span class="mono">${esc(l.loan_no)}</span> · ${esc(l.customer || l.purpose)}${ri ? ` · ${esc(ri)}` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? " · 배송" : ""}</div></div>
       ${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)} ${actions(l)}</div>`; };
   return `
@@ -992,7 +997,7 @@ function vShip() {
     const l = g[0], o = shipOf(l.loan_no, "outbound") || {}, p = shipOf(l.loan_no, "pickup"), c = o.id ? o : (p || {});
     return `<div class="panel">
       <div class="head"><div class="grow"><h3><span class="mono">${esc(l.loan_no)}</span> · ${esc(l.customer || l.purpose)}</h3>
-        <div class="meta">${g.map(x => `${esc(eqById(x.equipment_id)?.name)} (${esc(eqById(x.equipment_id)?.asset_no)})`).join(", ")}</div></div>
+        <div class="meta">${g.map(x => `${esc(eqById(x.equipment_id)?.name)} (${esc(eqNo(eqById(x.equipment_id)))})`).join(", ")}</div></div>
         ${[...new Set(g.map(x => x.status))].map(k => pill(LOAN_STATUS, k)).join(" ")}</div>
       <div class="meta">${o.id ? "수령" : "회수 담당"} ${esc(c.recipient)} · ${esc(c.phone)} · ${esc(c.address)}</div>
       ${o.id ? `<div class="row"><div class="main"><b>출고 배송</b><div class="meta">도착 희망 ${fmtD(o.requested_date)}${trackTxt(o)}</div></div>
@@ -1016,7 +1021,7 @@ function vLedger() {
     if (st === "done" && l.status !== "done") return false;
     if (st === "cancelled" && l.status !== "cancelled") return false;
     const e = eqById(l.equipment_id) || {};
-    return !q || `${l.loan_no} ${e.internal_id || ""} ${e.asset_no} ${e.name} ${l.customer} ${nameOf(l.requester_id)} ${reqInfo(l)}`.toLowerCase().includes(q);
+    return !q || `${l.loan_no} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${l.customer} ${nameOf(l.requester_id)} ${reqInfo(l)}`.toLowerCase().includes(q);
   }).sort((a, b) => b.start_date.localeCompare(a.start_date) || a.loan_no.localeCompare(b.loan_no));
   const act = l => {
     if (!me.isAdmin) return "";
@@ -1037,7 +1042,7 @@ function vLedger() {
       const note = [l.return_self_note, l.return_note].filter(Boolean).join(" / ");
       return `<div class="r2 ${isOverdue(l) ? "overdue" : ""}" data-act="loanView" data-id="${l.id}">
         <div class="r2-main">
-          <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b><span class="mono meta">${esc(e.asset_no)}</span></div>
+          <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b><span class="mono meta">${esc(eqNo(e))}</span></div>
           <div class="r2-l2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""}</span><span>${esc(l.purpose)}${l.customer ? ` · ${esc(l.customer)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.extension_count ? ` 연장 ${l.extension_count}회` : ""}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : ""}${l.checkout_at ? `<span>출고 <span class="mono">${fmtT(l.checkout_at)}</span></span>` : ""}${ret ? `<span>반납 ${ret}</span>` : ""}${note ? `<span class="r2-note" title="${esc(note)}">메모 ${esc(note)}</span>` : ""}</div>
         </div>
         <div class="r2-side">${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}${act(l)}</div></div>`; }).join("") || `<div class="empty">조건에 맞는 기록이 없어요.</div>`}
@@ -1125,12 +1130,13 @@ function confirmBox(title, body, okText, fn, danger) {
 function nextAssetNo() { const n = Math.max(0, ...equipment.map(e => +(/DEMO-(\d+)/.exec(e.asset_no)?.[1] || 0))); return `DEMO-${String(n + 1).padStart(4, "0")}`; }
 
 function eqForm(e) {
-  e = e || { asset_no: nextAssetNo(), name: "", item_no: "", serial_no: "", category: CATS[0], location: LOCS[0], status: "available", components: "", note: "" };
+  e = e || { asset_no: "", label: "", name: "", item_no: "", serial_no: "", category: CATS[0], location: LOCS[0], status: "available", components: "", note: "" };
   const isEtc = !!e.location && !LOCS.includes(e.location);
   modal(`<h2>${e.id ? "장비 수정" : "장비 등록"}</h2>
     ${e.internal_id ? `<p class="meta">내부 ID ${idTag(e)} · 다른 정보를 바꿔도 내부 ID는 바뀌지 않아요.</p>` : `<p class="meta">내부 ID(EQ-0000)는 저장할 때 자동으로 붙어요. 한 번 붙으면 바뀌지 않아요.</p>`}
     <form id="eqForm" class="fields">
-      <label class="f req"><span>자산번호</span><input id="eAsset" value="${esc(e.asset_no)}" required></label>
+      <label class="f"><span>자산번호 (없으면 비워 두기)</span><input id="eAsset" value="${esc(eqNo(e))}"></label>
+      <label class="f"><span>라벨 (예: RA1, SM3G)</span><input id="eLabel" value="${esc(e.label || "")}"></label>
       <label class="f req"><span>제품명</span><input id="eName" value="${esc(e.name)}" required></label>
       <label class="f"><span>품목번호</span><input id="eItem" value="${esc(e.item_no)}"></label>
       <label class="f"><span>시리얼 번호</span><input id="eSerial" value="${esc(e.serial_no)}"></label>
@@ -1146,11 +1152,11 @@ function eqForm(e) {
     $("#eLoc", m).addEventListener("change", ev => { $("#eLocEtcWrap", m).hidden = ev.target.value !== "__etc"; });
     $("#eqForm", m).addEventListener("submit", ev => {
       ev.preventDefault();
-      const d = { asset_no: $("#eAsset").value.trim(), name: $("#eName").value.trim(), item_no: $("#eItem").value.trim(), serial_no: $("#eSerial").value.trim(),
+      const d = { asset_no: $("#eAsset").value.trim(), label: $("#eLabel").value.trim(), name: $("#eName").value.trim(), item_no: $("#eItem").value.trim(), serial_no: $("#eSerial").value.trim(),
         category: $("#eCat").value, location: $("#eLoc").value === "__etc" ? $("#eLocEtc").value.trim() : $("#eLoc").value,
         status: $("#eSt").value, components: $("#eComp").value.trim(), note: $("#eNote").value.trim() };
       const err = $("#eErr"); err.hidden = true;
-      if (!d.asset_no || !d.name) { err.textContent = "자산번호와 제품명을 입력해 주세요."; err.hidden = false; return; }
+      if (!d.name) { err.textContent = "제품명을 입력해 주세요."; err.hidden = false; return; }
       if (!d.location) { err.textContent = "기타를 골랐다면 위치를 직접 입력해 주세요."; err.hidden = false; return; }
       busy($("#eSave"), async () => {
         if (e.id) await must(sb.from("equipment").update(d).eq("id", e.id));
@@ -1179,7 +1185,7 @@ function bindVerdict(m, condName) {
 }
 function eqCheck(e) {
   const lent = e.status === "onloan" || e.status === "inspect";
-  modal(`<h2>상태 점검 기록</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(e.asset_no)}</span>) · 실사나 수리 후 확인처럼 출납과 관계없는 점검을 기록해요.</p>
+  modal(`<h2>상태 점검 기록</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(eqNo(e))}</span>) · 실사나 수리 후 확인처럼 출납과 관계없는 점검을 기록해요.</p>
     <div class="fields">${Object.entries(CONDS).map(([k, t]) => `<label class="check"><input type="radio" name="kc" value="${k}" ${(e.last_check || "ok") === k ? "checked" : ""}> ${t}</label>`).join("")}</div>
     <label class="f"><span>점검 메모</span><textarea id="kNote"></textarea></label>
     ${lent ? `<div class="notice">지금 ${esc(EQ_STATUS[e.status][0])} 상태라서 장비 상태는 바꾸지 않고 점검 결과만 기록해요.</div>` : verdictHtml(e.last_check || "ok")}
@@ -1204,7 +1210,7 @@ function eqView(id) {
   const t = todayStr();
   const sched = loans.filter(l => l.equipment_id === id && ACTIVE(l.status)).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const hist = loans.filter(l => l.equipment_id === id && l.status === "done").sort((a, b) => (b.returned_at || "").localeCompare(a.returned_at || "")).slice(0, 5);
-  modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta">${idTag(e)} <span class="mono">${esc(e.asset_no)}</span> · ${esc(e.item_no || "품목번호 없음")} · S/N ${esc(e.serial_no || "–")} · ${esc(e.location)}</div></div>${pill(EQ_STATUS, e.status)}</div>
+  modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta">${idTag(e)}${e.label ? ` <span class="lbl-tag">${esc(e.label)}</span>` : ""} <span class="mono">${esc(e.asset_no || "자산번호 없음")}</span> · ${esc(e.item_no || "품목번호 없음")} · S/N ${esc(e.serial_no || "–")} · ${esc(e.location)}</div></div>${pill(EQ_STATUS, e.status)}</div>
     <div><h3>최근 점검</h3><div style="margin-top:4px">${checkCell(e)}</div></div>
     <div><h3>구성품</h3><div class="meta" style="white-space:pre-wrap">${esc(e.components || "등록된 구성품이 없어요.")}</div></div>
     <div><h3>예약 일정</h3><div class="list">${sched.map(l => `<div class="row"><div class="main"><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}</span> · ${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)}</div>${l.status === "out" && l.due_date < t ? `<span class="pill p-bad">연체</span>` : pill(LOAN_STATUS, l.status)}</div>`).join("") || `<div class="empty">잡힌 예약이 없어요.</div>`}</div></div>
@@ -1285,7 +1291,7 @@ function returnForm(l) {
   const steps = () => ["place", "method", ...(st.how === "pickup" ? ["pickup"] : []), ...CHECKS.map(q => "q:" + q.k), "memo", "sum"];
   modal(`<div class="flow">
     <div class="flow-top"><button class="icon-btn" id="fBack" aria-label="뒤로">←</button><div class="flow-bar" aria-hidden="true"><i id="fBar"></i></div><button class="icon-btn" data-close-btn aria-label="닫기">✕</button></div>
-    <div class="meta flow-eq">${esc(e.name)} · <span class="mono">${esc(e.asset_no)}</span></div>
+    <div class="meta flow-eq">${esc(e.name)} · <span class="mono">${esc(eqNo(e))}</span></div>
     <section data-step="place">
       <p class="flow-k">반납 장소</p><h2 class="flow-q">어디로 반납하나요?</h2>
       <div class="flow-opts">${RETURN_PLACES.map(k => `<button class="opt" data-p="${k}" aria-pressed="${k === "의왕"}">${k}${k === "의왕" ? ` <span class="opt-tag">기본</span>` : ""}</button>`).join("")}</div>
@@ -1426,7 +1432,7 @@ function inspect(l) {
   const self = l.return_self_check, selfNote = l.return_self_note || "";
   const defLoc = placeOf(l) || e.location;
   const defRepair = self === "broken" || self === "missing";
-  modal(`<h2>반납 확인</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(e.asset_no)}</span>) · ${esc(nameOf(l.requester_id))} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</p>
+  modal(`<h2>반납 확인</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(eqNo(e))}</span>) · ${esc(nameOf(l.requester_id))} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</p>
     ${self ? `<div class="panel" style="gap:6px">
       <h3>반납자 자가점검</h3>
       <div><span class="pill ${CHECK_PILL[self] || ""}">${esc(CONDS[self])}</span> <span class="meta">${esc(retLabel(l) || "–")} · ${fmtT(l.returned_at)}</span></div>
@@ -1464,7 +1470,7 @@ function inspect(l) {
 
 function mailText(no, dir) {
   const g = loans.filter(l => l.loan_no === no), l = g[0], s = shipOf(no, dir) || {};
-  const items = g.map((x, i) => `  ${i + 1}. ${eqById(x.equipment_id)?.name} / 자산번호 ${eqById(x.equipment_id)?.asset_no} / 1대`).join("\n");
+  const items = g.map((x, i) => `  ${i + 1}. ${eqById(x.equipment_id)?.name} / ${[eqById(x.equipment_id)?.internal_id, eqById(x.equipment_id)?.label, eqById(x.equipment_id)?.asset_no && `자산번호 ${eqById(x.equipment_id).asset_no}`].filter(Boolean).join(" / ")} / 1대`).join("\n");
   const locs = [...new Set(g.map(x => eqById(x.equipment_id)?.location).filter(Boolean))].join(", ") || "확인 필요";
   const dest = [...new Set(g.map(x => x.return_method === "pickup" ? x.return_place : "").filter(Boolean))].join(", ") || locs;
   if (dir === "pickup") return `제목: [Laerdal Medical Korea] 데모장비 회수 요청 – ${no}\n\n안녕하세요. 아래 데모장비 회수를 요청드립니다.\n\n■ 신청번호: ${no}\n■ 장비\n${items}\n■ 회수지: ${s.address}\n■ 담당자: ${s.recipient} / ${s.phone}\n■ 회수 희망일: ${s.requested_date || "협의"}\n■ 입고지: ${dest}\n■ 메모: ${s.memo || "없음"}\n\n회수 일정과 운송장 번호를 회신 부탁드립니다.\n감사합니다.`;
@@ -1499,9 +1505,9 @@ function shipEdit(sid) {
 }
 
 function exportCsv() {
-  const head = ["신청번호","장비 ID","자산번호","제품명","보관 위치","신청자","내부 요청자","외부 요청자","목적","고객사","시작일","반납 예정일","배송","상태","연체일","출고","반납","반납 방법","자가점검","자가점검 메모","점검 결과","점검 메모","연장 횟수"];
+  const head = ["신청번호","장비 ID","라벨","자산번호","제품명","보관 위치","신청자","내부 요청자","외부 요청자","목적","고객사","시작일","반납 예정일","배송","상태","연체일","출고","반납","반납 방법","자가점검","자가점검 메모","점검 결과","점검 메모","연장 횟수"];
   const t = todayStr();
-  const rows = [...loans].sort((a, b) => a.loan_no.localeCompare(b.loan_no)).map(l => { const e = eqById(l.equipment_id) || {}; return [l.loan_no, e.internal_id || "", e.asset_no, e.name, e.location, nameOf(l.requester_id), l.internal_requester, l.external_requester, l.purpose, l.customer, l.start_date, l.due_date,
+  const rows = [...loans].sort((a, b) => a.loan_no.localeCompare(b.loan_no)).map(l => { const e = eqById(l.equipment_id) || {}; return [l.loan_no, e.internal_id || "", e.label || "", e.asset_no, e.name, e.location, nameOf(l.requester_id), l.internal_requester, l.external_requester, l.purpose, l.customer, l.start_date, l.due_date,
     l.delivery ? "Y" : "N", LOAN_STATUS[l.status]?.[0] || l.status, isOverdue(l) ? daysBetween(l.due_date, t) : "", fmtT(l.checkout_at), fmtT(l.returned_at), retLabel(l), CONDS[l.return_self_check] || "", l.return_self_note || "", CONDS[l.return_condition] || "", l.return_note || "", l.extension_count || 0]; });
   const csv = "﻿" + [head, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const a = document.createElement("a");
@@ -1515,7 +1521,7 @@ document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
   const a = e.target.closest("[data-act]"); if (!a) return;
   const l = loans.find(x => x.id === a.dataset.id);
-  const eqName = l ? `${esc(eqById(l.equipment_id)?.name)} (${esc(eqById(l.equipment_id)?.asset_no)})` : "";
+  const eqName = l ? `${esc(eqById(l.equipment_id)?.name)} (${esc(eqNo(eqById(l.equipment_id)))})` : "";
   switch (a.dataset.act) {
     case "refresh": busy(a, () => refresh()); break;
     case "changelog": showChangelog(); break;
