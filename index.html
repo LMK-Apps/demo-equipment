@@ -256,6 +256,10 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.106", date: "2026-10-29", items: [
+    "배송 탭 회수 단계 정리: 버튼은 회수 요청 전 → 회수 요청 완료 → 회수 완료 3단계",
+    "사용자가 반납 신청을 하기 전에는 버튼 대신 ‘반납 신청 전’ 표시 (이전 이름: 회수 예정)",
+  ] },
   { v: "v0.105", date: "2026-10-29", items: [
     "배송 탭: 상태를 진행 단계 버튼으로 표시 (요청 전 → 요청 완료 → 배송 중 → 도착, 회수는 회수 예정 → 회수 요청 전 → 회수 요청 완료 → 회수 완료)",
     "지나간 단계는 옅은 초록 + ✓, 지금 단계는 진한 초록. 장비 관리자가 버튼을 누르면 바로 그 단계로 바뀜",
@@ -405,7 +409,7 @@ const daysBetween = (a, b) => Math.round((new Date(b + "T00:00:00") - new Date(a
 const EQ_STATUS = { available:["사용 가능","p-ok"], onloan:["대여 중","p-info"], inspect:["점검 중","p-warn"], repair:["수리 중","p-bad"], retired:["폐기",""] };
 const LOAN_STATUS = { reserved:["예약","p-acc"], out:["출고","p-info"], checking:["반납 확인 중","p-warn"], done:["반납 완료","p-ok"], cancelled:["취소",""] };
 const OUT_STATUS = { pending:["요청 전","p-warn"], requested:["요청 완료","p-acc"], in_transit:["배송 중","p-info"], delivered:["도착","p-ok"] };
-const PICK_STATUS = { scheduled:["회수 예정",""], pending:["회수 요청 전","p-warn"], requested:["회수 요청 완료","p-acc"], done:["회수 완료","p-ok"], cancelled:["회수 취소",""] };
+const PICK_STATUS = { scheduled:["반납 신청 전",""], pending:["회수 요청 전","p-warn"], requested:["회수 요청 완료","p-acc"], done:["회수 완료","p-ok"], cancelled:["회수 취소",""] };
 const RETURN_METHODS = { drop_uiwang:"직접 반납 – 의왕", drop_munjeong:"직접 반납 – 문정", pickup:"물류사 회수 요청" };
 const RETURN_PLACES = ["의왕", "문정"];
 const placeOf = l => l.return_place || ({ drop_uiwang: "의왕", drop_munjeong: "문정" })[l.return_method] || "";
@@ -944,7 +948,7 @@ function groupBy(arr, k) { const m = new Map(); for (const x of arr) { if (!m.ha
 
 // 배송 진행 단계: 누른 단계까지 색이 채워진다 (장비 관리자만 누를 수 있음)
 const OUT_STEPS = ["pending", "requested", "in_transit", "delivered"];
-const PICK_STEPS = ["scheduled", "pending", "requested", "done"];
+const PICK_STEPS = ["pending", "requested", "done"];   // 반납 신청 전(scheduled)·취소는 버튼 없이 표시만
 const steps = (x, order, map) => { const cur = order.indexOf(x.status);
   return `<div class="steps" role="group" aria-label="진행 단계">${order.map((k, i) => `<button class="step ${i < cur ? "done" : i === cur ? "cur" : ""}" data-act="shipStep" data-sid="${x.id}" data-st="${k}" aria-pressed="${i <= cur}" ${me.isAdmin ? "" : "disabled"}>${i < cur ? "✓ " : ""}${esc(map[k][0])}</button>`).join("")}</div>`; };
 const trackTxt = x => `${x.carrier ? ` · ${esc(x.carrier)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.tracking_no)}</span>` : ""}${me.isAdmin ? ` · <button class="linkbtn" data-act="shipEdit" data-sid="${x.id}">${x.tracking_no ? "운송장 수정" : "운송장 입력"}</button>` : ""}`;
@@ -963,7 +967,7 @@ function vShip() {
         <div class="steps-line">${steps(o, OUT_STEPS, OUT_STATUS)}</div></div>` : ""}
       ${p ? `<div class="row"><div class="main"><b>회수</b><div class="meta">회수 희망 ${fmtD(p.requested_date)}${trackTxt(p)}</div></div>
         <button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="pickup">회수 메일</button>
-        <div class="steps-line">${p.status === "cancelled" ? `${pill(PICK_STATUS, "cancelled")}` : steps(p, PICK_STEPS, PICK_STATUS)}</div></div>` : ""}
+        <div class="steps-line">${["cancelled", "scheduled"].includes(p.status) ? pill(PICK_STATUS, p.status) : steps(p, PICK_STEPS, PICK_STATUS)}</div></div>` : ""}
     </div>`;
   };
   return `
