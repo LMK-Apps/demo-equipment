@@ -1,7 +1,7 @@
 -- =====================================================================
--- 마이그레이션 011 · 실제 데모장비 등록 (DEMO_SIM.xlsx, 80대)
+-- 마이그레이션 011 · 실제 데모장비 등록 (DEMO_SIM.xlsx 80대 + 추가 1대)
 --   1) 테스트 데이터 전부 삭제: 배송, 출납, 장비, 이력, 신청번호 카운터 (사용자 계정은 그대로)
---   2) 분류를 4개로 변경: 시뮬레이터, BLS, MBL, Skill T.
+--   2) 분류를 5개로 변경: 시뮬레이터, BLS, MBL, Skill T., 기타
 --      (엑셀의 L&T, MU, EZ, LGH는 Skill T.로 넣고 메모에 제품군을 남김)
 --   3) 자산번호: 비워 둘 수 있고, 여러 장비가 같은 번호를 써도 됨 (구분은 내부 ID)
 --   4) 라벨 칸 추가 (SM3G, RA1, RJ1 등 장비 표시)
@@ -26,7 +26,7 @@ delete from private.loan_counters;   -- 신청번호도 D-LMK-연월-001부터 �
 -- 2. 분류
 alter table public.equipment drop constraint if exists equipment_category_check;
 alter table public.equipment add constraint equipment_category_check
-  check (category in ('시뮬레이터', 'BLS', 'MBL', 'Skill T.'));
+  check (category in ('시뮬레이터', 'BLS', 'MBL', 'Skill T.', '기타'));
 
 -- 3. 자산번호: 중복 허용, 빈 값 허용('')
 alter table public.equipment drop constraint if exists equipment_asset_no_key;
@@ -118,7 +118,8 @@ insert into public.equipment (asset_no, name, item_no, serial_no, label, categor
   ('', 'MamaNatalie', '340-01333', '', 'LGH', 'Skill T.', '의왕', 'available', '', '제품군: LGH'),
   ('', 'MamaNatalie', '340-01333', '', 'LGH', 'Skill T.', '의왕', 'available', '', '제품군: LGH'),
   ('', 'MamaNatalie', '340-01333', '', 'LGH', 'Skill T.', '의왕', 'available', '', '제품군: LGH'),
-  ('LMK-Demo-2018116', 'MamaBirthie(Light)', '360-00133', '', 'LGH', 'Skill T.', '의왕', 'available', '', '제품군: LGH / 취득연도: 2018');
+  ('LMK-Demo-2018116', 'MamaBirthie(Light)', '360-00133', '', 'LGH', 'Skill T.', '의왕', 'available', '', '제품군: LGH / 취득연도: 2018'),
+  ('LMK-Demo-2024177', 'Servo-air ventilator', '', '', '', '기타', '미확인', 'available', '', '제품군: Vent / 제조사·모델: MAQUET, SERVO-air / 취득연도: 2024');
 
 -- 6. Teams 알림: 장비를 내부 ID로 표시
 create or replace function private.notify_new_loan()
