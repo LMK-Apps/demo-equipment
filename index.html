@@ -41,7 +41,12 @@ header .wrap{display:flex;align-items:center;gap:12px;padding-block:14px;flex-wr
 .role{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--sunk);color:var(--muted);letter-spacing:.03em}
 .role.admin{background:var(--accent-soft);color:var(--accent)}
 nav.tabs{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
-nav.tabs .wrap{display:flex;gap:4px;overflow-x:auto;padding-block:8px;scrollbar-width:none}
+nav.tabs .wrap{display:flex;flex-direction:column;padding-block:6px}
+.tab-row{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;align-items:center}
+.tab-row.admin{margin-top:4px;padding-top:4px;border-top:1px dashed var(--line)}
+.tab-row.admin button{font-size:13px;padding:5px 10px;opacity:.8}
+.tab-row.admin button[aria-selected="true"]{opacity:1}
+.tab-label{flex:none;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--muted);opacity:.75;padding:0 6px 0 12px}
 nav.tabs button{font:inherit;font-weight:500;border:0;background:none;color:var(--muted);padding:7px 12px;border-radius:6px;cursor:pointer;white-space:nowrap;display:flex;gap:6px;align-items:center}
 nav.tabs button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -242,6 +247,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.102", date: "2026-10-29", items: [
+    "메뉴를 2줄로 나눔: 윗줄은 모든 사용자(현황·일정·장비·출납 신청·내 신청), 아랫줄은 장비 관리자 전용(배송·출납 대장·통계·사용자)",
+    "관리자 메뉴 줄은 옅은 색과 ‘관리자’ 표시로 구분",
+    "일반 사용자에게는 배송·출납 대장·통계 탭이 보이지 않음, 안내 문구도 그에 맞게 변경",
+  ] },
   { v: "v0.101", date: "2026-10-29", db: "008_pickup_edit.sql", items: [
     "반납 신청 때 회수 정보(담당자·연락처·주소·희망일·메모)를 고칠 수 있음. 배송 신청 때 적은 정보가 미리 채워짐",
     "물류사에 이미 회수를 요청한 경우에는 정보를 보여 주기만 하고, 장비 관리자에게 알려 달라고 안내",
@@ -501,15 +511,21 @@ async function refresh(quiet) {
 }
 
 /* ---------- 탭 ---------- */
+// 윗줄: 모든 사용자 · 아랫줄: 장비 관리자만
 const TABS = () => [
   ["home","현황"], ["cal","일정"], ["equip","장비"], ["request","출납 신청"], ["mine","내 신청"],
+];
+const ADMIN_TABS = () => [
   ["ship","배송", shipments.filter(s => s.status === "pending").length],
   ["ledger","출납 대장", loans.filter(isOverdue).length],
   ["stats","통계"],
-  ...(me.isAdmin ? [["users","사용자", people.filter(p => p.status === "pending").length]] : []),
+  ["users","사용자", people.filter(p => p.status === "pending").length],
 ];
+const ADMIN_VIEWS = ["ship", "ledger", "stats", "users"];
 function renderTabs() {
-  $("#tabs").innerHTML = TABS().map(([k, t, n]) => `<button role="tab" aria-selected="${view === k}" data-tab="${k}">${t}${n ? `<span class="count">${n}</span>` : ""}</button>`).join("");
+  const btn = ([k, t, n]) => `<button role="tab" aria-selected="${view === k}" data-tab="${k}">${t}${n ? `<span class="count">${n}</span>` : ""}</button>`;
+  $("#tabs").innerHTML = `<div class="tab-row">${TABS().map(btn).join("")}</div>`
+    + (me.isAdmin ? `<div class="tab-row admin"><span class="tab-label">관리자</span>${ADMIN_TABS().map(btn).join("")}</div>` : "");
 }
 $("#tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (!b) return; go(b.dataset.tab); });
 function go(v) { view = v; try { history.replaceState(null, "", "#" + v); } catch {} render(); window.scrollTo(0, 0); }
@@ -518,7 +534,7 @@ function go(v) { view = v; try { history.replaceState(null, "", "#" + v); } catc
 function render() {
   renderTabs();
   const views = { home: vHome, cal: vCal, stats: vStats, equip: vEquip, request: vRequest, mine: vMine, ship: vShip, ledger: vLedger, users: vUsers };
-  if (!views[view] || (view === "users" && !me.isAdmin)) view = "home";
+  if (!views[view] || (ADMIN_VIEWS.includes(view) && !me.isAdmin)) view = "home";
   $("#main").innerHTML = `<section data-view="${view}">${views[view]()}</section>`;
   if (view === "request") applyPickFilter();
 }
@@ -667,7 +683,7 @@ function loanView(id) {
         ${f("보관 위치", esc(l.return_location || e.location || "–"))}
         ${l.return_note ? f("확인 메모", pre(l.return_note), true) : ""}` : ""}
     </div></div>` : ""}
-    <div class="actions"><button class="btn" data-close-btn>닫기</button>${view !== "ledger" ? `<button class="btn" id="lLedger">출납 대장에서 보기</button>` : ""}${acts.join("")}</div>`, mm => {
+    <div class="actions"><button class="btn" data-close-btn>닫기</button>${me.isAdmin && view !== "ledger" ? `<button class="btn" id="lLedger">출납 대장에서 보기</button>` : ""}${acts.join("")}</div>`, mm => {
     $("#lLedger", mm)?.addEventListener("click", () => { filters.ledgerQ = l.loan_no; filters.ledgerSt = "all"; closeModal(); go("ledger"); });
   });
 }
@@ -1166,7 +1182,7 @@ async function submitRequest() {
     }));
     draft = { start: todayStr(), due: addDays(todayStr(), 7), picks: new Set() };
     await refresh(true); go("mine");
-    toast(`${no} 예약을 확정했어요.${shipment ? " 배송 탭에서 물류사 요청 메일을 보내 주세요." : ""}`);
+    toast(`${no} 예약을 확정했어요.${shipment ? (me.isAdmin ? " 배송 탭에서 물류사 요청 메일을 보내 주세요." : " 장비 관리자가 물류사에 배송을 요청해요.") : ""}`);
   } catch (e) { btn.disabled = false; show(errText(e)); await refresh(true); }
 }
 
@@ -1325,7 +1341,7 @@ function returnForm(l) {
       const { error } = await sb.rpc("request_return", { p_loan_id: l.id, p_method: method, p_self_check: self, p_self_note: note, p_pickup: pickup, p_place: st.place });
       b.disabled = false;
       if (error) return show(errText(error));
-      closeModal(); toast(method === "pickup" ? "반납을 신청했어요. 배송 탭에서 물류사에 회수 요청 메일을 보내 주세요." : `반납을 신청했어요. 장비를 ${st.place}에 가져다 놓아 주세요.`); await refresh();
+      closeModal(); toast(method === "pickup" ? (me.isAdmin ? "반납을 신청했어요. 배송 탭에서 물류사에 회수 요청 메일을 보내 주세요." : "반납을 신청했어요. 장비 관리자가 물류사에 회수를 요청해요.") : `반납을 신청했어요. 장비를 ${st.place}에 가져다 놓아 주세요.`); await refresh();
     });
     go("place");
   });
