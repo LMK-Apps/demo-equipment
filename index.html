@@ -71,6 +71,15 @@ h3{font-size:14px;margin:0;font-weight:600}
 .row:first-child{border-top:0}
 .row .main{flex:1;min-width:180px}
 .row .main b{font-weight:600}
+.steps-line{flex-basis:100%;display:flex;justify-content:flex-end}
+@media (max-width:600px){.steps-line{justify-content:flex-start}}
+.steps{display:flex;flex-wrap:wrap;gap:4px}
+.step{font:inherit;font-size:12.5px;font-weight:600;border:1.5px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:5px 11px;cursor:pointer;white-space:nowrap}
+.step:hover:not(:disabled){border-color:var(--accent)}
+.step.done{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.step.cur{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.step:disabled{cursor:default}
+.linkbtn{font:inherit;font-size:inherit;border:0;background:none;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer}
 .meta{font-size:12px;color:var(--muted)}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12.5px}
 .empty{color:var(--muted);font-size:13px;padding:10px 0}
@@ -247,6 +256,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.105", date: "2026-10-29", items: [
+    "배송 탭: 상태를 진행 단계 버튼으로 표시 (요청 전 → 요청 완료 → 배송 중 → 도착, 회수는 회수 예정 → 회수 요청 전 → 회수 요청 완료 → 회수 완료)",
+    "지나간 단계는 옅은 초록 + ✓, 지금 단계는 진한 초록. 장비 관리자가 버튼을 누르면 바로 그 단계로 바뀜",
+    "[상태·운송장] 버튼을 없애고, 운송장은 ‘운송장 입력’ 링크로 따로 입력",
+  ] },
   { v: "v0.104", date: "2026-10-29", items: [
     "메뉴 이름 ‘출납 신청’을 ‘데모 신청’으로 변경 (탭, 화면 제목, 현황의 신청 버튼, 장비 이력)",
   ] },
@@ -928,6 +942,12 @@ function vMine() {
 
 function groupBy(arr, k) { const m = new Map(); for (const x of arr) { if (!m.has(x[k])) m.set(x[k], []); m.get(x[k]).push(x); } return [...m.values()]; }
 
+// 배송 진행 단계: 누른 단계까지 색이 채워진다 (장비 관리자만 누를 수 있음)
+const OUT_STEPS = ["pending", "requested", "in_transit", "delivered"];
+const PICK_STEPS = ["scheduled", "pending", "requested", "done"];
+const steps = (x, order, map) => { const cur = order.indexOf(x.status);
+  return `<div class="steps" role="group" aria-label="진행 단계">${order.map((k, i) => `<button class="step ${i < cur ? "done" : i === cur ? "cur" : ""}" data-act="shipStep" data-sid="${x.id}" data-st="${k}" aria-pressed="${i <= cur}" ${me.isAdmin ? "" : "disabled"}>${i < cur ? "✓ " : ""}${esc(map[k][0])}</button>`).join("")}</div>`; };
+const trackTxt = x => `${x.carrier ? ` · ${esc(x.carrier)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.tracking_no)}</span>` : ""}${me.isAdmin ? ` · <button class="linkbtn" data-act="shipEdit" data-sid="${x.id}">${x.tracking_no ? "운송장 수정" : "운송장 입력"}</button>` : ""}`;
 function vShip() {
   const groups = groupBy(loans.filter(l => l.status !== "cancelled" && (l.delivery || shipOf(l.loan_no, "pickup"))), "loan_no").sort((a, b) => a[0].start_date.localeCompare(b[0].start_date));
   const openG = groups.filter(g => { const o = shipOf(g[0].loan_no, "outbound"), p = shipOf(g[0].loan_no, "pickup"); return (o && o.status !== "delivered") || (p && !["done", "cancelled"].includes(p.status)); });
@@ -938,18 +958,16 @@ function vShip() {
         <div class="meta">${g.map(x => `${esc(eqById(x.equipment_id)?.name)} (${esc(eqById(x.equipment_id)?.asset_no)})`).join(", ")}</div></div>
         ${[...new Set(g.map(x => x.status))].map(k => pill(LOAN_STATUS, k)).join(" ")}</div>
       <div class="meta">${o.id ? "수령" : "회수 담당"} ${esc(c.recipient)} · ${esc(c.phone)} · ${esc(c.address)}</div>
-      ${o.id ? `<div class="row"><div class="main"><b>출고 배송</b><div class="meta">도착 희망 ${fmtD(o.requested_date)}${o.carrier ? ` · ${esc(o.carrier)}` : ""}${o.tracking_no ? ` · 운송장 <span class="mono">${esc(o.tracking_no)}</span>` : ""}</div></div>
-        ${pill(OUT_STATUS, o.status)}
+      ${o.id ? `<div class="row"><div class="main"><b>출고 배송</b><div class="meta">도착 희망 ${fmtD(o.requested_date)}${trackTxt(o)}</div></div>
         <button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="outbound">요청 메일</button>
-        ${me.isAdmin ? `<button class="btn sm" data-act="shipEdit" data-sid="${o.id}">상태·운송장</button>` : ""}</div>` : ""}
-      ${p ? `<div class="row"><div class="main"><b>회수</b><div class="meta">회수 희망 ${fmtD(p.requested_date)}${p.tracking_no ? ` · 운송장 <span class="mono">${esc(p.tracking_no)}</span>` : ""}</div></div>
-        ${pill(PICK_STATUS, p.status)}
+        <div class="steps-line">${steps(o, OUT_STEPS, OUT_STATUS)}</div></div>` : ""}
+      ${p ? `<div class="row"><div class="main"><b>회수</b><div class="meta">회수 희망 ${fmtD(p.requested_date)}${trackTxt(p)}</div></div>
         <button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="pickup">회수 메일</button>
-        ${me.isAdmin ? `<button class="btn sm" data-act="shipEdit" data-sid="${p.id}">상태·운송장</button>` : ""}</div>` : ""}
+        <div class="steps-line">${p.status === "cancelled" ? `${pill(PICK_STATUS, "cancelled")}` : steps(p, PICK_STEPS, PICK_STATUS)}</div></div>` : ""}
     </div>`;
   };
   return `
-  <div class="head"><div class="grow"><h2>배송 요청</h2><p class="sub">‘요청 메일’로 물류사에 보낼 문안을 복사하고, 보낸 뒤 상태를 ‘요청 완료’로 바꿔 주세요. 회수 요청은 반납 신청에서 ‘물류사 회수 요청’을 고르면 ‘요청 전’으로 바뀌어요.</p></div></div>
+  <div class="head"><div class="grow"><h2>배송 요청</h2><p class="sub">‘요청 메일’로 물류사에 보낼 문안을 복사하고, 보낸 뒤 [요청 완료]를 눌러 주세요. 진행 단계 버튼을 누르면 그 단계까지 색이 채워져요. 회수는 반납 신청에서 ‘물류사 회수 요청’을 고르면 ‘회수 요청 전’이 돼요.</p></div></div>
   ${openG.length ? openG.map(card).join("") : `<div class="panel"><div class="empty">처리할 배송 요청이 없어요. 데모 신청에서 ‘배송 필요’를 체크하면 여기에 나타나요.</div></div>`}`;
 }
 
@@ -1416,17 +1434,16 @@ function mail(no, dir) {
 function shipEdit(sid) {
   const s = shipments.find(x => x.id === sid); if (!s) return;
   const opts = s.direction === "pickup" ? PICK_STATUS : OUT_STATUS;
-  modal(`<h2>${s.direction === "pickup" ? "회수" : "출고 배송"} 상태</h2><p class="meta"><span class="mono">${esc(s.loan_no)}</span></p>
+  modal(`<h2>${s.direction === "pickup" ? "회수" : "출고 배송"} 운송장</h2><p class="meta"><span class="mono">${esc(s.loan_no)}</span> · 지금 단계: ${esc(opts[s.status]?.[0] || s.status)}</p>
     <div class="fields">
-      <label class="f"><span>상태</span><select id="hSt">${Object.entries(opts).map(([k, [t]]) => `<option value="${k}" ${s.status === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
       <label class="f"><span>물류사</span><input id="hCar" value="${esc(s.carrier)}"></label>
       <label class="f wide"><span>운송장 번호</span><input id="hTr" value="${esc(s.tracking_no)}"></label>
     </div>
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="hOk">저장</button></div>`, m => {
     const b = $("#hOk", m);
     b.addEventListener("click", () => busy(b, async () => {
-      await must(sb.from("shipments").update({ status: $("#hSt").value, carrier: $("#hCar").value.trim(), tracking_no: $("#hTr").value.trim() }).eq("id", sid));
-      closeModal(); toast("배송 상태를 저장했어요."); await refresh();
+      await must(sb.from("shipments").update({ carrier: $("#hCar").value.trim(), tracking_no: $("#hTr").value.trim() }).eq("id", sid));
+      closeModal(); toast("운송장을 저장했어요."); await refresh();
     }));
   });
 }
@@ -1469,6 +1486,13 @@ document.addEventListener("click", e => {
       async () => { await must(sb.from("loans").update({ status: "cancelled" }).eq("id", l.id)); toast("예약을 취소했어요."); }, true); break;
     case "mail": mail(a.dataset.no, a.dataset.dir); break;
     case "shipEdit": shipEdit(a.dataset.sid); break;
+    case "shipStep": {
+      if (!me.isAdmin) break;
+      const sh = shipments.find(x => x.id === a.dataset.sid); if (!sh || sh.status === a.dataset.st) break;
+      const t = (sh.direction === "pickup" ? PICK_STATUS : OUT_STATUS)[a.dataset.st][0];
+      busy(a, async () => { await must(sb.from("shipments").update({ status: a.dataset.st }).eq("id", sh.id)); toast(`‘${t}’ 단계로 바꿨어요.`); await refresh(); });
+      break;
+    }
     case "csv": exportCsv(); break;
     case "uName": case "uApprove": {
       const p = people.find(x => x.id === a.dataset.uid); if (!p) break;
