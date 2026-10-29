@@ -217,6 +217,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.96", date: "2026-10-29", items: [
+    "반납 자가점검 질문을 장비 카테고리별로 다르게 표시 (공통 3문항 + BLS·환자 시뮬레이터·소프트웨어 추가 문항)",
+    "공통 질문에서 ‘작은 흠’, ‘청소·소독’ 문항 삭제",
+    "상태 이름 ‘파손’을 ‘파손 또는 수리 필요’로 변경 (기존 기록도 같은 이름으로 표시)",
+  ] },
   { v: "v0.95", date: "2026-10-29", items: [
     "반납 신청을 한 화면에 질문 하나씩 넘기는 방식으로 변경 (반납 방법 → 회수 정보 → 자가점검 5문항 → 메모 → 마지막 확인)",
     "예/아니오를 누르면 다음 질문으로 바로 넘어감, 위쪽 진행 막대와 뒤로 가기 버튼",
@@ -329,17 +334,33 @@ const USER_STATUS = { pending:["승인 대기","p-warn"], active:["사용 중","
 const CATS = ["BLS","ALS","환자 시뮬레이터","술기 트레이너","소프트웨어","기타"];
 const LOCS = ["의왕","문정"];
 const PURPOSES = ["고객 데모","전시회","교육·워크숍","학회","내부 교육","기타"];
-const CONDS = { ok:"정상", minor:"경미한 손상", broken:"파손", missing:"구성품 누락" };
+const CONDS = { ok:"정상", minor:"경미한 손상", broken:"파손 또는 수리 필요", missing:"구성품 누락" };
 const ACTIVE = s => s === "reserved" || s === "out";
 const CHECK_PILL = { ok:"p-ok", minor:"p-warn", broken:"p-bad", missing:"p-bad" };
 // 반납 자가점검 질문. "아니오"면 cond 상태가 된다 (우선순위: missing > broken > minor). cond 없음 = 상태에는 영향 없음
-const RETURN_CHECKS = [
+// 공통 질문 다음에 장비 카테고리별 질문이 붙는다. 문항을 바꾸려면 여기만 고친다.
+const CHECKS_COMMON = [
   { k:"parts",  q:"구성품이 모두 들어 있나요?", cond:"missing" },
   { k:"crack",  q:"깨지거나 금 간 곳이 없나요?", cond:"broken" },
   { k:"work",   q:"전원·작동에 이상이 없나요?", sub:"전원이 없는 장비는 ‘예’를 골라 주세요.", cond:"broken" },
-  { k:"scratch",q:"긁힘·얼룩 같은 작은 흠이 없나요?", cond:"minor" },
-  { k:"clean",  q:"사용 후 청소·소독을 했나요?" },
 ];
+const CHECKS_BY_CATEGORY = {
+  "BLS": [
+    { k:"face",   q:"얼굴 피부에 찢어진 곳이 없나요?", cond:"broken" },
+    { k:"comp",   q:"가슴을 누르면 정상적으로 눌렸다가 돌아오나요?", cond:"broken" },
+    { k:"qcpr",   q:"QCPR 피드백(앱·SimPad 연결)이 정상인가요?", sub:"QCPR 기능이 없으면 ‘예’를 골라 주세요.", cond:"broken" },
+  ],
+  "환자 시뮬레이터": [
+    { k:"pc",     q:"운영 노트북은 종료하고, 충전기가 모두 있나요?", cond:"missing" },
+    { k:"monitor",q:"환자 모니터 노트북은 종료하고, 충전기가 모두 있나요?", cond:"missing" },
+    { k:"batt",   q:"배터리를 충전해 두었나요?" },
+  ],
+  "소프트웨어": [
+    { k:"logout", q:"데모 계정에서 로그아웃했나요?" },
+    { k:"data",   q:"고객 정보와 녹화 영상을 지웠나요?", sub:"고객이 입력한 데이터가 남지 않게 해 주세요." },
+  ],
+};
+const checksFor = e => [...CHECKS_COMMON, ...(CHECKS_BY_CATEGORY[e && e.category] || [])];
 const COND_RANK = { ok:0, minor:1, broken:2, missing:3 };
 const locGroup = loc => LOCS.includes(loc) ? loc : "기타";
 function locPicker(px, cur) {
@@ -998,7 +1019,7 @@ function verdictHtml(cond) {
   return `<div><h3>장비 판정</h3><div class="fields" style="margin-top:6px">
     <label class="check"><input type="radio" name="vd" value="ok" ${repair ? "" : "checked"}> 사용 가능</label>
     <label class="check"><input type="radio" name="vd" value="repair" ${repair ? "checked" : ""}> 수리 필요</label></div>
-    <div class="meta">파손·구성품 누락이면 ‘수리 필요’로 자동 선택돼요. 필요하면 바꿔 주세요.</div></div>`;
+    <div class="meta">파손 또는 수리 필요·구성품 누락이면 ‘수리 필요’로 자동 선택돼요. 필요하면 바꿔 주세요.</div></div>`;
 }
 function bindVerdict(m, condName) {
   let touched = false;
@@ -1106,10 +1127,10 @@ function returnForm(l) {
   const src = pick || out || {};
   const pickDefault = (pick && pick.requested_date) || addDays(todayStr(), 1);
   const hasPick = pick && pick.status !== "cancelled";
-  const n = RETURN_CHECKS.length;
+  const CHECKS = checksFor(e), n = CHECKS.length;
   const st = { method: null, ans: {} };
-  const result = () => RETURN_CHECKS.reduce((c, q) => st.ans[q.k] === "n" && q.cond && COND_RANK[q.cond] > COND_RANK[c] ? q.cond : c, "ok");
-  const steps = () => ["method", ...(st.method === "pickup" ? ["pickup"] : []), ...RETURN_CHECKS.map(q => "q:" + q.k), "memo", "sum"];
+  const result = () => CHECKS.reduce((c, q) => st.ans[q.k] === "n" && q.cond && COND_RANK[q.cond] > COND_RANK[c] ? q.cond : c, "ok");
+  const steps = () => ["method", ...(st.method === "pickup" ? ["pickup"] : []), ...CHECKS.map(q => "q:" + q.k), "memo", "sum"];
   modal(`<div class="flow">
     <div class="flow-top"><button class="icon-btn" id="fBack" aria-label="뒤로">←</button><div class="flow-bar" aria-hidden="true"><i id="fBar"></i></div><button class="icon-btn" data-close-btn aria-label="닫기">✕</button></div>
     <div class="meta flow-eq">${esc(e.name)} · <span class="mono">${esc(e.asset_no)}</span></div>
@@ -1128,7 +1149,7 @@ function returnForm(l) {
         <label class="f wide"><span>회수 메모</span><input id="rpMemo" placeholder="수거 위치, 연락 가능 시간 등"></label></div>`}
       <div class="flow-foot"><div class="notice bad" id="rpErr" hidden></div><button class="btn pri big" id="rpNext">다음</button></div>
     </section>
-    ${RETURN_CHECKS.map((q, i) => `<section data-step="q:${q.k}" hidden>
+    ${CHECKS.map((q, i) => `<section data-step="q:${q.k}" hidden>
       <p class="flow-k">자가점검 ${i + 1}/${n}</p><h2 class="flow-q">${esc(q.q)}</h2>
       ${q.sub ? `<p class="meta">${esc(q.sub)}</p>` : ""}
       ${q.k === "parts" && e.components ? `<div class="flow-box"><b>구성품</b><div style="white-space:pre-wrap">${esc(e.components)}</div></div>` : ""}
@@ -1193,7 +1214,7 @@ function returnForm(l) {
       $("#sumBox", m).innerHTML = `
         <button class="sum-row" data-goto="method"><span>반납 방법</span><b>${esc(RETURN_METHODS[st.method])}</b></button>
         ${st.method === "pickup" ? `<button class="sum-row" data-goto="pickup"><span>회수 희망일</span><b>${fmtD($("#rpDate", m).value)}</b></button>` : ""}
-        ${RETURN_CHECKS.map((q, i) => `<button class="sum-row" data-goto="q:${q.k}"><span>${i + 1}. ${esc(q.q)}</span><b class="${st.ans[q.k] === "n" ? "t-bad" : ""}">${st.ans[q.k] === "n" ? "아니오" : "예"}</b></button>`).join("")}
+        ${CHECKS.map((q, i) => `<button class="sum-row" data-goto="q:${q.k}"><span>${i + 1}. ${esc(q.q)}</span><b class="${st.ans[q.k] === "n" ? "t-bad" : ""}">${st.ans[q.k] === "n" ? "아니오" : "예"}</b></button>`).join("")}
         <button class="sum-row" data-goto="memo"><span>메모</span><b>${memo ? esc(memo) : "없음"}</b></button>
         <div class="sum-res">자가점검 결과 <span class="pill ${CHECK_PILL[r]}">${esc(CONDS[r])}</span></div>
         <p class="meta">항목을 누르면 고칠 수 있어요.</p>`;
@@ -1204,7 +1225,7 @@ function returnForm(l) {
       const err = $("#rErr", m), show = t => { err.textContent = t; err.hidden = false; };
       err.hidden = true;
       const method = st.method, memo = $("#scNote", m).value.trim();
-      const self = result(), nos = RETURN_CHECKS.filter(q => st.ans[q.k] === "n");
+      const self = result(), nos = CHECKS.filter(q => st.ans[q.k] === "n");
       if (self !== "ok" && !memo) { back2sum = true; go("memo"); $("#mErr", m).textContent = "‘아니오’를 고른 내용을 적어 주세요."; $("#mErr", m).hidden = false; return; }
       const note = [nos.length ? nos.map(q => `[아니오] ${q.q}`).join("\n") : `자가점검 ${n}개 모두 ‘예’`, memo].filter(Boolean).join("\n");
       let pickup = null;
