@@ -28,3 +28,9 @@ Laerdal Medical Korea 사내 데모장비 관리·출납 신청·배송 요청·
 
 - 코드에는 Supabase **공개 키**(`sb_publishable_`)만 둔다. 비밀 키, DB 비밀번호는 절대 올리지 않는다.
 - 모든 권한은 DB(RLS, 트리거, 함수)가 판단한다. 화면에서 버튼을 숨기는 것은 보안이 아니다.
+
+## 외부 스크립트 (vendor)
+
+- `vendor/supabase-js-2.117.3.js`: npm 패키지 `@supabase/supabase-js@2.117.3`의 `dist/umd/supabase.js` 원본 그대로 (MIT, `vendor/supabase-js-LICENSE.txt`).
+- `index.html`의 `<script>`에 SRI 해시(`integrity`)가 있다. 파일을 바꾸면 해시도 다시 계산해야 한다:
+  `openssl dgst -sha384 -binary vendor/supabase-js-<버전>.js | openssl base64 -A`

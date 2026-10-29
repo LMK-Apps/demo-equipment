@@ -12,7 +12,7 @@
 <meta name="theme-color" content="#0f6b5c">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="vendor/supabase-js-2.117.3.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
 <style>
 /* Layout: 상단 바 + 탭, 아래는 탭별 작업 화면 */
 :root{
@@ -184,6 +184,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.93", date: "2026-10-29", items: [
+    "로그인·DB 연결 스크립트(supabase-js 2.117.3)를 외부 CDN 대신 앱 저장소에서 직접 제공",
+    "스크립트 무결성 검사(SRI) 추가: 파일이 바뀌면 브라우저가 실행하지 않음",
+    "자동 백업 설정의 GitHub 액션 버전 갱신 (Node 24, 지원 종료 경고 해소)",
+  ] },
   { v: "v0.92", date: "2026-10-29", db: "006_date_limits.sql", items: [
     "신청 날짜 제한: 사용 시작일은 오늘부터 1년 이내, 대여 기간은 최대 1달",
     "연장도 시작일부터 1달까지 (관리자는 예외로 더 길게 연장 가능)",
