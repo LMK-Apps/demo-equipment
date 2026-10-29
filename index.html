@@ -63,6 +63,10 @@ h3{font-size:14px;margin:0;font-weight:600}
 .stat b{display:block;font-family:var(--mono);font-size:24px;font-weight:500;font-variant-numeric:tabular-nums}
 .stat span{font-size:12px;color:var(--muted)}
 .stat.alert{border-color:var(--bad);background:var(--bad-soft)}
+.stat-btn{font:inherit;color:inherit;text-align:left;cursor:pointer;display:block;width:100%}
+.stat-btn:hover{border-color:var(--accent)}
+.stat-btn.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft)}
+.stat-btn.on b{color:var(--accent)}
 .stat.alert b{color:var(--bad)}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;min-width:0;display:flex;flex-direction:column;gap:10px}
@@ -263,6 +267,10 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.033", date: "2026-10-29", items: [
+    "장비 탭 위 숫자 카드를 누르면 그 조건으로 목록을 거름 (의왕·문정·기타 보관, 수리 필요). 한 번 더 누르면 해제",
+    "‘전체 보기’ 카드와 ‘필터 초기화’ 버튼 추가, 거른 상태에서는 표시 중인 대수를 보여 줌",
+  ] },
   { v: "v0.032", date: "2026-10-29", db: "011_real_equipment.sql", items: [
     "실제 데모장비 81대 등록 (DEMO_SIM.xlsx 80대 + Servo-air ventilator). 테스트 장비·출납·배송·이력은 모두 삭제",
     "분류를 5개로 정리: 시뮬레이터, BLS, MBL, Skill T., 기타 (L&T·MU·EZ·LGH는 Skill T., 메모에 제품군 표시)",
@@ -508,7 +516,7 @@ let session = null, profile = null;
 let me = { id: null, isAdmin: false };
 let equipment = [], loans = [], shipments = [], people = [];
 let view = (location.hash || "").slice(1) || "home";
-let filters = { eqQ: "", eqCat: "", eqLoc: "", ledgerQ: "", ledgerSt: "open" };
+let filters = { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", ledgerQ: "", ledgerSt: "open" };
 // 기본 사용 기간: 3일 (시작일 포함, 시작일 + 2일). 반납 예정일을 직접 고르면 그 값을 유지한다
 const DEFAULT_DAYS = 3;
 const defaultDue = start => addDays(start, DEFAULT_DAYS - 1);
@@ -844,20 +852,25 @@ function vStats() {
 
 function vEquip() {
   const q = filters.eqQ.trim().toLowerCase();
-  const list = equipment.filter(e => (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q)));
+  const list = equipment.filter(e => (!filters.eqSt || e.status === filters.eqSt) && (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q)));
   const t = todayStr();
   const byLoc = [...LOCS, "기타"].map(k => [k, equipment.filter(e => locGroup(e.location) === k && e.status !== "retired").length]);
   const needRepair = equipment.filter(e => e.status === "repair").length;
+  const anyF = !!(filters.eqQ.trim() || filters.eqCat || filters.eqLoc || filters.eqSt);
   return `
   <div class="head"><div class="grow"><h2>장비</h2><p class="sub">장비 ${equipment.length}대. 보관 위치와 최근 점검 결과는 반납 신청과 관리자 점검 때 자동으로 바뀌어요. 행을 누르면 자세히 볼 수 있어요.</p></div>
     ${me.isAdmin ? `<button class="btn pri" data-act="eqNew">장비 등록</button>` : ""}</div>
-  <div class="stats">${byLoc.map(([k, n]) => `<div class="stat"><b>${n}</b><span>${k} 보관</span></div>`).join("")}
-    <div class="stat ${needRepair ? "alert" : ""}"><b>${needRepair}</b><span>수리 필요</span></div></div>
+  <div class="stats">
+    <button class="stat stat-btn ${anyF ? "" : "on"}" data-act="eqCard" data-k="all" aria-pressed="${!anyF}"><b>${equipment.filter(e => e.status !== "retired").length}</b><span>전체 보기</span></button>
+    ${byLoc.map(([k, n]) => `<button class="stat stat-btn ${filters.eqLoc === k ? "on" : ""}" data-act="eqCard" data-k="loc:${k}" aria-pressed="${filters.eqLoc === k}"><b>${n}</b><span>${k} 보관</span></button>`).join("")}
+    <button class="stat stat-btn ${needRepair ? "alert" : ""} ${filters.eqSt === "repair" ? "on" : ""}" data-act="eqCard" data-k="st:repair" aria-pressed="${filters.eqSt === "repair"}"><b>${needRepair}</b><span>수리 필요</span></button></div>
   <div class="toolbar">
     <input id="eqQ" type="search" placeholder="제품명·자산번호·위치 검색" value="${esc(filters.eqQ)}" style="flex:1;min-width:200px">
     <select id="eqLoc"><option value="">전체 위치</option>${[...LOCS, "기타"].map(c => `<option ${filters.eqLoc === c ? "selected" : ""}>${c}</option>`).join("")}</select>
     <select id="eqCat"><option value="">전체 분류</option>${CATS.map(c => `<option ${filters.eqCat === c ? "selected" : ""}>${c}</option>`).join("")}</select>
+    <button class="btn" data-act="eqReset" ${anyF ? "" : "disabled"}>필터 초기화</button>
   </div>
+  ${anyF ? `<p class="meta" style="margin:-4px 0 0">${list.length}대 표시 중${filters.eqSt === "repair" ? " · 수리 필요만" : ""}</p>` : ""}
   ${equipment.length === 0 ? `<div class="panel"><div class="empty">아직 등록된 장비가 없어요. ${me.isAdmin ? "‘장비 등록’으로 첫 장비를 추가해 주세요." : "장비 관리자가 장비를 등록하면 여기에 나타나요."}</div></div>` : `
   <div class="list2">${list.map(e => {
       const next = loans.filter(l => l.equipment_id === e.id && ACTIVE(l.status) && l.due_date >= t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
@@ -1533,6 +1546,14 @@ document.addEventListener("click", e => {
     case "calDay": calDay(a.dataset.d); break;
     case "eqNew": eqForm(); break;
     case "eqView": eqView(a.dataset.id); break;
+    case "eqReset": Object.assign(filters, { eqQ: "", eqCat: "", eqLoc: "", eqSt: "" }); render(); break;
+    case "eqCard": {
+      const [t, v] = a.dataset.k.split(":");
+      if (t === "all") Object.assign(filters, { eqQ: "", eqCat: "", eqLoc: "", eqSt: "" });
+      else if (t === "loc") { filters.eqLoc = filters.eqLoc === v ? "" : v; filters.eqSt = ""; }
+      else if (t === "st") { filters.eqSt = filters.eqSt === v ? "" : v; filters.eqLoc = ""; }
+      render(); break;
+    }
     case "checkout": l && confirmBox("출고 처리", `${eqName}를 ${esc(nameOf(l.requester_id))}에게 출고해요. 구성품을 확인했는지 봐 주세요.<br><br>${esc(eqById(l.equipment_id)?.components || "")}`, "출고",
       async () => { await must(sb.from("loans").update({ status: "out" }).eq("id", l.id)); toast("출고 처리했어요."); }); break;
     case "return": l && returnForm(l); break;
