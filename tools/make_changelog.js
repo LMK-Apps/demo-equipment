@@ -4,7 +4,7 @@ const src = fs.readFileSync(__dirname + "/../index.html", "utf8");
 const m = src.match(/const CHANGELOG = (\[[\s\S]*?\n\]);/);
 if (!m) throw new Error("CHANGELOG 배열을 찾지 못했어요");
 const log = Function(`return ${m[1]}`)();
-const lines = ["# 데모장비 출납 앱 · 버전 기록", "",
+const lines = ["# 데모콕 · 버전 기록", "",
   "이 문서는 `index.html` 안의 `CHANGELOG`에서 자동으로 만들어진다. 직접 고치지 말고 `index.html`을 고친 뒤 다시 만든다.", "",
   "| 버전 | 날짜 | DB 변경 |", "| --- | --- | --- |",
   ...log.map(c => `| ${c.v} | ${c.date} | ${c.db ? "`" + c.db + "`" : "없음"} |`), ""];

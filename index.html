@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>데모장비 출납</title>
+<title>데모콕</title>
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="apple-mobile-web-app-title" content="데모장비">
+<meta name="apple-mobile-web-app-title" content="데모콕">
 <meta name="theme-color" content="#0f6b5c">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -252,7 +252,7 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
 <div id="gate" class="gate" hidden></div>
 <div id="app" hidden>
   <header class="top"><div class="wrap">
-    <div class="brand">데모장비 출납 <span class="tag">LMK DEMO POOL</span> <button class="ver" id="verTop" title="버전 기록 보기"></button></div>
+    <div class="brand">데모콕 <span class="tag">LMK DEMO POOL</span> <button class="ver" id="verTop" title="버전 기록 보기"></button></div>
     <div class="who"><span id="meName"></span><span class="role" id="meRole"></span><button class="btn sm" id="logout">로그아웃</button></div>
   </div></header>
   <nav class="tabs" aria-label="화면"><div class="wrap" role="tablist" id="tabs"></div></nav>
@@ -267,6 +267,9 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.035", date: "2026-10-29", items: [
+    "앱 이름을 ‘데모장비 출납’에서 ‘데모콕’으로 변경 (화면 제목, 로그인 화면, 브라우저 탭, 홈 화면 아이콘 이름)",
+  ] },
   { v: "v0.034", date: "2026-10-29", db: "012_notify_demo_request.sql", items: [
     "Teams 알림 제목을 ‘새 출납 신청’에서 ‘새 데모 신청’으로 변경 (메뉴 이름과 맞춤)",
   ] },
@@ -437,7 +440,7 @@ const APP_BUILD = CHANGELOG[0].date;
 const $ = (s, r = document) => r.querySelector(s);
 document.getElementById("verTop").textContent = `${APP_VERSION} · ${APP_BUILD}`;
 document.getElementById("verTop").dataset.act = "changelog";
-document.title = `데모장비 출납 ${APP_VERSION}`;
+document.title = `데모콕 ${APP_VERSION}`;
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const pad = n => String(n).padStart(2, "0");
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
@@ -551,7 +554,7 @@ function showGate(kind, extra = "") {
   $("#app").hidden = true; const g = $("#gate"); g.hidden = false;
   const name = esc(profile?.display_name || "");
   const body = {
-    login: `<h1>데모장비 출납</h1><p>Laerdal Medical Korea 사내 앱이에요. 카카오 계정으로 로그인한 뒤, 장비 관리자가 승인하면 쓸 수 있어요.</p>${extra}<button class="kakao" id="kakaoLogin">${KAKAO_ICON}카카오 로그인</button>`,
+    login: `<h1>데모콕</h1><p>Laerdal Medical Korea 데모장비 신청 앱이에요. 카카오 계정으로 로그인한 뒤, 장비 관리자가 승인하면 쓸 수 있어요.</p>${extra}<button class="kakao" id="kakaoLogin">${KAKAO_ICON}카카오 로그인</button>`,
     pending: `<h1>승인을 기다리고 있어요</h1><p>${name ? `<b>${name}</b>님, ` : ""}가입 요청이 장비 관리자에게 전달됐어요. 승인되면 이 화면을 새로 고쳐 주세요.</p><p class="meta">관리자에게 카카오 닉네임 “${name || "–"}”을 알려 주면 빨리 찾을 수 있어요.</p><button class="btn pri" id="reload">새로 고침</button><button class="btn" id="gateLogout">로그아웃</button>`,
     disabled: `<h1>사용이 중지된 계정이에요</h1><p>다시 써야 한다면 장비 관리자에게 문의해 주세요.</p><button class="btn" id="gateLogout">로그아웃</button>`,
     error: `<h1>불러오지 못했어요</h1><p>${extra}</p><button class="btn pri" id="reload">다시 시도</button><button class="btn" id="gateLogout">로그아웃</button>`,

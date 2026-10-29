@@ -1,6 +1,6 @@
 {
-  "name": "데모장비 출납",
-  "short_name": "데모장비",
+  "name": "데모콕",
+  "short_name": "데모콕",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
