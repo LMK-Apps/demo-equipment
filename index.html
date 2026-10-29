@@ -242,6 +242,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.101", date: "2026-10-29", db: "008_pickup_edit.sql", items: [
+    "반납 신청 때 회수 정보(담당자·연락처·주소·희망일·메모)를 고칠 수 있음. 배송 신청 때 적은 정보가 미리 채워짐",
+    "물류사에 이미 회수를 요청한 경우에는 정보를 보여 주기만 하고, 장비 관리자에게 알려 달라고 안내",
+    "마지막 확인 화면에 회수 주소와 희망일 표시",
+  ] },
   { v: "v0.100", date: "2026-10-29", items: [
     "내 신청과 출납 대장에서 항목을 누르면 세부 정보 창이 열림",
     "세부 정보: 신청(기간·신청자·요청자·목적·고객사·함께 신청한 장비), 출고·배송, 반납(장소·방법·자가점검·관리자 확인·보관 위치·메모)",
@@ -1190,7 +1195,8 @@ function returnForm(l) {
   const pick = shipOf(l.loan_no, "pickup"), out = shipOf(l.loan_no, "outbound");
   const src = pick || out || {};
   const pickDefault = (pick && pick.requested_date) || addDays(todayStr(), 1);
-  const hasPick = pick && pick.status !== "cancelled";
+  const pickLocked = pick && !["scheduled", "pending", "cancelled"].includes(pick.status);   // 물류사에 이미 요청함
+  const bundle = loans.filter(x => x.loan_no === l.loan_no && x.id !== l.id && x.status !== "cancelled").length;
   const CHECKS = checksFor(e), n = CHECKS.length;
   const st = { place: "의왕", how: null, ans: {} };
   const methodOf = () => st.how === "pickup" ? "pickup" : st.place === "문정" ? "drop_munjeong" : "drop_uiwang";
@@ -1212,13 +1218,15 @@ function returnForm(l) {
     </section>
     <section data-step="pickup" hidden>
       <p class="flow-k">물류사 회수</p><h2 class="flow-q">회수 정보를 확인해 주세요</h2>
-      ${hasPick ? `<div class="meta">이 신청에는 회수 정보가 이미 있어요.<br>${esc(pick.recipient)} · ${esc(pick.phone)} · ${esc(pick.address)}</div>
-        <label class="f req"><span>회수 희망일</span><input type="date" id="rpDate" value="${esc(pickDefault)}"></label>` : `<div class="fields">
+      ${pickLocked ? `<div class="flow-box">${esc(pick.recipient)} · ${esc(pick.phone)}<br>${esc(pick.address)}${pick.requested_date ? `<br>회수 희망일 ${fmtD(pick.requested_date)}` : ""}</div>
+        <p class="meta">이미 물류사에 회수를 요청했어요. 회수 정보를 바꾸려면 장비 관리자에게 알려 주세요.</p>` : `
+        ${pick ? `<p class="meta">배송 신청 때 적은 회수 정보예요. 바뀌었으면 고쳐 주세요.${bundle ? ` 같은 신청번호의 다른 장비 ${bundle}대도 이 정보로 회수돼요.` : ""}</p>` : ""}
+        <div class="fields">
         <label class="f req"><span>담당자</span><input id="rpName" value="${esc(src.recipient || "")}"></label>
         <label class="f req"><span>연락처</span><input id="rpPhone" inputmode="tel" value="${esc(src.phone || "")}"></label>
         <label class="f req wide"><span>회수 주소</span><input id="rpAddr" value="${esc(src.address || "")}"></label>
         <label class="f req"><span>회수 희망일</span><input type="date" id="rpDate" value="${esc(pickDefault)}"></label>
-        <label class="f wide"><span>회수 메모</span><input id="rpMemo" placeholder="수거 위치, 연락 가능 시간 등"></label></div>`}
+        <label class="f wide"><span>회수 메모</span><input id="rpMemo" value="${esc(pick ? pick.memo || "" : "")}" placeholder="수거 위치, 연락 가능 시간 등"></label></div>`}
       <div class="flow-foot"><div class="notice bad" id="rpErr" hidden></div><button class="btn pri big" id="rpNext">다음</button></div>
     </section>
     ${CHECKS.map((q, i) => `<section data-step="q:${q.k}" hidden>
@@ -1273,7 +1281,7 @@ function returnForm(l) {
     $("#rpNext", m).addEventListener("click", () => {
       const err = $("#rpErr", m), show = t => { err.textContent = t; err.hidden = false; };
       err.hidden = true;
-      if (!$("#rpDate", m).value) return show("회수 희망일을 골라 주세요.");
+      if ($("#rpDate", m) && !$("#rpDate", m).value) return show("회수 희망일을 골라 주세요.");
       if ($("#rpName", m) && (!$("#rpName", m).value.trim() || !$("#rpPhone", m).value.trim() || !$("#rpAddr", m).value.trim())) return show("담당자, 연락처, 회수 주소를 입력해 주세요.");
       next();
     });
@@ -1293,7 +1301,7 @@ function returnForm(l) {
       $("#sumBox", m).innerHTML = `
         <button class="sum-row" data-goto="place"><span>반납 장소</span><b>${esc(st.place)}</b></button>
         <button class="sum-row" data-goto="method"><span>반납 방법</span><b>${st.how === "pickup" ? "물류사 회수 요청" : "직접 반납"}</b></button>
-        ${st.how === "pickup" ? `<button class="sum-row" data-goto="pickup"><span>회수 희망일</span><b>${fmtD($("#rpDate", m).value)}</b></button>` : ""}
+        ${st.how === "pickup" ? `<button class="sum-row" data-goto="pickup"><span>회수 정보</span><b>${esc($("#rpAddr", m)?.value || pick?.address || "")}\n${fmtD($("#rpDate", m)?.value || pick?.requested_date || "")}</b></button>` : ""}
         ${CHECKS.map((q, i) => `<button class="sum-row" data-goto="q:${q.k}"><span>${i + 1}. ${esc(q.q)}</span><b class="${st.ans[q.k] === "n" ? "t-bad" : ""}">${st.ans[q.k] === "n" ? "아니오" : "예"}</b></button>`).join("")}
         <button class="sum-row" data-goto="memo"><span>메모</span><b>${memo ? esc(memo) : "없음"}</b></button>
         <div class="sum-res">자가점검 결과 <span class="pill ${CHECK_PILL[r]}">${esc(CONDS[r])}</span></div>
@@ -1310,7 +1318,7 @@ function returnForm(l) {
       const note = [nos.length ? nos.map(q => `[아니오] ${q.q}`).join("\n") : `자가점검 ${n}개 모두 ‘예’`, memo].filter(Boolean).join("\n");
       let pickup = null;
       if (method === "pickup") {
-        pickup = { date: $("#rpDate", m).value };
+        pickup = { date: $("#rpDate", m)?.value || pick?.requested_date || null };
         if ($("#rpName", m)) Object.assign(pickup, { recipient: $("#rpName", m).value.trim(), phone: $("#rpPhone", m).value.trim(), address: $("#rpAddr", m).value.trim(), memo: $("#rpMemo", m).value.trim() });
       }
       b.disabled = true;
