@@ -134,7 +134,11 @@ tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .list2>.empty{padding:24px}
 .r2{display:flex;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line)}
 .r2:last-child{border-bottom:0}
-.r2[data-act]{cursor:pointer}.r2[data-act]:hover{background:var(--sunk)}
+.r2[data-act]{cursor:pointer}
+.row.clickable{cursor:pointer;border-radius:6px}.row.clickable:hover{background:var(--sunk)}
+.lv-sub{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:-8px}
+.lv-sec{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.lv-sec h3{margin:0}.r2[data-act]:hover{background:var(--sunk)}
 .r2.overdue{box-shadow:inset 3px 0 0 var(--bad)}
 .r2-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .r2-l1{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;min-width:0}
@@ -238,6 +242,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.100", date: "2026-10-29", items: [
+    "내 신청과 출납 대장에서 항목을 누르면 세부 정보 창이 열림",
+    "세부 정보: 신청(기간·신청자·요청자·목적·고객사·함께 신청한 장비), 출고·배송, 반납(장소·방법·자가점검·관리자 확인·보관 위치·메모)",
+    "세부 정보 창에서 출고, 연장, 예약 취소, 반납 신청, 반납 확인 바로 가능 (권한에 맞는 버튼만 표시)",
+  ] },
   { v: "v0.99", date: "2026-10-29", items: [
     "모든 팝업 창 오른쪽 위에 ✕ 닫기 버튼 추가 (장비 정보, 반납 확인, 신청 수정 등)",
   ] },
@@ -614,24 +623,47 @@ function calDay(key) {
     $("#dReq", mm)?.addEventListener("click", () => { draft.start = key; if (draft.due < key) draft.due = addDays(key, 2); closeModal(); go("request"); });
   });
 }
-function calLoan(id) {
+function loanView(id) {
   const l = loans.find(x => x.id === id); if (!l) return;
   const e = eqById(l.equipment_id) || {}, group = loans.filter(x => x.loan_no === l.loan_no && x.id !== l.id && x.status !== "cancelled");
-  const o = shipOf(l.loan_no, "outbound"), ri = reqInfo(l);
-  modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta"><span class="mono">${esc(e.asset_no)}</span> · ${esc(e.location)}</div></div>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</div>
-    <div class="fields">
-      <div><div class="meta">신청번호</div><div class="mono">${esc(l.loan_no)}</div></div>
-      <div><div class="meta">기간</div><div class="mono">${esc(l.start_date)} ~ ${esc(l.due_date)}${l.extension_count ? ` (연장 ${l.extension_count}회)` : ""}</div></div>
-      <div><div class="meta">신청자</div><div>${esc(nameOf(l.requester_id))}</div></div>
-      <div><div class="meta">요청자</div><div>${esc(ri || "–")}</div></div>
-      <div><div class="meta">목적</div><div>${esc(l.purpose)}</div></div>
-      <div><div class="meta">고객사·기관</div><div>${esc(l.customer || "–")}</div></div>
-      <div class="wide"><div class="meta">배송</div><div>${o ? `${esc(OUT_STATUS[o.status]?.[0] || o.status)} · ${esc(o.address)} (${fmtD(o.requested_date)} 도착 희망)` : "직접 수령"}</div></div>
-      ${l.note ? `<div class="wide"><div class="meta">메모</div><div style="white-space:pre-wrap">${esc(l.note)}</div></div>` : ""}
-      ${group.length ? `<div class="wide"><div class="meta">함께 신청한 장비</div><div>${group.map(x => `${esc(eqById(x.equipment_id)?.name)} (${esc(eqById(x.equipment_id)?.asset_no)})`).join(", ")}</div></div>` : ""}
-    </div>
-    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn" id="lLedger">출납 대장에서 보기</button></div>`, mm => {
-    $("#lLedger", mm).addEventListener("click", () => { filters.ledgerQ = l.loan_no; filters.ledgerSt = "all"; closeModal(); go("ledger"); });
+  const o = shipOf(l.loan_no, "outbound"), p = shipOf(l.loan_no, "pickup"), ri = reqInfo(l);
+  const mine = l.requester_id === me.id, adm = me.isAdmin;
+  const btn = (act, t, cls = "") => `<button class="btn ${cls}" data-act="${act}" data-id="${l.id}">${t}</button>`;
+  const acts = [];
+  if (l.status === "reserved") { if (adm) acts.push(btn("checkout", "출고", "pri")); if (mine || adm) acts.push(btn("extend", "연장")); if (mine) acts.push(btn("cancel", "예약 취소", "danger")); }
+  if (l.status === "out") { if (mine || adm) acts.push(btn("extend", "연장"), btn("return", "반납 신청", "pri")); }
+  if (l.status === "checking" && adm) acts.push(btn("inspect", "반납 확인", "pri"));
+  const f = (label, val, wide) => `<div${wide ? ` class="wide"` : ""}><div class="meta">${label}</div><div>${val}</div></div>`;
+  const pre = t => `<span style="white-space:pre-wrap">${esc(t)}</span>`;
+  const shipTxt = (x, map) => `${esc(map[x.status]?.[0] || x.status)} · ${esc(x.recipient || "")} ${esc(x.phone || "")} · ${esc(x.address || "")}${x.requested_date ? ` · 희망일 ${fmtD(x.requested_date)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.carrier || "")} ${esc(x.tracking_no)}</span>` : ""}`;
+  modal(`<h2>${esc(e.name)}</h2>
+    <div class="lv-sub"><span class="meta"><span class="mono">${esc(e.asset_no)}</span> · <span class="mono">${esc(l.loan_no)}</span></span>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</div>
+    <div class="lv-sec"><h3>신청</h3><div class="fields">
+      ${f("기간", `<span class="mono">${fmtD(l.start_date)} ~ ${fmtD(l.due_date)}</span> (${daysBetween(l.start_date, l.due_date) + 1}일)${l.extension_count ? ` · 연장 ${l.extension_count}회` : ""}`)}
+      ${f("신청자", esc(nameOf(l.requester_id)))}
+      ${f("요청자", esc(ri || "–"))}
+      ${f("목적", esc(l.purpose))}
+      ${f("고객사·기관", esc(l.customer || "–"))}
+      ${f("신청일", l.created_at ? `<span class="mono">${fmtT(l.created_at)}</span>` : "–")}
+      ${l.note ? f("메모", pre(l.note), true) : ""}
+      ${group.length ? f("함께 신청한 장비", group.map(x => `${esc(eqById(x.equipment_id)?.name)} (<span class="mono">${esc(eqById(x.equipment_id)?.asset_no)}</span>)`).join(", "), true) : ""}
+    </div></div>
+    <div class="lv-sec"><h3>출고·배송</h3><div class="fields">
+      ${f("출고", l.checkout_at ? `<span class="mono">${fmtT(l.checkout_at)}</span>` : "아직 출고 전")}
+      ${f("배송", l.delivery && o ? shipTxt(o, OUT_STATUS) : "직접 수령", true)}
+    </div></div>
+    ${l.return_method || l.returned_at ? `<div class="lv-sec"><h3>반납</h3><div class="fields">
+      ${f("반납 신청", `${esc(retLabel(l) || "–")}${l.returned_at ? ` · <span class="mono">${fmtT(l.returned_at)}</span>` : ""}`, true)}
+      ${l.return_method === "pickup" && p ? f("회수", shipTxt(p, PICK_STATUS), true) : ""}
+      ${f("반납자 자가점검", l.return_self_check ? `<span class="pill ${CHECK_PILL[l.return_self_check] || ""}">${esc(CONDS[l.return_self_check])}</span>` : "–")}
+      ${l.return_self_note ? f("자가점검 메모", pre(l.return_self_note), true) : ""}
+      ${l.status === "done" ? `
+        ${f("관리자 확인", `${l.return_condition ? `<span class="pill ${CHECK_PILL[l.return_condition] || ""}">${esc(CONDS[l.return_condition])}</span> ` : ""}${l.checked_by ? esc(nameOf(l.checked_by)) : ""}`)}
+        ${f("보관 위치", esc(l.return_location || e.location || "–"))}
+        ${l.return_note ? f("확인 메모", pre(l.return_note), true) : ""}` : ""}
+    </div></div>` : ""}
+    <div class="actions"><button class="btn" data-close-btn>닫기</button>${view !== "ledger" ? `<button class="btn" id="lLedger">출납 대장에서 보기</button>` : ""}${acts.join("")}</div>`, mm => {
+    $("#lLedger", mm)?.addEventListener("click", () => { filters.ledgerQ = l.loan_no; filters.ledgerSt = "all"; closeModal(); go("ledger"); });
   });
 }
 
@@ -858,7 +890,7 @@ function vMine() {
     if (l.status === "out") return `<button class="btn sm" data-act="extend" data-id="${l.id}">연장</button><button class="btn sm pri" data-act="return" data-id="${l.id}">반납 신청</button>`;
     return "";
   };
-  const line = l => { const e = eqById(l.equipment_id) || {}, ri = reqInfo(l); return `<div class="row"><div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(e.asset_no)}</span>
+  const line = l => { const e = eqById(l.equipment_id) || {}, ri = reqInfo(l); return `<div class="row clickable" data-act="loanView" data-id="${l.id}"><div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(e.asset_no)}</span>
       <div class="meta"><span class="mono">${esc(l.loan_no)}</span> · ${esc(l.customer || l.purpose)}${ri ? ` · ${esc(ri)}` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? " · 배송" : ""}</div></div>
       ${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)} ${actions(l)}</div>`; };
   return `
@@ -921,7 +953,7 @@ function vLedger() {
   <div class="list2">${list.map(l => { const e = eqById(l.equipment_id) || {}, ri = reqInfo(l), o = shipOf(l.loan_no, "outbound");
       const ret = l.return_method ? `${esc(l.return_method === "pickup" ? retLabel(l) : placeOf(l))}${l.returned_at ? ` ${fmtT(l.returned_at)}` : ""} · 자가점검 ${condText(l.return_self_check)}${l.return_condition ? ` → 확인 ${condText(l.return_condition)}` : ""}` : "";
       const note = [l.return_self_note, l.return_note].filter(Boolean).join(" / ");
-      return `<div class="r2 ${isOverdue(l) ? "overdue" : ""}">
+      return `<div class="r2 ${isOverdue(l) ? "overdue" : ""}" data-act="loanView" data-id="${l.id}">
         <div class="r2-main">
           <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b><span class="mono meta">${esc(e.asset_no)}</span></div>
           <div class="r2-l2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""}</span><span>${esc(l.purpose)}${l.customer ? ` · ${esc(l.customer)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.extension_count ? ` 연장 ${l.extension_count}회` : ""}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : ""}${l.checkout_at ? `<span>출고 <span class="mono">${fmtT(l.checkout_at)}</span></span>` : ""}${ret ? `<span>반납 ${ret}</span>` : ""}${note ? `<span class="r2-note" title="${esc(note)}">메모 ${esc(note)}</span>` : ""}</div>
@@ -1394,7 +1426,7 @@ document.addEventListener("click", e => {
     case "calPrev": case "calNext": { const [y, m] = cal.ym.split("-").map(Number); const d = new Date(y, m - 1 + (a.dataset.act === "calNext" ? 1 : -1), 1); cal.ym = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; render(); break; }
     case "calToday": cal.ym = todayStr().slice(0, 7); render(); break;
     case "calMode": cal.mode = a.dataset.v; render(); break;
-    case "calLoan": calLoan(a.dataset.id); break;
+    case "calLoan": case "loanView": loanView(a.dataset.id); break;
     case "calDay": calDay(a.dataset.d); break;
     case "eqNew": eqForm(); break;
     case "eqView": eqView(a.dataset.id); break;
