@@ -153,6 +153,15 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
 .tl td.c-done{background:color-mix(in srgb,var(--muted) 22%,transparent)}
 .legend i.c-reserved{background:var(--accent)} .legend i.c-out{background:var(--info)} .legend i.c-overdue{background:var(--bad)} .legend i.c-checking{background:var(--warn)} .legend i.c-done{background:var(--muted)}
 .tl .eqc{position:sticky;left:0;background:var(--surface);z-index:1;min-width:150px;max-width:180px;white-space:normal}
+.hist{display:flex;flex-direction:column;max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:var(--r)}
+.hist .ev{display:grid;grid-template-columns:86px 1fr;gap:8px;padding:7px 10px;border-top:1px solid var(--line);font-size:13px}
+.hist .ev:first-child{border-top:0}
+.hist .ev .t{font-family:var(--mono);font-size:11.5px;color:var(--muted);padding-top:1px}
+.bar{display:flex;align-items:center;gap:8px;min-width:120px}
+.bar i{display:block;height:10px;border-radius:0 4px 4px 0;background:var(--accent);min-width:2px}
+.bar span{font-family:var(--mono);font-size:12px;color:var(--fg);white-space:nowrap}
+.rank{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,1.4fr);gap:6px 12px;align-items:center;font-size:13px}
+.rank .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -175,6 +184,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.91", date: "2026-10-29", db: "005_equipment_history.sql", items: [
+    "장비 상세에 이력 추가: 등록, 출납 신청, 연장, 출고, 반납 신청(자가점검), 반납 확인(판정), 위치 변경, 수시 점검을 시간순으로 표시",
+    "‘통계’ 탭 추가: 기간별 신청 건수, 대여 일수, 평균 대여 기간, 연체 반납 비율",
+    "통계: 장비별 대여 횟수·일수·가동률·마지막 사용일, 미사용 장비, 목적별·고객사별·신청자별 건수",
+  ] },
   { v: "v0.90", date: "2026-10-28", db: "", items: [
     "출납 신청 화면에 장비 검색(제품명·자산번호·품목번호), 분류·보관 위치 필터 추가",
     "‘가능한 장비만 보기’로 수리·점검 중이거나 예약이 겹치는 장비 숨기기",
@@ -352,6 +366,7 @@ const TABS = () => [
   ["home","현황"], ["cal","일정"], ["equip","장비"], ["request","출납 신청"], ["mine","내 신청"],
   ["ship","배송", shipments.filter(s => s.status === "pending").length],
   ["ledger","출납 대장", loans.filter(isOverdue).length],
+  ["stats","통계"],
   ...(me.isAdmin ? [["users","사용자", people.filter(p => p.status === "pending").length]] : []),
 ];
 function renderTabs() {
@@ -363,7 +378,7 @@ function go(v) { view = v; try { history.replaceState(null, "", "#" + v); } catc
 /* ---------- 화면 ---------- */
 function render() {
   renderTabs();
-  const views = { home: vHome, cal: vCal, equip: vEquip, request: vRequest, mine: vMine, ship: vShip, ledger: vLedger, users: vUsers };
+  const views = { home: vHome, cal: vCal, stats: vStats, equip: vEquip, request: vRequest, mine: vMine, ship: vShip, ledger: vLedger, users: vUsers };
   if (!views[view] || (view === "users" && !me.isAdmin)) view = "home";
   $("#main").innerHTML = `<section data-view="${view}">${views[view]()}</section>`;
   if (view === "request") applyPickFilter();
@@ -493,6 +508,99 @@ function calLoan(id) {
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn" id="lLedger">출납 대장에서 보기</button></div>`, mm => {
     $("#lLedger", mm).addEventListener("click", () => { filters.ledgerQ = l.loan_no; filters.ledgerSt = "all"; closeModal(); go("ledger"); });
   });
+}
+
+/* ---------- 장비 이력 ---------- */
+const STATUS_TXT = s => EQ_STATUS[s]?.[0] || s;
+function histText(ev, loanAts) {
+  const d = ev.detail || {}, dt = x => x ? String(x).slice(5, 10).replace("-", "/") : "–";
+  if (ev.table_name === "equipment") {
+    if (ev.action === "insert") return `장비 등록 · 보관 위치 ${esc(d.location || "–")}`;
+    if (ev.action === "delete") return "장비 삭제";
+    const parts = [];
+    if (d.location) parts.push(`보관 위치 → <b>${esc(d.location)}</b>`);
+    if (loanAts.has(ev.at)) return parts.join(" · ") || null;          // 출납 처리와 함께 바뀐 상태는 출납 줄에 이미 있음
+    if (d.last_check && d.last_check_source === "admin") parts.push(`점검 기록: <b>${esc(CONDS[d.last_check])}</b>${d.last_check_note ? ` · ${esc(d.last_check_note)}` : ""}`);
+    if (d.status) parts.push(`상태 → <b>${esc(STATUS_TXT(d.status))}</b>`);
+    const other = Object.keys(d).filter(k => !["location", "status", "last_check", "last_check_note", "last_check_source", "last_check_by", "last_check_at"].includes(k));
+    if (other.length) parts.push("장비 정보 수정");
+    return parts.join(" · ") || null;
+  }
+  const no = ev.loan_no ? ` <span class="mono meta">${esc(ev.loan_no)}</span>` : "";
+  if (ev.action === "insert") return `출납 신청 · ${dt(d.start_date)}–${dt(d.due_date)} · ${esc(d.purpose || "")}${d.customer ? ` · ${esc(d.customer)}` : ""}${no}`;
+  if (d.status === "out") return `출고${no}`;
+  if (d.status === "checking") return `반납 신청${d.return_method ? ` · ${esc(RETURN_METHODS[d.return_method])}` : ""}${d.return_self_check ? ` · 자가점검 <b>${esc(CONDS[d.return_self_check])}</b>` : ""}${d.return_self_note ? ` (${esc(d.return_self_note)})` : ""}${no}`;
+  if (d.status === "done") return `반납 확인 · <b>${esc(CONDS[d.return_condition] || "–")}</b>${d.return_note ? ` · ${esc(d.return_note)}` : ""}${d.repair_needed === true ? " · 수리 필요" : ""}${no}`;
+  if (d.status === "cancelled") return `예약 취소${no}`;
+  if (d.due_date) return `반납 예정일 연장 → ${dt(d.due_date)}${no}`;
+  return null;
+}
+async function loadHistory(eqId, box) {
+  const { data, error } = await sb.rpc("equipment_history", { p_equipment_id: eqId });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="ev"><span class="t"></span><span class="meta">${esc(/function|schema cache/i.test(error.message || "") ? "이력 기능 준비 중이에요. 관리자에게 DB 업데이트를 요청해 주세요." : errText(error))}</span></div>`; return; }
+  const loanAts = new Set(data.filter(x => x.table_name === "loans").map(x => x.at));
+  const rows = data.map(ev => ({ ev, txt: histText(ev, loanAts) })).filter(r => r.txt);
+  box.innerHTML = rows.length ? rows.map(({ ev, txt }) => `<div class="ev"><span class="t">${fmtT(ev.at)}</span><span>${txt}<div class="meta">${esc(ev.actor_name)}</div></span></div>`).join("")
+    : `<div class="ev"><span class="t"></span><span class="meta">기록된 이력이 없어요.</span></div>`;
+}
+
+/* ---------- 통계 ---------- */
+let statP = "3m";
+const kstDate = iso => { if (!iso) return null; const d = new Date(iso); return ds(d); };
+function vStats() {
+  const t = todayStr();
+  const used = loans.filter(l => ["out", "checking", "done"].includes(l.status) && l.start_date <= t);
+  const minStart = loans.reduce((m, l) => l.start_date < m ? l.start_date : m, t);
+  const ps = { m: t.slice(0, 8) + "01", "3m": addDays(t, -89), y: t.slice(0, 5) + "01-01", all: minStart }[statP];
+  const pDays = daysBetween(ps, t) + 1;
+  const endOf = l => l.status === "out" ? t : (kstDate(l.returned_at) || l.due_date);
+  const clip = l => { const a = l.start_date > ps ? l.start_date : ps, b0 = endOf(l), b = b0 < t ? b0 : t; return b >= a ? daysBetween(a, b) + 1 : 0; };
+  const inP = used.filter(l => clip(l) > 0);
+  const started = loans.filter(l => l.status !== "cancelled" && l.start_date >= ps && l.start_date <= t);
+  const reqCount = new Set(started.map(l => l.loan_no)).size;
+  const devDays = inP.reduce((n, l) => n + clip(l), 0);
+  const finished = used.filter(l => l.status !== "out" && l.start_date >= ps);
+  const avgLen = finished.length ? (finished.reduce((n, l) => n + daysBetween(l.start_date, endOf(l)) + 1, 0) / finished.length) : 0;
+  const lateFin = finished.filter(l => endOf(l) > l.due_date).length, overdueNow = loans.filter(isOverdue).length;
+  const lateRate = (finished.length + overdueNow) ? Math.round((lateFin + overdueNow) / (finished.length + overdueNow) * 100) : 0;
+
+  const per = equipment.filter(e => e.status !== "retired").map(e => {
+    const ls = inP.filter(l => l.equipment_id === e.id), days = ls.reduce((n, l) => n + clip(l), 0);
+    const last = used.filter(l => l.equipment_id === e.id).reduce((m, l) => l.start_date > m ? l.start_date : m, "");
+    return { e, n: ls.length, days, util: Math.round(days / pDays * 100), last };
+  }).sort((a, b) => b.days - a.days || a.e.asset_no.localeCompare(b.e.asset_no));
+  const idle = per.filter(r => r.n === 0).length, maxDays = Math.max(1, ...per.map(r => r.days));
+
+  const groups = (keyFn) => { const m = new Map(); for (const l of started) { const k = keyFn(l); if (!k) continue; if (!m.has(k)) m.set(k, new Set()); m.get(k).add(l.loan_no); } return [...m].map(([k, v]) => [k, v.size]).sort((a, b) => b[1] - a[1]).slice(0, 8); };
+  const rank = (title, rows, unit) => { const mx = Math.max(1, ...rows.map(r => r[1])); return `<div class="panel"><h3>${title}</h3>${rows.length ? `<div class="rank">${rows.map(([k, v]) => `<span class="nm" title="${esc(k)}">${esc(k)}</span><span class="bar" title="${esc(k)}: ${v}${unit}"><i style="width:${Math.round(v / mx * 100)}%"></i><span>${v}${unit}</span></span>`).join("")}</div>` : `<div class="empty">기간 안에 신청이 없어요.</div>`}</div>`; };
+
+  return `
+  <div class="head"><div class="grow"><h2>통계</h2><p class="sub">${ps.replace(/-/g, ".")} ~ ${t.replace(/-/g, ".")} (${pDays}일). 대여 일수는 실제 출고부터 반납까지, 진행 중이면 오늘까지 세요. 취소된 신청은 빼요.</p></div>
+    <div class="seg" role="group" aria-label="기간">${[["m", "이번 달"], ["3m", "최근 3개월"], ["y", "올해"], ["all", "전체"]].map(([k, l]) => `<button data-act="statP" data-v="${k}" aria-pressed="${statP === k}">${l}</button>`).join("")}</div></div>
+  <div class="stats">
+    <div class="stat"><b>${reqCount}</b><span>신청 건수</span></div>
+    <div class="stat"><b>${devDays}</b><span>대여 일수 (장비·일)</span></div>
+    <div class="stat"><b>${avgLen ? avgLen.toFixed(1) : "–"}</b><span>평균 대여 기간 (일)</span></div>
+    <div class="stat ${lateRate >= 20 ? "alert" : ""}"><b>${lateRate}%</b><span>연체 비율 (지금 연체 ${overdueNow}건 포함)</span></div>
+    <div class="stat"><b>${idle}</b><span>기간 중 미사용 장비</span></div>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>장비</th><th>보관 위치</th><th>대여 횟수</th><th>대여 일수</th><th>가동률</th><th>마지막 사용</th></tr></thead>
+    <tbody>${per.map(r => `<tr data-act="eqView" data-id="${r.e.id}" style="cursor:pointer">
+      <td>${esc(r.e.name)}<div class="meta mono">${esc(r.e.asset_no)}</div></td>
+      <td>${esc(r.e.location)}</td>
+      <td class="mono">${r.n}</td>
+      <td><span class="bar" title="${esc(r.e.name)}: ${r.days}일">${r.days ? `<i style="width:${Math.round(r.days / maxDays * 140)}px"></i>` : ""}<span>${r.days}일</span></span></td>
+      <td class="mono">${r.n ? r.util + "%" : `<span class="pill">미사용</span>`}</td>
+      <td class="mono">${r.last ? fmtD(r.last) : "–"}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">장비가 없어요.</td></tr>`}</tbody>
+  </table></div>
+  <div class="grid2">
+    ${rank("목적별 신청", groups(l => l.purpose), "건")}
+    ${rank("고객사·기관별 신청 (상위 8)", groups(l => l.customer.trim()), "건")}
+    ${rank("신청자별 신청 (상위 8)", groups(l => nameOf(l.requester_id)), "건")}
+  </div>
+  <p class="meta">가동률 = 대여 일수 ÷ 기간 일수. 장비를 누르면 상세와 이력을 볼 수 있어요.</p>`;
 }
 
 function vEquip() {
@@ -863,11 +971,13 @@ function eqView(id) {
     <div><h3>최근 점검</h3><div style="margin-top:4px">${checkCell(e)}</div></div>
     <div><h3>구성품</h3><div class="meta" style="white-space:pre-wrap">${esc(e.components || "등록된 구성품이 없어요.")}</div></div>
     <div><h3>예약 일정</h3><div class="list">${sched.map(l => `<div class="row"><div class="main"><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}</span> · ${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)}</div>${l.status === "out" && l.due_date < t ? `<span class="pill p-bad">연체</span>` : pill(LOAN_STATUS, l.status)}</div>`).join("") || `<div class="empty">잡힌 예약이 없어요.</div>`}</div></div>
-    <div><h3>최근 반납</h3><div class="list">${hist.map(l => `<div class="row"><div class="main"><span class="mono">${fmtT(l.returned_at)}</span> · ${esc(nameOf(l.requester_id))}</div><span class="pill ${l.return_condition === "ok" ? "p-ok" : "p-warn"}">${esc(CONDS[l.return_condition] || "–")}</span></div>`).join("") || `<div class="empty">반납 기록이 없어요.</div>`}</div></div>
+    <div><h3>이력</h3><div class="hist" id="eqHist"><div class="ev"><span class="t"></span><span class="meta">불러오는 중…</span></div></div></div>
+    <div hidden><h3>최근 반납</h3><div class="list">${hist.map(l => `<div class="row"><div class="main"><span class="mono">${fmtT(l.returned_at)}</span> · ${esc(nameOf(l.requester_id))}</div><span class="pill ${l.return_condition === "ok" ? "p-ok" : "p-warn"}">${esc(CONDS[l.return_condition] || "–")}</span></div>`).join("") || `<div class="empty">반납 기록이 없어요.</div>`}</div></div>
     ${e.note ? `<div class="meta">메모: ${esc(e.note)}</div>` : ""}
     <div class="actions"><button class="btn" data-close-btn>닫기</button>${me.isAdmin ? `<button class="btn" id="eCheck">상태 점검 기록</button><button class="btn" id="eEdit">수정</button>` : ""}<button class="btn pri" id="eReq" ${["repair","retired","inspect"].includes(e.status) ? "disabled" : ""}>이 장비 신청</button></div>`, m => {
     $("#eEdit", m)?.addEventListener("click", () => eqForm(e));
     $("#eCheck", m)?.addEventListener("click", () => eqCheck(e));
+    loadHistory(e.id, $("#eqHist", m));
     $("#eReq", m).addEventListener("click", () => { draft.picks = new Set([id]); closeModal(); go("request"); });
   });
 }
@@ -1067,6 +1177,7 @@ document.addEventListener("click", e => {
   switch (a.dataset.act) {
     case "refresh": busy(a, () => refresh()); break;
     case "changelog": showChangelog(); break;
+    case "statP": statP = a.dataset.v; render(); break;
     case "calPrev": case "calNext": { const [y, m] = cal.ym.split("-").map(Number); const d = new Date(y, m - 1 + (a.dataset.act === "calNext" ? 1 : -1), 1); cal.ym = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; render(); break; }
     case "calToday": cal.ym = todayStr().slice(0, 7); render(); break;
     case "calMode": cal.mode = a.dataset.v; render(); break;
