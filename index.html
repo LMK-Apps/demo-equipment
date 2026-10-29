@@ -261,6 +261,10 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.029", date: "2026-10-29", db: "009_shipping_privacy.sql", items: [
+    "배송 정보(이름·연락처·주소)는 장비 관리자와 신청한 본인만 볼 수 있음. 배송 탭에서 일반 사용자는 자기 신청 건만 보임",
+    "반납 완료 후 90일이 지난 신청의 배송 담당자·연락처·주소·메모를 매일 04:00에 자동으로 지움 (이력에 남은 값도 함께)",
+  ] },
   { v: "v0.028", date: "2026-10-29", items: [
     "버전 번호 규칙 변경: v0.001부터 배포할 때마다 0.001씩 (지금까지 배포 27번 → 이번이 28번째). 이전 번호는 모두 새 규칙으로 바꿈",
     "반납 자가점검 정리: 분류마다 최대 5문항 (BLS 4, 환자 시뮬레이터 5, 소프트웨어 5, 그 밖 3)",
@@ -709,7 +713,7 @@ function loanView(id) {
     </div></div>
     <div class="lv-sec"><h3>출고·배송</h3><div class="fields">
       ${f("출고", l.checkout_at ? `<span class="mono">${fmtT(l.checkout_at)}</span>` : "아직 출고 전")}
-      ${f("배송", l.delivery && o ? shipTxt(o, OUT_STATUS) : "직접 수령", true)}
+      ${f("배송", !l.delivery ? "직접 수령" : o ? shipTxt(o, OUT_STATUS) : "배송 (배송 정보는 신청한 본인과 장비 관리자만 볼 수 있어요)", true)}
     </div></div>
     ${l.return_method || l.returned_at ? `<div class="lv-sec"><h3>반납</h3><div class="fields">
       ${f("반납 신청", `${esc(retLabel(l) || "–")}${l.returned_at ? ` · <span class="mono">${fmtT(l.returned_at)}</span>` : ""}`, true)}
@@ -967,7 +971,8 @@ const steps = (x, order, map) => { const cur = order.indexOf(x.status);
   return `<div class="steps" role="group" aria-label="진행 단계">${order.map((k, i) => `<button class="step ${i < cur ? "done" : i === cur ? "cur" : ""}" data-act="shipStep" data-sid="${x.id}" data-st="${k}" aria-pressed="${i <= cur}" ${me.isAdmin ? "" : "disabled"}>${i < cur ? "✓ " : ""}${esc(map[k][0])}</button>`).join("")}</div>`; };
 const trackTxt = x => `${x.carrier ? ` · ${esc(x.carrier)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.tracking_no)}</span>` : ""}${me.isAdmin ? ` · <button class="linkbtn" data-act="shipEdit" data-sid="${x.id}">${x.tracking_no ? "운송장 수정" : "운송장 입력"}</button>` : ""}`;
 function vShip() {
-  const groups = groupBy(loans.filter(l => l.status !== "cancelled" && (l.delivery || shipOf(l.loan_no, "pickup"))), "loan_no").sort((a, b) => a[0].start_date.localeCompare(b[0].start_date));
+  // 배송 정보는 관리자와 신청한 본인만 볼 수 있다 (DB 권한과 같음)
+  const groups = groupBy(loans.filter(l => l.status !== "cancelled" && (me.isAdmin || l.requester_id === me.id) && (l.delivery || shipOf(l.loan_no, "pickup"))), "loan_no").sort((a, b) => a[0].start_date.localeCompare(b[0].start_date));
   const openG = groups.filter(g => { const o = shipOf(g[0].loan_no, "outbound"), p = shipOf(g[0].loan_no, "pickup"); return (o && o.status !== "delivered") || (p && !["done", "cancelled"].includes(p.status)); });
   const card = g => {
     const l = g[0], o = shipOf(l.loan_no, "outbound") || {}, p = shipOf(l.loan_no, "pickup"), c = o.id ? o : (p || {});
@@ -985,7 +990,7 @@ function vShip() {
     </div>`;
   };
   return `
-  <div class="head"><div class="grow"><h2>배송 요청</h2><p class="sub">‘요청 메일’로 물류사에 보낼 문안을 복사하고, 보낸 뒤 [요청 완료]를 눌러 주세요. 진행 단계 버튼을 누르면 그 단계까지 색이 채워져요. 회수는 반납 신청에서 ‘물류사 회수 요청’을 고르면 ‘회수 요청 전’이 돼요.</p></div></div>
+  <div class="head"><div class="grow"><h2>배송 요청</h2><p class="sub">${me.isAdmin ? "" : "내가 신청한 건만 보여요. 배송 정보(이름·연락처·주소)는 장비 관리자와 신청한 본인만 볼 수 있어요. "}‘요청 메일’로 물류사에 보낼 문안을 복사하고, 보낸 뒤 [요청 완료]를 눌러 주세요. 진행 단계 버튼을 누르면 그 단계까지 색이 채워져요. 회수는 반납 신청에서 ‘물류사 회수 요청’을 고르면 ‘회수 요청 전’이 돼요.</p></div></div>
   ${openG.length ? openG.map(card).join("") : `<div class="panel"><div class="empty">처리할 배송 요청이 없어요. 데모 신청에서 ‘배송 필요’를 체크하면 여기에 나타나요.</div></div>`}`;
 }
 
