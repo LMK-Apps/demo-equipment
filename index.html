@@ -247,6 +247,9 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.104", date: "2026-10-29", items: [
+    "메뉴 이름 ‘출납 신청’을 ‘데모 신청’으로 변경 (탭, 화면 제목, 현황의 신청 버튼, 장비 이력)",
+  ] },
   { v: "v0.103", date: "2026-10-29", items: [
     "배송 탭을 다시 윗줄(모든 사용자)로 옮김. 관리자 전용 줄은 출납 대장·통계·사용자",
   ] },
@@ -516,7 +519,7 @@ async function refresh(quiet) {
 /* ---------- 탭 ---------- */
 // 윗줄: 모든 사용자 · 아랫줄: 장비 관리자만
 const TABS = () => [
-  ["home","현황"], ["cal","일정"], ["equip","장비"], ["request","출납 신청"], ["mine","내 신청"],
+  ["home","현황"], ["cal","일정"], ["equip","장비"], ["request","데모 신청"], ["mine","내 신청"],
   ["ship","배송", shipments.filter(s => s.status === "pending").length],
 ];
 const ADMIN_TABS = () => [
@@ -557,7 +560,7 @@ function vHome() {
   const cnt = k => equipment.filter(e => e.status === k).length;
   return `
   <div class="head"><div class="grow"><h2>오늘 현황</h2><p class="sub">${t.replace(/-/g, ".")} 기준. 연체는 반납 예정일이 지났는데 아직 출고 상태인 건이에요.</p></div>
-    <button class="btn" data-act="refresh">새로 고침</button><button class="btn pri" data-go="request">출납 신청</button></div>
+    <button class="btn" data-act="refresh">새로 고침</button><button class="btn pri" data-go="request">데모 신청</button></div>
   <div class="stats">
     <div class="stat"><b>${cnt("available")}</b><span>사용 가능 장비</span></div>
     <div class="stat"><b>${cnt("onloan")}</b><span>대여 중</span></div>
@@ -592,7 +595,7 @@ function vCal() {
   const monthLoans = list.filter(l => l.start_date <= ds(last) && loanEnd(l) >= ds(first));
   const head = `
   <div class="head"><div class="grow"><h2>일정</h2><p class="sub">누가 어떤 장비를 언제 쓰는지 보여 줘요. 일정을 누르면 자세히 볼 수 있어요.</p></div>
-    <button class="btn pri" data-go="request">출납 신청</button></div>
+    <button class="btn pri" data-go="request">데모 신청</button></div>
   <div class="toolbar">
     <div class="calnav"><button class="btn sm" data-act="calPrev" aria-label="이전 달">◀</button><b>${y}년 ${m}월</b><button class="btn sm" data-act="calNext" aria-label="다음 달">▶</button><button class="btn sm" data-act="calToday">이번 달</button></div>
     <span style="flex:1"></span>
@@ -708,7 +711,7 @@ function histText(ev, loanAts) {
     return parts.join(" · ") || null;
   }
   const no = ev.loan_no ? ` <span class="mono meta">${esc(ev.loan_no)}</span>` : "";
-  if (ev.action === "insert") return `출납 신청 · ${dt(d.start_date)}–${dt(d.due_date)} · ${esc(d.purpose || "")}${d.customer ? ` · ${esc(d.customer)}` : ""}${no}`;
+  if (ev.action === "insert") return `데모 신청 · ${dt(d.start_date)}–${dt(d.due_date)} · ${esc(d.purpose || "")}${d.customer ? ` · ${esc(d.customer)}` : ""}${no}`;
   if (d.status === "out") return `출고${no}`;
   if (d.status === "checking") return `반납 신청${d.return_method ? ` · ${esc(retLabel(d))}` : ""}${d.return_self_check ? ` · 자가점검 <b>${esc(CONDS[d.return_self_check])}</b>` : ""}${d.return_self_note ? ` (${esc(d.return_self_note)})` : ""}${no}`;
   if (d.status === "done") return `반납 확인 · <b>${esc(CONDS[d.return_condition] || "–")}</b>${d.return_note ? ` · ${esc(d.return_note)}` : ""}${d.repair_needed === true ? " · 수리 필요" : ""}${no}`;
@@ -834,7 +837,7 @@ function vRequest() {
       ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
   }).join("");
   return `
-  <div class="head"><div class="grow"><h2>출납 신청</h2><p class="sub">승인 없이 저장하는 즉시 예약이 확정돼요. 같은 기간에 이미 예약된 장비는 고를 수 없어요.</p></div></div>
+  <div class="head"><div class="grow"><h2>데모 신청</h2><p class="sub">승인 없이 저장하는 즉시 예약이 확정돼요. 같은 기간에 이미 예약된 장비는 고를 수 없어요.</p></div></div>
   <form id="reqForm" class="grid2" novalidate>
     <div class="panel">
       <h3>1. 기간과 장비</h3>
@@ -919,7 +922,7 @@ function vMine() {
       ${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)} ${actions(l)}</div>`; };
   return `
   <div class="head"><div class="grow"><h2>내 신청</h2><p class="sub">반납을 누르면 반납 방법과 장비 상태를 적는 반납 신청서가 열려요. 장비 관리자가 점검하면 반납이 완료돼요.</p></div></div>
-  <div class="panel"><h3>진행 중 ${open.length}건</h3><div class="list">${open.map(line).join("") || `<div class="empty">진행 중인 신청이 없어요. ‘출납 신청’에서 장비를 빌려 보세요.</div>`}</div></div>
+  <div class="panel"><h3>진행 중 ${open.length}건</h3><div class="list">${open.map(line).join("") || `<div class="empty">진행 중인 신청이 없어요. ‘데모 신청’에서 장비를 빌려 보세요.</div>`}</div></div>
   <div class="panel"><h3>지난 신청</h3><div class="list">${past.map(line).join("") || `<div class="empty">지난 신청이 없어요.</div>`}</div></div>`;
 }
 
@@ -947,7 +950,7 @@ function vShip() {
   };
   return `
   <div class="head"><div class="grow"><h2>배송 요청</h2><p class="sub">‘요청 메일’로 물류사에 보낼 문안을 복사하고, 보낸 뒤 상태를 ‘요청 완료’로 바꿔 주세요. 회수 요청은 반납 신청에서 ‘물류사 회수 요청’을 고르면 ‘요청 전’으로 바뀌어요.</p></div></div>
-  ${openG.length ? openG.map(card).join("") : `<div class="panel"><div class="empty">처리할 배송 요청이 없어요. 출납 신청에서 ‘배송 필요’를 체크하면 여기에 나타나요.</div></div>`}`;
+  ${openG.length ? openG.map(card).join("") : `<div class="panel"><div class="empty">처리할 배송 요청이 없어요. 데모 신청에서 ‘배송 필요’를 체크하면 여기에 나타나요.</div></div>`}`;
 }
 
 function vLedger() {
