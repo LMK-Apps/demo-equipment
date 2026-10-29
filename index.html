@@ -157,6 +157,9 @@ tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .ship-box{border:1px dashed var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:12px}
 .overlay{position:fixed;inset:0;background:rgba(10,14,12,.45);display:flex;align-items:flex-start;justify-content:center;z-index:20;padding:24px 12px;overflow:auto}
 .modal{background:var(--surface);border-radius:12px;max-width:560px;width:100%;padding:18px;display:flex;flex-direction:column;gap:14px;border:1px solid var(--line)}
+.modal{position:relative}
+.modal-x{position:absolute;top:10px;right:10px;font-size:18px}
+.modal>.modal-x+h2{padding-right:40px}
 .modal .actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 pre.mail{white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;background:var(--sunk);border-radius:6px;padding:12px;margin:0;max-height:320px;overflow:auto}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
@@ -235,6 +238,9 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.99", date: "2026-10-29", items: [
+    "모든 팝업 창 오른쪽 위에 ✕ 닫기 버튼 추가 (장비 정보, 반납 확인, 신청 수정 등)",
+  ] },
   { v: "v0.98", date: "2026-10-29", db: "007_return_place.sql", items: [
     "반납 신청 첫 단계를 2단계로 나눔: ① 반납 장소(의왕 기본 / 문정) → ② 반납 방법(직접 반납 / 물류사 회수 요청)",
     "물류사 회수도 어디로 들어올지(의왕·문정) 기록, 회수 메일의 입고지와 관리자 확인 화면의 보관 위치에 자동 반영",
@@ -978,11 +984,12 @@ function vUsers() {
 /* ---------- 모달 ---------- */
 function modal(html, onMount) {
   const root = $("#modalRoot");
-  root.innerHTML = `<div class="overlay"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
+  const x = html.includes('class="flow"') ? "" : `<button class="icon-btn modal-x" data-close-btn aria-label="닫기">✕</button>`;
+  root.innerHTML = `<div class="overlay"><div class="modal" role="dialog" aria-modal="true">${x}${html}</div></div>`;
   const ov = root.firstElementChild;
   ov.addEventListener("click", e => { if (e.target === ov || e.target.closest("[data-close-btn]")) closeModal(); });
   onMount && onMount(ov.firstElementChild);
-  const f = ov.querySelector("input:not([type=radio]),select,textarea,button"); f && f.focus();
+  const f = ov.querySelector("input:not([type=radio]),select,textarea,button:not(.modal-x)"); f && f.focus();
 }
 function showChangelog() {
   modal(`<h2>버전 기록</h2><p class="meta">지금 보고 있는 버전은 <b>${APP_VERSION}</b>이에요. 새로 올렸는데 번호가 그대로면 강력 새로 고침(PC: Ctrl+Shift+R)을 해 주세요.</p>
