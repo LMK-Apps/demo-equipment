@@ -261,6 +261,10 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.030", date: "2026-10-29", items: [
+    "데모 신청 기본 사용 기간을 3일로 설정 (시작일 포함). 시작일을 바꾸면 반납 예정일이 자동으로 시작일 + 2일이 됨",
+    "반납 예정일을 직접 고르면 시작일을 바꿔도 그 날짜를 유지 (시작일보다 앞이 되면 다시 3일로 맞춤)",
+  ] },
   { v: "v0.029", date: "2026-10-29", db: "009_shipping_privacy.sql", items: [
     "배송 정보(이름·연락처·주소)는 장비 관리자와 신청한 본인만 볼 수 있음. 배송 탭에서 일반 사용자는 자기 신청 건만 보임",
     "반납 완료 후 90일이 지난 신청의 배송 담당자·연락처·주소·메모를 매일 04:00에 자동으로 지움 (이력에 남은 값도 함께)",
@@ -493,7 +497,10 @@ let me = { id: null, isAdmin: false };
 let equipment = [], loans = [], shipments = [], people = [];
 let view = (location.hash || "").slice(1) || "home";
 let filters = { eqQ: "", eqCat: "", eqLoc: "", ledgerQ: "", ledgerSt: "open" };
-let draft = { start: todayStr(), due: addDays(todayStr(), 7), picks: new Set() };
+// 기본 사용 기간: 3일 (시작일 포함, 시작일 + 2일). 반납 예정일을 직접 고르면 그 값을 유지한다
+const DEFAULT_DAYS = 3;
+const defaultDue = start => addDays(start, DEFAULT_DAYS - 1);
+let draft = { start: todayStr(), due: defaultDue(todayStr()), dueSet: false, picks: new Set() };
 let pickF = { q: "", cat: "", loc: "", avail: false };
 let cal = { ym: todayStr().slice(0, 7), mode: "month", mine: false, loc: "" };
 
@@ -683,7 +690,7 @@ function calDay(key) {
       <div class="meta">${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</div></div>
       ${isOverdue(l) ? `<span class="pill p-bad">연체</span>` : pill(LOAN_STATUS, l.status)}<button class="btn sm" data-act="calLoan" data-id="${l.id}">자세히</button></div>`).join("") || `<div class="empty">이날은 일정이 없어요.</div>`}</div>
     <div class="actions"><button class="btn" data-close-btn>닫기</button>${key >= todayStr() ? `<button class="btn pri" id="dReq">이날부터 신청</button>` : ""}</div>`, mm => {
-    $("#dReq", mm)?.addEventListener("click", () => { draft.start = key; if (draft.due < key) draft.due = addDays(key, 2); closeModal(); go("request"); });
+    $("#dReq", mm)?.addEventListener("click", () => { draft.start = key; if (!draft.dueSet || draft.due < key) draft.due = defaultDue(key); closeModal(); go("request"); });
   });
 }
 function loanView(id) {
@@ -1227,7 +1234,7 @@ async function submitRequest() {
       p_customer: $("#rCustomer").value, p_internal: $("#rInternal").value, p_external: $("#rExternal").value,
       p_note: $("#rNote").value, p_shipment: shipment,
     }));
-    draft = { start: todayStr(), due: addDays(todayStr(), 7), picks: new Set() };
+    draft = { start: todayStr(), due: defaultDue(todayStr()), dueSet: false, picks: new Set() };
     await refresh(true); go("mine");
     toast(`${no} 예약을 확정했어요.${shipment ? (me.isAdmin ? " 배송 탭에서 물류사 요청 메일을 보내 주세요." : " 장비 관리자가 물류사에 배송을 요청해요.") : ""}`);
   } catch (e) { btn.disabled = false; show(errText(e)); await refresh(true); }
@@ -1562,7 +1569,8 @@ document.addEventListener("change", e => {
   else if (id === "lgSt") { filters.ledgerSt = e.target.value; render(); }
   else if (id === "rStart" || id === "rDue") {
     draft[id === "rStart" ? "start" : "due"] = e.target.value;
-    if (id === "rStart" && draft.start && draft.due < draft.start) draft.due = draft.start;
+    if (id === "rDue") draft.dueSet = !!draft.due;
+    if (id === "rStart" && draft.start && (!draft.dueSet || draft.due < draft.start)) { draft.due = defaultDue(draft.start); draft.dueSet = false; }
     if (id === "rStart" && draft.start && draft.start <= maxStart() && draft.due > addMonth1(draft.start)) draft.due = addMonth1(draft.start);
     const keep = collectReqFields(); render(); restoreReqFields(keep);
   }
