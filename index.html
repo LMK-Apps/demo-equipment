@@ -128,6 +128,22 @@ th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);verti
 th{font-size:11.5px;font-weight:600;color:var(--muted);letter-spacing:.03em;background:var(--sunk);position:sticky;top:0}
 tr:last-child td{border-bottom:0}
 tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
+.list2{border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.list2>.empty{padding:24px}
+.r2{display:flex;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line)}
+.r2:last-child{border-bottom:0}
+.r2[data-act]{cursor:pointer}.r2[data-act]:hover{background:var(--sunk)}
+.r2.overdue{box-shadow:inset 3px 0 0 var(--bad)}
+.r2-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.r2-l1{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;min-width:0}
+.r2-title{font-size:14px;font-weight:600;min-width:0;overflow-wrap:anywhere}
+.r2-l1 .meta{flex:none}
+.r2-l2{display:flex;flex-wrap:wrap;font-size:12.5px;color:var(--muted);min-width:0}
+.r2-l2>span:not(:last-child)::after{content:"·";margin:0 7px;opacity:.6}
+.r2-l2 b{font-weight:600}
+.r2-note{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-ok{color:var(--ok)}.c-minor{color:var(--warn)}.c-broken,.c-missing{color:var(--bad)}
+.r2-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none}
 .pick{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);max-height:420px;overflow:auto}
 .pick label{display:flex;gap:10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);cursor:pointer}
 .pick label:first-child{border-top:0}
@@ -217,6 +233,10 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.97", date: "2026-10-29", items: [
+    "장비 목록과 출납 대장을 표 대신 2줄 목록으로 변경 (1줄: 장비 이름·번호, 2줄: 위치·기간·점검 등 세부 정보)",
+    "상태와 버튼은 오른쪽에 모아서 표시, 옆으로 스크롤하지 않아도 됨",
+  ] },
   { v: "v0.96", date: "2026-10-29", items: [
     "반납 자가점검 질문을 장비 카테고리별로 다르게 표시 (공통 3문항 + BLS·환자 시뮬레이터·소프트웨어 추가 문항)",
     "공통 질문에서 ‘작은 흠’, ‘청소·소독’ 문항 삭제",
@@ -375,6 +395,7 @@ function checkCell(e) {
   const who = e.last_check_source === "self" ? "반납자 자가점검" : "관리자 확인";
   return `<span class="pill ${CHECK_PILL[e.last_check] || ""}">${esc(CONDS[e.last_check])}</span><div class="meta">${who} · ${fmtT(e.last_check_at)}${e.last_check_note ? `<br>${esc(e.last_check_note)}` : ""}</div>`;
 }
+const condText = k => k ? `<b class="c-${k}">${esc(CONDS[k] || k)}</b>` : "기록 없음";
 const pill = (map, k) => { const [t, c] = map[k] || [k || "–", ""]; return `<span class="pill ${c}">${esc(t)}</span>`; };
 
 if (!window.supabase || SUPABASE_KEY.includes("REPLACE_ME")) {
@@ -707,20 +728,17 @@ function vEquip() {
     <select id="eqCat"><option value="">전체 분류</option>${CATS.map(c => `<option ${filters.eqCat === c ? "selected" : ""}>${c}</option>`).join("")}</select>
   </div>
   ${equipment.length === 0 ? `<div class="panel"><div class="empty">아직 등록된 장비가 없어요. ${me.isAdmin ? "‘장비 등록’으로 첫 장비를 추가해 주세요." : "장비 관리자가 장비를 등록하면 여기에 나타나요."}</div></div>` : `
-  <div class="tbl-wrap"><table>
-    <thead><tr><th>자산번호</th><th>제품명</th><th>분류</th><th>보관 위치</th><th>상태</th><th>최근 점검</th><th>다음 예약</th></tr></thead>
-    <tbody>${list.map(e => {
+  <div class="list2">${list.map(e => {
       const next = loans.filter(l => l.equipment_id === e.id && ACTIVE(l.status) && l.due_date >= t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
       const cur = e.status === "onloan" ? loans.find(l => l.equipment_id === e.id && l.status === "out") : null;
-      return `<tr data-act="eqView" data-id="${e.id}" style="cursor:pointer">
-        <td class="mono">${esc(e.asset_no)}</td><td>${esc(e.name)}<div class="meta">${esc(e.item_no || "")}</div></td>
-        <td>${esc(e.category)}</td>
-        <td>${esc(e.location)}${cur ? `<div class="meta">지금: ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</div>` : ""}</td>
-        <td>${pill(EQ_STATUS, e.status)}</td>
-        <td>${checkCell(e)}</td>
-        <td class="mono">${next ? `${fmtD(next.start_date)}–${fmtD(next.due_date)}` : "–"}</td></tr>`;
-    }).join("") || `<tr><td colspan="7" class="empty">조건에 맞는 장비가 없어요.</td></tr>`}</tbody>
-  </table></div>`}`;
+      return `<div class="r2" data-act="eqView" data-id="${e.id}">
+        <div class="r2-main">
+          <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b><span class="mono meta">${esc(e.asset_no)}</span>${e.item_no ? `<span class="mono meta">${esc(e.item_no)}</span>` : ""}</div>
+          <div class="r2-l2"><span>${esc(e.category)}</span><span>보관 ${esc(e.location)}</span>${cur ? `<span>지금 ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</span>` : ""}<span>점검 ${condText(e.last_check)}${e.last_check_at ? ` ${fmtD(e.last_check_at.slice(0, 10))}` : ""}</span><span>다음 예약 ${next ? `<span class="mono">${fmtD(next.start_date)}–${fmtD(next.due_date)}</span>` : "없음"}</span></div>
+        </div>
+        <div class="r2-side">${pill(EQ_STATUS, e.status)}</div></div>`;
+    }).join("") || `<div class="empty">조건에 맞는 장비가 없어요.</div>`}
+  </div>`}`;
 }
 
 function conflictsFor(eqId, start, due, ignoreId) {
@@ -877,26 +895,22 @@ function vLedger() {
     return "";
   };
   return `
-  <div class="head"><div class="grow"><h2>출납 대장</h2><p class="sub">장비 1대가 한 줄이에요. 함께 신청한 장비는 같은 신청번호를 써요.${me.isAdmin ? "" : " 출고·점검은 장비 관리자만 할 수 있어요."}</p></div>
+  <div class="head"><div class="grow"><h2>출납 대장</h2><p class="sub">장비 1대가 한 항목이에요. 함께 신청한 장비는 같은 신청번호를 써요.${me.isAdmin ? "" : " 출고·점검은 장비 관리자만 할 수 있어요."}</p></div>
     <button class="btn" data-act="csv">CSV 내보내기</button></div>
   <div class="toolbar">
     <input id="lgQ" type="search" placeholder="신청번호·장비·고객사·신청자 검색" value="${esc(filters.ledgerQ)}" style="flex:1;min-width:200px">
     <select id="lgSt">${[["open","진행 중"],["overdue","연체"],["done","반납 완료"],["cancelled","취소"],["all","전체"]].map(([k, t]) => `<option value="${k}" ${st === k ? "selected" : ""}>${t}</option>`).join("")}</select>
   </div>
-  <div class="tbl-wrap"><table>
-    <thead><tr><th>신청번호</th><th>장비</th><th>신청자·요청자</th><th>목적·고객사</th><th>기간</th><th>배송</th><th>상태</th><th>출고</th><th>반납·점검</th><th></th></tr></thead>
-    <tbody>${list.map(l => { const e = eqById(l.equipment_id) || {}, ri = reqInfo(l), o = shipOf(l.loan_no, "outbound"); return `<tr class="${isOverdue(l) ? "overdue" : ""}">
-      <td class="mono">${esc(l.loan_no)}</td>
-      <td>${esc(e.name)}<div class="meta mono">${esc(e.asset_no)}</div></td>
-      <td>${esc(nameOf(l.requester_id))}${ri ? `<div class="meta">${esc(ri)}</div>` : ""}</td>
-      <td>${esc(l.purpose)}<div class="meta">${esc(l.customer || "")}</div></td>
-      <td class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.extension_count ? `<div class="meta">연장 ${l.extension_count}회</div>` : ""}</td>
-      <td>${l.delivery && o ? pill(OUT_STATUS, o.status) : "–"}</td>
-      <td>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</td>
-      <td class="mono">${fmtT(l.checkout_at)}</td>
-      <td>${l.returned_at ? `<span class="mono">${fmtT(l.returned_at)}</span>` : "–"}${l.return_method ? `<div class="meta">${esc(RETURN_METHODS[l.return_method])} · 자가점검 ${esc(CONDS[l.return_self_check] || "–")}${l.return_self_note ? ` (${esc(l.return_self_note)})` : ""}</div>` : ""}${l.return_condition ? `<div class="meta">점검 ${esc(CONDS[l.return_condition])}${l.return_note ? ` · ${esc(l.return_note)}` : ""}</div>` : ""}</td>
-      <td>${act(l)}</td></tr>`; }).join("") || `<tr><td colspan="10" class="empty">조건에 맞는 기록이 없어요.</td></tr>`}</tbody>
-  </table></div>`;
+  <div class="list2">${list.map(l => { const e = eqById(l.equipment_id) || {}, ri = reqInfo(l), o = shipOf(l.loan_no, "outbound");
+      const ret = l.return_method ? `${RETURN_METHODS[l.return_method].replace("직접 반납 – ", "")}${l.returned_at ? ` ${fmtT(l.returned_at)}` : ""} · 자가점검 ${condText(l.return_self_check)}${l.return_condition ? ` → 확인 ${condText(l.return_condition)}` : ""}` : "";
+      const note = [l.return_self_note, l.return_note].filter(Boolean).join(" / ");
+      return `<div class="r2 ${isOverdue(l) ? "overdue" : ""}">
+        <div class="r2-main">
+          <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b><span class="mono meta">${esc(e.asset_no)}</span></div>
+          <div class="r2-l2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""}</span><span>${esc(l.purpose)}${l.customer ? ` · ${esc(l.customer)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.extension_count ? ` 연장 ${l.extension_count}회` : ""}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : ""}${l.checkout_at ? `<span>출고 <span class="mono">${fmtT(l.checkout_at)}</span></span>` : ""}${ret ? `<span>반납 ${ret}</span>` : ""}${note ? `<span class="r2-note" title="${esc(note)}">메모 ${esc(note)}</span>` : ""}</div>
+        </div>
+        <div class="r2-side">${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}${act(l)}</div></div>`; }).join("") || `<div class="empty">조건에 맞는 기록이 없어요.</div>`}
+  </div>`;
 }
 
 function nameForm(p, approve) {
