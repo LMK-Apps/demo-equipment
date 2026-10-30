@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" class="splashing">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -12,6 +12,7 @@
 <meta name="theme-color" content="#0f6b5c">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>html.splashing,html.splashing body{background:#0f6b5c}@media (prefers-color-scheme:dark){html.splashing,html.splashing body{background:#0a4038}}</style>
 <script src="vendor/supabase-js-2.117.3.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
 <style>
 /* Layout: 상단 바 + 탭, 아래는 탭별 작업 화면 */
@@ -199,6 +200,25 @@ pre.mail{white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;backgroun
 button.kakao{font:inherit;font-weight:600;font-size:15px;background:var(--kakao);color:var(--kakao-ink);border:0;border-radius:8px;padding:12px 16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
 button.kakao svg{width:18px;height:18px}
 .boot{padding:40px 0;color:var(--muted)}
+/* 로딩 화면: 콕 물결 */
+.splash{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0f6b5c;color:#fff;transition:opacity .2s ease;padding:env(safe-area-inset-top,0) 16px env(safe-area-inset-bottom,0)}
+.splash.out{opacity:0;pointer-events:none}
+.splash .ttl{font-weight:700;font-size:26px;margin-top:14px;letter-spacing:-.3px}
+.splash .sub{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:#fff;opacity:.7;margin:4px 0 0}
+.splash .sv{position:absolute;bottom:calc(26px + env(safe-area-inset-bottom,0px));font-family:var(--mono);font-size:11px;opacity:.6}
+.splash .slow{margin-top:22px;text-align:center;font-size:13px;opacity:.9}
+.splash .slow button{margin-top:10px;background:#fff;color:#0f6b5c;border:0;border-radius:var(--r);padding:8px 16px;font:inherit;font-weight:600;cursor:pointer}
+.splash .ring{transform-origin:75px 75px;animation:ring .6s ease-out both}
+.splash .ring.r2{animation-delay:.12s}
+.splash .dot{transform-origin:108px 42px;animation:pop .28s cubic-bezier(.3,1.6,.5,1) both}
+.splash.wait .ring{animation:ring 1.4s ease-out infinite}
+.splash.wait .ring.r2{animation-delay:.7s}
+@keyframes ring{from{transform:scale(.6);opacity:0}60%{opacity:1}to{transform:scale(1);opacity:1}}
+.splash.wait .ring{animation-name:wave}
+@keyframes wave{0%{transform:scale(.6);opacity:0}40%{opacity:1}100%{transform:scale(1.15);opacity:0}}
+@keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
+@media (prefers-color-scheme:dark){.splash{background:#0a4038}.splash .slow button{color:#0a4038}}
+@media (prefers-reduced-motion:reduce){.splash .ring,.splash .dot{animation:none!important}}
 .ver{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.02em}
 .gate .ver{margin-top:4px}
 button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
@@ -249,6 +269,12 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
 </style>
 </head>
 <body>
+<div id="splash" class="splash" role="status" aria-live="polite" aria-label="데모콕을 불러오는 중">
+  <svg width="150" height="150" viewBox="0 0 150 150" aria-hidden="true"><circle class="ring" cx="75" cy="75" r="68" fill="none" stroke="#fff" stroke-opacity=".15" stroke-width="5"/><circle class="ring r2" cx="75" cy="75" r="46" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width="5"/><text x="75" y="96" text-anchor="middle" font-family="IBM Plex Sans KR,Apple SD Gothic Neo,Malgun Gothic,sans-serif" font-weight="700" font-size="62" fill="#fff">콕</text><circle class="dot" cx="108" cy="42" r="9" fill="#ffd84d"/></svg>
+  <div class="ttl">데모콕</div><div class="sub">LMK DEMO POOL</div>
+  <div class="slow" id="splashSlow" hidden>연결이 느려요. 잠시만 기다려 주세요.<br><button type="button" id="splashRetry">다시 시도</button></div>
+  <div class="sv" id="splashVer"></div>
+</div>
 <div id="gate" class="gate" hidden></div>
 <div id="app" hidden>
   <header class="top"><div class="wrap">
@@ -267,6 +293,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.036", date: "2026-10-30", items: [
+    "첫 로딩 화면 추가: 초록 바탕에 ‘콕’과 노란 점, 물결이 한 번 퍼짐 (아이콘과 같은 모양)",
+    "데이터를 다 불러오면 바로 닫힘 (최소 0.6초, 0.2초 동안 서서히). 8초가 넘으면 ‘다시 시도’ 버튼 표시",
+    "앱을 열 때 흰 화면이 번쩍이지 않도록 첫 배경색을 로딩 화면 색으로 맞춤",
+  ] },
   { v: "v0.035", date: "2026-10-29", items: [
     "앱 이름을 ‘데모장비 출납’에서 ‘데모콕’으로 변경 (화면 제목, 로그인 화면, 브라우저 탭, 홈 화면 아이콘 이름)",
     "앱 아이콘 변경: 초록 바탕에 흰 ‘콕’ 글자와 노란 점 (홈 화면 아이콘, 브라우저 탭 아이콘)",
@@ -552,6 +583,7 @@ async function must(p) { const { data, error } = await p; if (error) throw error
 /* ---------- 로그인 화면 ---------- */
 const KAKAO_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.48 3 2 6.52 2 10.86c0 2.8 1.86 5.25 4.66 6.64l-.95 3.48c-.08.3.26.54.52.37l4.15-2.74c.53.06 1.07.1 1.62.1 5.52 0 10-3.52 10-7.85S17.52 3 12 3z"/></svg>`;
 function showGate(kind, extra = "") {
+  hideSplash();
   $("#app").hidden = true; const g = $("#gate"); g.hidden = false;
   const name = esc(profile?.display_name || "");
   const body = {
@@ -1631,6 +1663,26 @@ function softRender() {
   if (a === "eqQ" || a === "lgQ") { const n = $("#" + a); n && n.focus(); }
 }
 
+/* ---------- 로딩 화면 ---------- */
+// 데이터를 다 불러오면 바로 닫는다. 깜빡임을 막으려고 최소 0.6초는 보여 주고, 0.2초 동안 서서히 사라진다.
+// 0.9초가 지나면 물결을 반복하고, 8초가 지나면 '다시 시도'를 보여 준다.
+const SPLASH_MIN = 600, SPLASH_SLOW = 8000;
+let splashDone = false;
+const splashWait = setTimeout(() => { const s = $("#splash"); if (s && !splashDone) s.classList.add("wait"); }, 900);
+const splashSlow = setTimeout(() => { if (!splashDone && $("#splashSlow")) $("#splashSlow").hidden = false; }, SPLASH_SLOW);
+$("#splashVer") && ($("#splashVer").textContent = APP_VERSION);
+$("#splashRetry")?.addEventListener("click", () => location.reload());
+function hideSplash() {
+  if (splashDone) return; splashDone = true;
+  clearTimeout(splashWait); clearTimeout(splashSlow);
+  const s = $("#splash"); if (!s) return;
+  setTimeout(() => {
+    document.documentElement.classList.remove("splashing");
+    s.classList.add("out");
+    setTimeout(() => s.remove(), 220);
+  }, Math.max(0, SPLASH_MIN - performance.now()));
+}
+
 /* ---------- 시작 ---------- */
 async function start() {
   const params = new URLSearchParams(location.search);
@@ -1654,7 +1706,7 @@ async function start() {
   $("#meName").textContent = profile.display_name || "나";
   const r = $("#meRole"); r.textContent = me.isAdmin ? "장비 관리자" : "신청자"; r.classList.toggle("admin", me.isAdmin);
   renderTabs();
-  try { await loadAll(); render(); } catch (e) { showGate("error", esc(errText(e))); return; }
+  try { await loadAll(); render(); hideSplash(); } catch (e) { showGate("error", esc(errText(e))); return; }
   setInterval(() => { if (document.visibilityState === "visible") refresh(true); }, 60000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(true); });
 }
