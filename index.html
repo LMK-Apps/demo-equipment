@@ -130,8 +130,14 @@ label.f.req>span::after{content:" *";color:var(--bad)}
 .opt{text-align:left;font:inherit;font-size:18px;font-weight:600;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:20px 18px;cursor:pointer}
 .opt:hover{border-color:var(--accent)}
 .opt[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.opt[data-sel]{position:relative;padding-right:52px}
+.opt[data-sel]::after{content:"";position:absolute;right:18px;top:50%;width:24px;height:24px;margin-top:-12px;border-radius:50%;border:2px solid var(--line);box-sizing:border-box;font-size:14px;line-height:20px;text-align:center}
+.opt[data-sel][aria-pressed="true"]::after{content:"✓";background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.opt[data-sel][aria-pressed="false"]{opacity:.75}
 .memo-pick{display:flex;flex-direction:column;gap:14px}.memo-pick:empty{display:none}
 .m-grp{display:flex;flex-direction:column;gap:8px}.m-grp b{font-size:14px;font-weight:600}
+.m-eq{font-weight:700;font-size:15px;padding-top:6px;border-top:1px solid var(--line)}.m-grp:first-child .m-eq{border-top:0;padding-top:0}
+.m-grp textarea{font-size:15px}
 .m-chips{display:flex;flex-wrap:wrap;gap:8px}
 .mchip{font:inherit;font-size:14px;font-weight:500;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);border-radius:99px;padding:9px 14px;cursor:pointer}
 .mchip[aria-pressed="true"]{border-color:var(--bad);background:var(--bad-soft);color:var(--bad);font-weight:600}
@@ -298,6 +304,13 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.038", date: "2026-11-02", db: "013_bundle_return_edit_notify.sql", items: [
+    "묶음 반납: 같은 신청번호의 장비 여러 대를 한 번에 반납 신청 (반납할 장비 고르기 → 장소·방법·회수 정보는 한 번 → 자가점검은 장비마다)",
+    "묶음 반납 메모: 문제가 있는 장비마다 문구를 고르거나 직접 적고, 모든 장비에 함께 전할 내용도 적을 수 있음",
+    "예약 수정: 출고 전이면 내 신청·세부 정보의 [수정]으로 기간, 장비, 사용 정보, 배송 정보를 고침. 빠진 장비는 취소, 새 장비는 추가",
+    "예약 수정 제한: 출고된 장비가 하나라도 있으면 수정 불가. 물류사에 배송을 이미 요청했으면 배송 정보는 잠김",
+    "Teams 알림 추가: 예약 수정(바뀐 내용), 반납 예정일 연장, 예약 취소. 묶음 반납은 알림 1건으로",
+  ] },
   { v: "v0.037", date: "2026-11-02", items: [
     "새 버전 안내: 앱을 쓰는 중에 새 버전이 배포되면 화면 위에 ‘새 버전이 있어요 [새로 고침]’ 띠 표시 (5분에 한 번 확인)",
   ] },
@@ -665,7 +678,7 @@ function renderTabs() {
     + (me.isAdmin ? `<div class="tab-row admin"><span class="tab-label">관리자</span>${ADMIN_TABS().map(btn).join("")}</div>` : "");
 }
 $("#tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (!b) return; go(b.dataset.tab); });
-function go(v) { view = v; try { history.replaceState(null, "", "#" + v); } catch {} render(); window.scrollTo(0, 0); }
+function go(v) { if (v !== "request" && draft.edit) draft = newDraft(); view = v; try { history.replaceState(null, "", "#" + v); } catch {} render(); window.scrollTo(0, 0); }
 
 /* ---------- 화면 ---------- */
 function render() {
@@ -788,7 +801,7 @@ function loanView(id) {
   const mine = l.requester_id === me.id, adm = me.isAdmin;
   const btn = (act, t, cls = "") => `<button class="btn ${cls}" data-act="${act}" data-id="${l.id}">${t}</button>`;
   const acts = [];
-  if (l.status === "reserved") { if (adm) acts.push(btn("checkout", "출고", "pri")); if (mine || adm) acts.push(btn("extend", "연장")); if (mine) acts.push(btn("cancel", "예약 취소", "danger")); }
+  if (l.status === "reserved") { if (adm) acts.push(btn("checkout", "출고", "pri")); if ((mine || adm) && canEditRes(l)) acts.push(btn("editRes", "예약 수정")); if (mine || adm) acts.push(btn("extend", "연장")); if (mine) acts.push(btn("cancel", "예약 취소", "danger")); }
   if (l.status === "out") { if (mine || adm) acts.push(btn("extend", "연장"), btn("return", "반납 신청", "pri")); }
   if (l.status === "checking" && adm) acts.push(btn("inspect", "반납 확인", "pri"));
   const f = (label, val, wide) => `<div${wide ? ` class="wide"` : ""}><div class="meta">${label}</div><div>${val}</div></div>`;
@@ -954,8 +967,32 @@ function vEquip() {
 }
 
 function conflictsFor(eqId, start, due, ignoreId) {
-  return loans.filter(l => l.equipment_id === eqId && l.id !== ignoreId && ACTIVE(l.status) && l.start_date <= due && start <= l.due_date);
+  return loans.filter(l => l.equipment_id === eqId && l.id !== ignoreId && ACTIVE(l.status) && l.start_date <= due && start <= l.due_date
+    && !(draft.edit && l.loan_no === draft.edit));
 }
+
+/* ---------- 예약 수정 ---------- */
+// 같은 신청번호의 장비가 모두 '예약'(출고 전)일 때만 고칠 수 있다.
+const resRows = no => loans.filter(x => x.loan_no === no && x.status !== "cancelled");
+const canEditRes = l => (l.requester_id === me.id || me.isAdmin) && resRows(l.loan_no).every(x => x.status === "reserved");
+const newDraft = () => ({ start: todayStr(), due: defaultDue(todayStr()), dueSet: false, picks: new Set() });
+function editReservation(l) {
+  if (!canEditRes(l)) return toast("이미 출고된 장비가 있어서 예약을 고칠 수 없어요.");
+  const rows = resRows(l.loan_no), out = shipOf(l.loan_no, "outbound"), pk = shipOf(l.loan_no, "pickup");
+  draft = { start: l.start_date, due: l.due_date, dueSet: true, picks: new Set(rows.map(x => x.equipment_id)), edit: l.loan_no, owner: l.requester_id,
+    own: new Set(rows.map(x => x.equipment_id)), shipLocked: !!out && out.status !== "pending" };
+  closeModal(); go("request");
+  restoreReqFields({ rPurpose: l.purpose, rCustomer: l.customer || "", rInternal: l.internal_requester || "", rExternal: l.external_requester || "", rNote: l.note || "",
+    rDelivery: !!out, sName: out?.recipient || "", sPhone: out?.phone || "", sAddr: out?.address || "", sDate: out?.requested_date || l.start_date,
+    sPick: pk && pk.status === "scheduled" ? pk.requested_date : "", sMemo: out?.memo || "" });
+  lockShipFields();
+  applyPickFilter();
+}
+function lockShipFields() {
+  if (!draft.edit || !draft.shipLocked) return;
+  ["rDelivery", "sName", "sPhone", "sAddr", "sDate"].forEach(id => { const n = $("#" + id); if (n) n.disabled = true; });
+}
+function exitEdit() { draft = newDraft(); go("mine"); }
 
 function vRequest() {
   const { start, due } = draft;
@@ -963,7 +1000,8 @@ function vRequest() {
   const rows = equipment.filter(e => e.status !== "retired").sort((a, b) => a.category.localeCompare(b.category) || (a.internal_id || "").localeCompare(b.internal_id || ""));
   const pickHtml = rows.map(e => {
     const c = badRange ? [] : conflictsFor(e.id, start, due);
-    const blocked = e.status === "repair" || e.status === "inspect" || c.length > 0;
+    const own = draft.edit && draft.own.has(e.id);
+    const blocked = (!own && (e.status === "repair" || e.status === "inspect")) || c.length > 0;
     if (blocked) draft.picks.delete(e.id);
     const why = e.status === "repair" ? "수리 중" : e.status === "inspect" ? "점검 중" : c.length ? "예약 겹침" : "";
     const title = c.length ? `${c[0].loan_no} (${fmtD(c[0].start_date)}–${fmtD(c[0].due_date)})` : why;
@@ -972,8 +1010,12 @@ function vRequest() {
       <div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span><div class="meta">${esc(e.category)} · ${esc(e.location)}</div></div>
       ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
   }).join("");
+  const ed = draft.edit, ownerName = ed ? nameOf(draft.owner) : profile?.display_name || "나";
   return `
-  <div class="head"><div class="grow"><h2>데모 신청</h2><p class="sub">승인 없이 저장하는 즉시 예약이 확정돼요. 같은 기간에 이미 예약된 장비는 고를 수 없어요.</p></div></div>
+  <div class="head"><div class="grow">${ed
+    ? `<h2>예약 수정 <span class="mono" style="font-size:.7em">${esc(ed)}</span></h2><p class="sub">출고 전이라 기간, 장비, 사용 정보, 배송 정보를 고칠 수 있어요. 저장하면 장비 관리자에게 알림이 가요.</p>`
+    : `<h2>데모 신청</h2><p class="sub">승인 없이 저장하는 즉시 예약이 확정돼요. 같은 기간에 이미 예약된 장비는 고를 수 없어요.</p>`}</div>
+    ${ed ? `<button class="btn" type="button" data-act="exitEdit">수정 그만두기</button>` : ""}</div>
   <form id="reqForm" class="grid2" novalidate>
     <div class="panel">
       <h3>1. 기간과 장비</h3>
@@ -997,7 +1039,7 @@ function vRequest() {
     <div class="panel">
       <h3>2. 사용 정보</h3>
       <div class="fields">
-        <label class="f wide"><span>신청자</span><input id="rApplicant" value="${esc(profile?.display_name || "나")}" readonly></label>
+        <label class="f wide"><span>신청자</span><input id="rApplicant" value="${esc(ownerName)}" readonly></label>
         <label class="f"><span>내부 요청자</span><input id="rInternal" placeholder="요청한 사내 담당자 (없으면 비움)"></label>
         <label class="f"><span>외부 요청자</span><input id="rExternal" placeholder="고객사 담당자 이름·직함"></label>
         <label class="f req"><span>목적</span><select id="rPurpose">${PURPOSES.map(p => `<option>${p}</option>`).join("")}</select></label>
@@ -1005,6 +1047,7 @@ function vRequest() {
         <label class="f wide"><span>메모</span><textarea id="rNote" placeholder="데모 장소, 함께 가져갈 소모품 등"></textarea></label>
       </div>
       <label class="check"><input type="checkbox" id="rDelivery"> 외부 물류사 배송이 필요해요</label>
+      ${ed && draft.shipLocked ? `<div class="notice">물류사에 이미 배송을 요청해서 배송 정보는 여기서 바꿀 수 없어요. 바꿔야 하면 장비 관리자에게 말해 주세요.</div>` : ""}
       <div class="ship-box" id="shipBox" hidden>
         <div class="fields">
           <label class="f req"><span>수령인</span><input id="sName"></label>
@@ -1016,7 +1059,7 @@ function vRequest() {
         </div>
       </div>
       <div class="notice bad" id="reqErr" hidden></div>
-      <div class="toolbar" style="justify-content:flex-end"><button class="btn pri" type="submit" id="reqSubmit">신청 저장</button></div>
+      <div class="toolbar" style="justify-content:flex-end"><button class="btn pri" type="submit" id="reqSubmit">${ed ? "수정 저장" : "신청 저장"}</button></div>
     </div>
   </form>`;
 }
@@ -1049,7 +1092,7 @@ function vMine() {
   const open = mine.filter(l => l.status !== "done" && l.status !== "cancelled");
   const past = mine.filter(l => !open.includes(l)).slice(0, 30);
   const actions = l => {
-    if (l.status === "reserved") return `<button class="btn sm" data-act="extend" data-id="${l.id}">연장</button><button class="btn sm danger" data-act="cancel" data-id="${l.id}">취소</button>`;
+    if (l.status === "reserved") return `${canEditRes(l) ? `<button class="btn sm" data-act="editRes" data-id="${l.id}">수정</button>` : `<button class="btn sm" data-act="extend" data-id="${l.id}">연장</button>`}<button class="btn sm danger" data-act="cancel" data-id="${l.id}">취소</button>`;
     if (l.status === "out") return `<button class="btn sm" data-act="extend" data-id="${l.id}">연장</button><button class="btn sm pri" data-act="return" data-id="${l.id}">반납 신청</button>`;
     return "";
   };
@@ -1323,13 +1366,26 @@ async function submitRequest() {
     if ($("#sPick").value) shipment.pickup_date = $("#sPick").value;
   }
   const btn = $("#reqSubmit"); btn.disabled = true;
+  if (draft.edit) {
+    const no = draft.edit;
+    try {
+      await must(sb.rpc("update_reservation", {
+        p_loan_no: no, p_equipment_ids: picks, p_start: start, p_due: due, p_purpose: $("#rPurpose").value,
+        p_customer: $("#rCustomer").value, p_internal: $("#rInternal").value, p_external: $("#rExternal").value,
+        p_note: $("#rNote").value, p_shipment: shipment,
+      }));
+      draft = newDraft(); await refresh(true); go("mine");
+      toast(`${no} 예약을 고쳤어요.`);
+    } catch (e) { btn.disabled = false; show(errText(e)); await refresh(true); }
+    return;
+  }
   try {
     const no = await must(sb.rpc("create_loan_request", {
       p_equipment_ids: picks, p_start: start, p_due: due, p_purpose: $("#rPurpose").value,
       p_customer: $("#rCustomer").value, p_internal: $("#rInternal").value, p_external: $("#rExternal").value,
       p_note: $("#rNote").value, p_shipment: shipment,
     }));
-    draft = { start: todayStr(), due: defaultDue(todayStr()), dueSet: false, picks: new Set() };
+    draft = newDraft();
     await refresh(true); go("mine");
     toast(`${no} 예약을 확정했어요.${shipment ? (me.isAdmin ? " 배송 탭에서 물류사 요청 메일을 보내 주세요." : " 장비 관리자가 물류사에 배송을 요청해요.") : ""}`);
   } catch (e) { btn.disabled = false; show(errText(e)); await refresh(true); }
@@ -1356,24 +1412,52 @@ function extend(l) {
 }
 
 function returnForm(l) {
-  const e = eqById(l.equipment_id) || {};
+  // 같은 신청번호에서 지금 반납할 수 있는(출고 상태) 장비. 처음엔 모두 고른 상태로 시작한다.
+  const cands = loans.filter(x => x.loan_no === l.loan_no && x.status === "out" && (x.requester_id === me.id || me.isAdmin))
+    .sort((a, b) => (a.id === l.id ? -1 : b.id === l.id ? 1 : (eqNo(eqById(a.equipment_id) || {}) > eqNo(eqById(b.equipment_id) || {}) ? 1 : -1)));
   const pick = shipOf(l.loan_no, "pickup"), out = shipOf(l.loan_no, "outbound");
   const src = pick || out || {};
   const pickDefault = (pick && pick.requested_date) || addDays(todayStr(), 1);
   const pickLocked = pick && !["scheduled", "pending", "cancelled"].includes(pick.status);   // 물류사에 이미 요청함
-  const bundle = loans.filter(x => x.loan_no === l.loan_no && x.id !== l.id && x.status !== "cancelled").length;
-  const CHECKS = checksFor(e), n = CHECKS.length;
-  const st = { place: "의왕", how: null, ans: {}, pick: {} };
-  const nosOf = () => CHECKS.filter(q => st.ans[q.k] === "n");
-  const picksOf = () => nosOf().flatMap(q => st.pick[q.k] || []);
-  const hasMemo = () => !!($("#scNote")?.value.trim() || picksOf().length);
+  const st = { place: "의왕", how: null, sel: new Set(cands.map(x => x.id)), ans: {}, pick: {}, note: {} };
+  const multi = cands.length > 1;
+  const items = () => cands.filter(x => st.sel.has(x.id));
+  const eqOf = x => eqById(x.equipment_id) || {};
+  const checksOf = x => checksFor(eqOf(x));
+  const ansOf = x => (st.ans[x.id] = st.ans[x.id] || {});
+  const pickOf = x => (st.pick[x.id] = st.pick[x.id] || {});
+  const nosOf = x => checksOf(x).filter(q => ansOf(x)[q.k] === "n");
+  const picksOf = x => nosOf(x).flatMap(q => pickOf(x)[q.k] || []);
+  const resultOf = x => checksOf(x).reduce((c, q) => ansOf(x)[q.k] === "n" && q.cond && COND_RANK[q.cond] > COND_RANK[c] ? q.cond : c, "ok");
+  const noteOf = x => ($(`#scN-${x.id}`)?.value || st.note[x.id] || "").trim();
+  const general = () => ($("#scNote")?.value || "").trim();
+  const hasMemoFor = x => !!(picksOf(x).length || noteOf(x) || general());
+  const anyBad = () => items().some(x => resultOf(x) !== "ok");
+  const missingMemo = () => items().find(x => resultOf(x) !== "ok" && !hasMemoFor(x));
   const methodOf = () => st.how === "pickup" ? "pickup" : st.place === "문정" ? "drop_munjeong" : "drop_uiwang";
-  const result = () => CHECKS.reduce((c, q) => st.ans[q.k] === "n" && q.cond && COND_RANK[q.cond] > COND_RANK[c] ? q.cond : c, "ok");
-  const steps = () => ["place", "method", ...(st.how === "pickup" ? ["pickup"] : []), ...CHECKS.map(q => "q:" + q.k), "memo", "sum"];
+  const steps = () => [...(multi ? ["items"] : []), "place", "method", ...(st.how === "pickup" ? ["pickup"] : []),
+    ...items().flatMap(x => checksOf(x).map(q => `q:${x.id}:${q.k}`)), "memo", "sum"];
+  const qSec = (x, q, i, n, k, kn) => `<section data-step="q:${x.id}:${q.k}" data-lid="${x.id}" hidden>
+      <p class="flow-k">자가점검 ${i + 1}/${n}${kn > 1 ? ` · 장비 ${k + 1}/${kn}` : ""}</p><h2 class="flow-q">${esc(q.q)}</h2>
+      ${q.sub ? `<p class="meta">${esc(q.sub)}</p>` : ""}
+      ${q.k === "parts" && eqOf(x).components ? `<div class="flow-box"><b>구성품</b><div style="white-space:pre-wrap">${esc(eqOf(x).components)}</div></div>` : ""}
+      <div class="flow-yn"><button class="big yn-n" data-yn="n" aria-pressed="false">아니오</button><button class="big yn-y" data-yn="y" aria-pressed="false">예</button></div>
+    </section>`;
+  const head = () => {
+    const its = items();
+    return its.length === 1 ? `${esc(eqOf(its[0]).name)} · <span class="mono">${esc(eqNo(eqOf(its[0])))}</span>`
+      : `<span class="mono">${esc(l.loan_no)}</span> · 장비 ${its.length}대`;
+  };
   modal(`<div class="flow">
     <div class="flow-top"><button class="icon-btn" id="fBack" aria-label="뒤로">←</button><div class="flow-bar" aria-hidden="true"><i id="fBar"></i></div><button class="icon-btn" data-close-btn aria-label="닫기">✕</button></div>
-    <div class="meta flow-eq">${esc(e.name)} · <span class="mono">${esc(eqNo(e))}</span></div>
-    <section data-step="place">
+    <div class="meta flow-eq" id="fEq"></div>
+    ${multi ? `<section data-step="items">
+      <p class="flow-k">반납할 장비</p><h2 class="flow-q">어떤 장비를 반납하나요?</h2>
+      <p class="meta">같은 신청번호(${esc(l.loan_no)})의 장비예요. 함께 반납할 장비를 모두 골라 주세요.</p>
+      <div class="flow-opts">${cands.map(x => `<button class="opt" data-sel="${x.id}" aria-pressed="true">${esc(eqOf(x).name)}<span class="opt-sub">${esc(eqNo(eqOf(x)))} · ${esc(eqOf(x).category || "")} · 반납 예정 ${fmtD(x.due_date)}</span></button>`).join("")}</div>
+      <div class="flow-foot"><div class="notice bad" id="iErr" hidden></div><button class="btn pri big" id="iNext">다음</button></div>
+    </section>` : ""}
+    <section data-step="place" hidden>
       <p class="flow-k">반납 장소</p><h2 class="flow-q">어디로 반납하나요?</h2>
       <div class="flow-opts">${RETURN_PLACES.map(k => `<button class="opt" data-p="${k}" aria-pressed="${k === "의왕"}">${k}${k === "의왕" ? ` <span class="opt-tag">기본</span>` : ""}</button>`).join("")}</div>
     </section>
@@ -1388,7 +1472,8 @@ function returnForm(l) {
       <p class="flow-k">물류사 회수</p><h2 class="flow-q">회수 정보를 확인해 주세요</h2>
       ${pickLocked ? `<div class="flow-box">${esc(pick.recipient)} · ${esc(pick.phone)}<br>${esc(pick.address)}${pick.requested_date ? `<br>회수 희망일 ${fmtD(pick.requested_date)}` : ""}</div>
         <p class="meta">이미 물류사에 회수를 요청했어요. 회수 정보를 바꾸려면 장비 관리자에게 알려 주세요.</p>` : `
-        ${pick ? `<p class="meta">배송 신청 때 적은 회수 정보예요. 바뀌었으면 고쳐 주세요.${bundle ? ` 같은 신청번호의 다른 장비 ${bundle}대도 이 정보로 회수돼요.` : ""}</p>` : ""}
+        ${pick ? `<p class="meta">배송 신청 때 적은 회수 정보예요. 바뀌었으면 고쳐 주세요.</p>` : ""}
+        <p class="meta" id="rpBundle"></p>
         <div class="fields">
         <label class="f req"><span>담당자</span><input id="rpName" value="${esc(src.recipient || "")}"></label>
         <label class="f req"><span>연락처</span><input id="rpPhone" inputmode="tel" value="${esc(src.phone || "")}"></label>
@@ -1397,16 +1482,11 @@ function returnForm(l) {
         <label class="f wide"><span>회수 메모</span><input id="rpMemo" value="${esc(pick ? pick.memo || "" : "")}" placeholder="수거 위치, 연락 가능 시간 등"></label></div>`}
       <div class="flow-foot"><div class="notice bad" id="rpErr" hidden></div><button class="btn pri big" id="rpNext">다음</button></div>
     </section>
-    ${CHECKS.map((q, i) => `<section data-step="q:${q.k}" hidden>
-      <p class="flow-k">자가점검 ${i + 1}/${n}</p><h2 class="flow-q">${esc(q.q)}</h2>
-      ${q.sub ? `<p class="meta">${esc(q.sub)}</p>` : ""}
-      ${q.k === "parts" && e.components ? `<div class="flow-box"><b>구성품</b><div style="white-space:pre-wrap">${esc(e.components)}</div></div>` : ""}
-      <div class="flow-yn"><button class="big yn-n" data-yn="n" aria-pressed="false">아니오</button><button class="big yn-y" data-yn="y" aria-pressed="false">예</button></div>
-    </section>`).join("")}
+    <div id="qSecs"></div>
     <section data-step="memo" hidden>
       <p class="flow-k">메모</p><h2 class="flow-q" id="memoQ"></h2>
       <div id="memoPick" class="memo-pick"></div>
-      <textarea id="scNote" rows="3" placeholder="고를 문구가 없으면 직접 적어 주세요"></textarea>
+      <textarea id="scNote" rows="3"></textarea>
       <div class="flow-foot"><div class="notice bad" id="mErr" hidden></div><button class="btn pri big" id="memoNext">다음</button></div>
     </section>
     <section data-step="sum" hidden>
@@ -1415,34 +1495,74 @@ function returnForm(l) {
       <div class="flow-foot"><div class="notice">반납 신청 후 장비 관리자가 상태를 점검하면 반납이 완료돼요.</div><div class="notice bad" id="rErr" hidden></div><button class="btn pri big" id="rOk">반납 신청</button></div>
     </section></div>`, m => {
     m.classList.add("full"); m.parentElement.classList.add("full");
-    let cur = "method", back2sum = false;
+    let cur = null, back2sum = false;
+    // 자가점검 화면은 고른 장비에 맞춰 다시 그린다 (이미 고른 답은 그대로 둔다)
+    const paintChecks = () => {
+      const its = items();
+      $("#qSecs", m).innerHTML = its.map((x, k) => checksOf(x).map((q, i, all) => qSec(x, q, i, all.length, k, its.length)).join("")).join("");
+      $("#qSecs", m).querySelectorAll("section[data-step^='q:']").forEach(sec => {
+        const x = cands.find(c => c.id === sec.dataset.lid), k = sec.dataset.step.split(":")[2];
+        sec.querySelectorAll("[data-yn]").forEach(btn => {
+          btn.setAttribute("aria-pressed", String(ansOf(x)[k] === btn.dataset.yn));
+          btn.addEventListener("click", () => {
+            ansOf(x)[k] = btn.dataset.yn;
+            sec.querySelectorAll("[data-yn]").forEach(y => y.setAttribute("aria-pressed", String(y === btn)));
+            setTimeout(next, 150);
+          });
+        });
+      });
+    };
+    const keepNotes = () => items().forEach(x => { const t = $(`#scN-${x.id}`, m); if (t) st.note[x.id] = t.value; });
+    const memoLabel = () => { $("#memoNext", m).textContent = anyBad() || items().some(hasMemoFor) ? "다음" : "건너뛰기"; };
     const go = id => {
+      if (cur === "memo") keepNotes();
       cur = id;
       m.querySelectorAll("section[data-step]").forEach(x => { x.hidden = x.dataset.step !== id; });
       const list = steps(), i = list.indexOf(id);
       $("#fBar", m).style.width = `${Math.round(((i + 1) / list.length) * 100)}%`;
       $("#fBack", m).style.visibility = i === 0 ? "hidden" : "visible";
+      const sec = m.querySelector(`section[data-step="${id}"]`);
+      const qx = sec?.dataset.lid && cands.find(c => c.id === sec.dataset.lid);
+      $("#fEq", m).innerHTML = qx ? `${esc(eqOf(qx).name)} · <span class="mono">${esc(eqNo(eqOf(qx)))}</span>` : head();
+      if (id === "pickup" && $("#rpBundle", m)) {
+        const others = loans.filter(x => x.loan_no === l.loan_no && x.status !== "cancelled" && !st.sel.has(x.id)).length;
+        $("#rpBundle", m).textContent = others ? `같은 신청번호의 다른 장비 ${others}대도 나중에 이 정보로 회수돼요.` : "";
+      }
       if (id === "memo") {
-        const bad = result() !== "ok";
-        const nos = nosOf();
-        $("#memoQ", m).textContent = nos.length ? "어떤 문제인지 골라 주세요" : "전달할 내용이 있으면 적어 주세요";
-        $("#memoPick", m).innerHTML = nos.map(q => `<div class="m-grp"><b>${esc(q.q)}</b><div class="m-chips">${(q.pre || []).map(t => `<button type="button" class="mchip" data-q="${q.k}" data-t="${esc(t)}" aria-pressed="${(st.pick[q.k] || []).includes(t)}">${esc(t)}</button>`).join("")}</div></div>`).join("");
+        const its = items(), bads = its.filter(x => nosOf(x).length);
+        $("#memoQ", m).textContent = bads.length ? "어떤 문제인지 골라 주세요" : "전달할 내용이 있으면 적어 주세요";
+        $("#memoPick", m).innerHTML = bads.map(x => `<div class="m-grp">${its.length > 1 ? `<div class="m-eq">${esc(eqOf(x).name)} <span class="mono meta">${esc(eqNo(eqOf(x)))}</span></div>` : ""}
+          ${nosOf(x).map(q => `<b>${esc(q.q)}</b><div class="m-chips">${(q.pre || []).map(t => `<button type="button" class="mchip" data-l="${x.id}" data-q="${q.k}" data-t="${esc(t)}" aria-pressed="${(pickOf(x)[q.k] || []).includes(t)}">${esc(t)}</button>`).join("")}</div>`).join("")}
+          ${its.length > 1 ? `<textarea id="scN-${x.id}" rows="2" placeholder="이 장비에 대해 직접 적기">${esc(st.note[x.id] || "")}</textarea>` : ""}</div>`).join("");
+        $("#scNote", m).placeholder = bads.length && its.length > 1 ? "모든 장비에 함께 전할 내용 (선택)" : bads.length ? "고를 문구가 없으면 직접 적어 주세요" : "예: 케이스 손잡이가 헐거워요";
         $("#memoPick", m).querySelectorAll(".mchip").forEach(c => c.addEventListener("click", () => {
-          const arr = st.pick[c.dataset.q] = st.pick[c.dataset.q] || [], t = c.dataset.t, i = arr.indexOf(t);
+          const x = cands.find(y => y.id === c.dataset.l), arr = pickOf(x)[c.dataset.q] = pickOf(x)[c.dataset.q] || [], t = c.dataset.t, i = arr.indexOf(t);
           if (i < 0) arr.push(t); else arr.splice(i, 1);
-          c.setAttribute("aria-pressed", String(i < 0)); $("#mErr", m).hidden = true;
-          $("#memoNext", m).textContent = bad || hasMemo() ? "다음" : "건너뛰기";
+          c.setAttribute("aria-pressed", String(i < 0)); $("#mErr", m).hidden = true; memoLabel();
         }));
-        $("#memoNext", m).textContent = bad || hasMemo() ? "다음" : "건너뛰기";
+        $("#memoPick", m).querySelectorAll("textarea").forEach(t => t.addEventListener("input", () => { $("#mErr", m).hidden = true; memoLabel(); }));
+        memoLabel();
       }
       if (id === "sum") paintSum();
       m.parentElement.scrollTop = 0;
     };
     const next = () => {
-      if (back2sum && !(cur === "method" && st.how === "pickup")) { back2sum = false; return go("sum"); }
+      if (back2sum && !(cur === "method" && st.how === "pickup") && cur !== "items") { back2sum = false; return go("sum"); }
       const list = steps(); go(list[list.indexOf(cur) + 1]);
     };
     $("#fBack", m).addEventListener("click", () => { back2sum = false; const list = steps(), i = list.indexOf(cur); if (i > 0) go(list[i - 1]); });
+    m.querySelectorAll("[data-sel]").forEach(btn => btn.addEventListener("click", () => {
+      const id = btn.dataset.sel; st.sel.has(id) ? st.sel.delete(id) : st.sel.add(id);
+      btn.setAttribute("aria-pressed", String(st.sel.has(id))); $("#iErr", m).hidden = true;
+      $("#iNext", m).textContent = st.sel.size ? `${st.sel.size}대 반납하기` : "다음";
+    }));
+    if (multi) {
+      $("#iNext", m).textContent = `${st.sel.size}대 반납하기`;
+      $("#iNext", m).addEventListener("click", () => {
+        if (!st.sel.size) { $("#iErr", m).textContent = "반납할 장비를 1대 이상 골라 주세요."; $("#iErr", m).hidden = false; return; }
+        paintChecks(); back2sum = false; next();
+      });
+    }
     const paintHow = () => { $("#hDirect", m).textContent = `${st.place} 보관 장소에 직접 가져다 놓아요`; $("#hPickup", m).textContent = `물류사가 회수해서 ${st.place}으로 보내요`; };
     m.querySelectorAll("[data-p]").forEach(btn => btn.addEventListener("click", () => {
       st.place = btn.dataset.p; paintHow();
@@ -1462,49 +1582,57 @@ function returnForm(l) {
       if ($("#rpName", m) && (!$("#rpName", m).value.trim() || !$("#rpPhone", m).value.trim() || !$("#rpAddr", m).value.trim())) return show("담당자, 연락처, 회수 주소를 입력해 주세요.");
       next();
     });
-    m.querySelectorAll("section[data-step^='q:']").forEach(sec => sec.querySelectorAll("[data-yn]").forEach(btn => btn.addEventListener("click", () => {
-      st.ans[sec.dataset.step.slice(2)] = btn.dataset.yn;
-      sec.querySelectorAll("[data-yn]").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
-      setTimeout(next, 150);
-    })));
-    $("#scNote", m).addEventListener("input", () => { $("#mErr", m).hidden = true; if (result() === "ok") $("#memoNext", m).textContent = hasMemo() ? "다음" : "건너뛰기"; });
-    $("#memoNext", m).addEventListener("click", () => {
-      const err = $("#mErr", m); err.hidden = true;
-      if (result() !== "ok" && !hasMemo()) { err.textContent = "문구를 고르거나 직접 적어 주세요."; err.hidden = false; return; }
-      next();
-    });
+    $("#scNote", m).addEventListener("input", () => { $("#mErr", m).hidden = true; memoLabel(); });
+    const memoMiss = () => {
+      const x = missingMemo(); if (!x) return false;
+      $("#mErr", m).textContent = items().length > 1 ? `${eqOf(x).name} (${eqNo(eqOf(x))}): 문구를 고르거나 직접 적어 주세요.` : "문구를 고르거나 직접 적어 주세요.";
+      $("#mErr", m).hidden = false; return true;
+    };
+    $("#memoNext", m).addEventListener("click", () => { $("#mErr", m).hidden = true; keepNotes(); if (!memoMiss()) next(); });
     const paintSum = () => {
-      const r = result(), memo = [...picksOf(), $("#scNote", m).value.trim()].filter(Boolean).join("\n");
+      const its = items(), gm = general();
+      const firstQ = x => `q:${x.id}:${checksOf(x)[0].k}`;
       $("#sumBox", m).innerHTML = `
+        ${multi ? `<button class="sum-row" data-goto="items"><span>반납할 장비</span><b>${its.length}대</b></button>` : ""}
         <button class="sum-row" data-goto="place"><span>반납 장소</span><b>${esc(st.place)}</b></button>
         <button class="sum-row" data-goto="method"><span>반납 방법</span><b>${st.how === "pickup" ? "물류사 회수 요청" : "직접 반납"}</b></button>
         ${st.how === "pickup" ? `<button class="sum-row" data-goto="pickup"><span>회수 정보</span><b>${esc($("#rpAddr", m)?.value || pick?.address || "")}\n${fmtD($("#rpDate", m)?.value || pick?.requested_date || "")}</b></button>` : ""}
-        ${CHECKS.map((q, i) => `<button class="sum-row" data-goto="q:${q.k}"><span>${i + 1}. ${esc(q.q)}</span><b class="${st.ans[q.k] === "n" ? "t-bad" : ""}">${st.ans[q.k] === "n" ? "아니오" : "예"}</b></button>`).join("")}
-        <button class="sum-row" data-goto="memo"><span>메모</span><b>${memo ? esc(memo) : "없음"}</b></button>
-        <div class="sum-res">자가점검 결과 <span class="pill ${CHECK_PILL[r]}">${esc(CONDS[r])}</span></div>
+        ${its.map(x => {
+          const nos = nosOf(x), r = resultOf(x), memo = [...picksOf(x), noteOf(x)].filter(Boolean).join(", ");
+          return its.length === 1
+            ? checksOf(x).map((q, i) => `<button class="sum-row" data-goto="q:${x.id}:${q.k}"><span>${i + 1}. ${esc(q.q)}</span><b class="${ansOf(x)[q.k] === "n" ? "t-bad" : ""}">${ansOf(x)[q.k] === "n" ? "아니오" : "예"}</b></button>`).join("")
+            : `<button class="sum-row" data-goto="${nos.length ? `q:${x.id}:${nos[0].k}` : firstQ(x)}"><span>${esc(eqOf(x).name)} <span class="mono">${esc(eqNo(eqOf(x)))}</span>${memo ? `<br><span class="t-bad">${esc(memo)}</span>` : ""}</span><b><span class="pill ${CHECK_PILL[r]}">${esc(CONDS[r])}</span>${nos.length ? `\n아니오 ${nos.length}개` : ""}</b></button>`;
+        }).join("")}
+        <button class="sum-row" data-goto="memo"><span>메모</span><b>${its.length === 1 ? esc([...picksOf(its[0]), gm].filter(Boolean).join("\n") || "없음") : esc(gm || "없음")}</b></button>
+        ${its.length === 1 ? `<div class="sum-res">자가점검 결과 <span class="pill ${CHECK_PILL[resultOf(its[0])]}">${esc(CONDS[resultOf(its[0])])}</span></div>` : ""}
         <p class="meta">항목을 누르면 고칠 수 있어요.</p>`;
-      $("#sumBox", m).querySelectorAll("[data-goto]").forEach(x => x.addEventListener("click", () => { back2sum = true; go(x.dataset.goto); }));
+      $("#sumBox", m).querySelectorAll("[data-goto]").forEach(x => x.addEventListener("click", () => { back2sum = x.dataset.goto !== "items"; go(x.dataset.goto); }));
     };
     const b = $("#rOk", m);
     b.addEventListener("click", async () => {
       const err = $("#rErr", m), show = t => { err.textContent = t; err.hidden = false; };
       err.hidden = true;
-      const method = methodOf(), memo = $("#scNote", m).value.trim();
-      const self = result(), nos = CHECKS.filter(q => st.ans[q.k] === "n");
-      if (self !== "ok" && !hasMemo()) { back2sum = true; go("memo"); $("#mErr", m).textContent = "문구를 고르거나 직접 적어 주세요."; $("#mErr", m).hidden = false; return; }
-      const note = [nos.length ? nos.map(q => `[아니오] ${q.q}${(st.pick[q.k] || []).length ? ` → ${st.pick[q.k].join(", ")}` : ""}`).join("\n") : `자가점검 ${n}개 모두 ‘예’`, memo].filter(Boolean).join("\n");
+      if (missingMemo()) { back2sum = true; go("memo"); memoMiss(); return; }
+      const method = methodOf(), gm = general(), its = items();
+      const payload = its.map(x => {
+        const nos = nosOf(x), n = checksOf(x).length;
+        const note = [nos.length ? nos.map(q => `[아니오] ${q.q}${(pickOf(x)[q.k] || []).length ? ` → ${pickOf(x)[q.k].join(", ")}` : ""}`).join("\n") : `자가점검 ${n}개 모두 ‘예’`, noteOf(x), gm].filter(Boolean).join("\n");
+        return { loan_id: x.id, self_check: resultOf(x), self_note: note };
+      });
       let pickup = null;
       if (method === "pickup") {
         pickup = { date: $("#rpDate", m)?.value || pick?.requested_date || null };
         if ($("#rpName", m)) Object.assign(pickup, { recipient: $("#rpName", m).value.trim(), phone: $("#rpPhone", m).value.trim(), address: $("#rpAddr", m).value.trim(), memo: $("#rpMemo", m).value.trim() });
       }
       b.disabled = true;
-      const { error } = await sb.rpc("request_return", { p_loan_id: l.id, p_method: method, p_self_check: self, p_self_note: note, p_pickup: pickup, p_place: st.place });
+      const { error } = await sb.rpc("request_return_bulk", { p_items: payload, p_method: method, p_pickup: pickup, p_place: st.place });
       b.disabled = false;
       if (error) return show(errText(error));
-      closeModal(); toast(method === "pickup" ? (me.isAdmin ? "반납을 신청했어요. 배송 탭에서 물류사에 회수 요청 메일을 보내 주세요." : "반납을 신청했어요. 장비 관리자가 물류사에 회수를 요청해요.") : `반납을 신청했어요. 장비를 ${st.place}에 가져다 놓아 주세요.`); await refresh();
+      const cnt = its.length > 1 ? `장비 ${its.length}대 ` : "";
+      closeModal(); toast(method === "pickup" ? (me.isAdmin ? `${cnt}반납을 신청했어요. 배송 탭에서 물류사에 회수 요청 메일을 보내 주세요.` : `${cnt}반납을 신청했어요. 장비 관리자가 물류사에 회수를 요청해요.`) : `${cnt}반납을 신청했어요. 장비를 ${st.place}에 가져다 놓아 주세요.`); await refresh();
     });
-    go("place");
+    if (!multi) paintChecks();
+    go(multi ? "items" : "place");
   });
 }
 
@@ -1606,6 +1734,7 @@ document.addEventListener("click", e => {
   switch (a.dataset.act) {
     case "refresh": busy(a, () => refresh()); break;
     case "changelog": showChangelog(); break;
+    case "exitEdit": exitEdit(); break;
     case "statP": statP = a.dataset.v; render(); break;
     case "calPrev": case "calNext": { const [y, m] = cal.ym.split("-").map(Number); const d = new Date(y, m - 1 + (a.dataset.act === "calNext" ? 1 : -1), 1); cal.ym = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; render(); break; }
     case "calToday": cal.ym = todayStr().slice(0, 7); render(); break;
@@ -1627,6 +1756,7 @@ document.addEventListener("click", e => {
     case "return": l && returnForm(l); break;
     case "inspect": l && inspect(l); break;
     case "extend": l && extend(l); break;
+    case "editRes": l && editReservation(l); break;
     case "cancel": l && confirmBox("신청 취소", `${esc(l.loan_no)} · ${eqName} 예약을 취소해요.`, "예약 취소",
       async () => { await must(sb.from("loans").update({ status: "cancelled" }).eq("id", l.id)); toast("예약을 취소했어요."); }, true); break;
     case "mail": mail(a.dataset.no, a.dataset.dir); break;
@@ -1684,7 +1814,7 @@ document.addEventListener("change", e => {
 document.addEventListener("submit", e => { if (e.target.id === "reqForm") { e.preventDefault(); submitRequest(); } });
 const REQ_IDS = ["rPurpose","rCustomer","rInternal","rExternal","rNote","rDelivery","sName","sPhone","sAddr","sDate","sPick","sMemo"];
 function collectReqFields() { const o = {}; for (const id of REQ_IDS) { const n = $("#" + id); if (n) o[id] = n.type === "checkbox" ? n.checked : n.value; } return o; }
-function restoreReqFields(o) { for (const [id, v] of Object.entries(o)) { if (!o.rDelivery && (id === "sDate" || id === "sPick")) continue; const n = $("#" + id); if (!n) continue; if (n.type === "checkbox") n.checked = v; else n.value = v; } const d = $("#rDelivery"); if (d) $("#shipBox").hidden = !d.checked; }
+function restoreReqFields(o) { for (const [id, v] of Object.entries(o)) { if (!o.rDelivery && (id === "sDate" || id === "sPick")) continue; const n = $("#" + id); if (!n) continue; if (n.type === "checkbox") n.checked = v; else n.value = v; } const d = $("#rDelivery"); if (d) $("#shipBox").hidden = !d.checked; lockShipFields(); }
 function softRender() {
   if ($("#app").hidden || $("#modalRoot").innerHTML) { renderTabs(); return; }
   if (view === "request" && $("#reqForm")) { const keep = collectReqFields(); render(); restoreReqFields(keep); return; }
