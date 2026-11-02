@@ -385,6 +385,9 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
     else m.addedNodes.forEach(fix);
   } }).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["placeholder", "title", "aria-label"] });
   run(document.body); run(document.querySelector("title"));
+  // 영어 이름은 DEMO Pool: 이름 옆 부제(LMK DEMO POOL)가 겹치지 않게 바꾼다
+  document.querySelectorAll(".brand .tag").forEach(t => { t.textContent = "LMK"; });
+  document.querySelectorAll(".splash .sub").forEach(t => { t.textContent = "Laerdal Medical Korea"; });
 })();
 
 /* ===== 설정: Supabase 프로젝트 주소와 공개 키 (공개돼도 되는 값) ===== */
@@ -392,6 +395,9 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.051", date: "2026-11-02", items: [
+    "영어 화면의 앱 이름을 ‘DEMO Pool’로 정함 (부제는 LMK / Laerdal Medical Korea)",
+  ] },
   { v: "v0.050", date: "2026-11-02", items: [
     "영어 화면 준비 (아직 숨김): 주소 끝에 ?lang=en을 붙여 열면 그 기기에서 영어로 보임. ?lang=ko로 되돌림",
     "영어 모드에서도 분류·목적·위치처럼 DB로 가는 값은 한국어로 저장됨. Teams 알림, 물류사 메일 문안, 버전 기록, 사용 설명서는 한국어 그대로",

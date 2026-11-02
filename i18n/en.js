@@ -11,7 +11,7 @@ const day = s => String(s).replace(/\((월|화|수|목|금|토|일)\)/g, (_, k) 
 
 const EX = {
   // 앱 이름·공통
-  "데모콕": "DemoKok", "콕": "콕", "데모콕을 불러오는 중": "Loading DemoKok", "데이터를 불러오는 중…": "Loading data…", "불러오는 중…": "Loading…",
+  "데모콕": "DEMO Pool", "콕": "콕", "데모콕을 불러오는 중": "Loading DEMO Pool", "데이터를 불러오는 중…": "Loading data…", "불러오는 중…": "Loading…",
   "연결이 느려요. 잠시만 기다려 주세요.": "The connection is slow. Please wait a moment.", "다시 시도": "Try again",
   "닫기": "Close", "저장": "Save", "적용": "Apply", "취소": "Cancel", "다음": "Next", "뒤로": "Back", "수정": "Edit", "보기": "View",
   "예": "Yes", "아니오": "No", "없음": "None", "기본": "Default", "전체": "All", "관리": "Manage", "기록": "Records", "화면": "Screen",
@@ -68,8 +68,8 @@ const EX = {
   "그대로 두기": "Keep as is", "고른 장비 보기": "Show selected", "바꿀 항목을 골라 주세요.": "Choose what to change.",
   "보관 위치나 상태 중 하나는 골라 주세요.": "Choose a location or a status.",
   "고른 장비가 모두 대여 중이거나 반납 확인을 기다리고 있어서 상태를 바꿀 수 없어요.": "All selected items are on loan or waiting for a return check, so their status can't change.",
-  "장비에 붙은 데모콕 QR 라벨을 네모 안에 맞춰 주세요.": "Fit the DemoKok QR label on the equipment inside the square.", "카메라를 켜는 중…": "Starting camera…",
-  "QR 라벨을 비춰 주세요.": "Point the camera at a QR label.", "데모콕 장비 라벨이 아니에요. 장비에 붙은 QR을 찍어 주세요.": "That isn't a DemoKok label. Please scan the QR on the equipment.",
+  "장비에 붙은 데모콕 QR 라벨을 네모 안에 맞춰 주세요.": "Fit the DEMO Pool QR label on the equipment inside the square.", "카메라를 켜는 중…": "Starting camera…",
+  "QR 라벨을 비춰 주세요.": "Point the camera at a QR label.", "데모콕 장비 라벨이 아니에요. 장비에 붙은 QR을 찍어 주세요.": "That isn't a DEMO Pool label. Please scan the QR on the equipment.",
   "카메라를 쓸 수 없어요. 브라우저 설정에서 카메라 권한을 허용해 주세요.": "Can't use the camera. Please allow camera access in browser settings.",
   "이 브라우저에서는 카메라를 쓸 수 없어요. 폰 카메라로 라벨을 찍어도 장비 화면이 열려요.": "This browser can't use the camera. You can also scan the label with the phone camera.",
   "스캔 도구를 불러오지 못했어요.": "Couldn't load the scanner.", "내부 ID가 있는 장비를 골라 주세요.": "Please choose equipment with an internal ID.",
@@ -243,7 +243,7 @@ const TPL = {
   "한 계정은 동시에 #대까지 로그인할 수 있고, #번째 기기로 로그인하면 가장 오래된 로그인이 끊겨요.": "One account can be logged in on # devices at a time; a #rd device ends the oldest login.",
   "최근 #건": "Last #", "#일이 지나면 지워져요. 한 계정은 동시에 #대까지 로그인할 수 있고, #번째 기기로 로그인하면 가장 오래된 로그인이 끊겨요.": "Deleted after # days. One account can be logged in on # devices at a time; a #rd device ends the oldest login.",
   "7일간 기기 #종": "# devices in 7 days",
-  "회수 희망 #/# ·": "Pick up #/# ·", "도착 희망 #/# ·": "Deliver by #/# ·", "· #일": "· # days", "· 이번 달 #건, 장비 #대": "· # this month, # items", "· 장비 #대": "· # items", "노트북 #대(운영·환자 모니터)를 모두 종료했나요?": "Did you shut down both laptops (instructor · patient monitor)?", "데모콕 v#.#": "DemoKok v#.#",
+  "회수 희망 #/# ·": "Pick up #/# ·", "도착 희망 #/# ·": "Deliver by #/# ·", "· #일": "· # days", "· 이번 달 #건, 장비 #대": "· # this month, # items", "· 장비 #대": "· # items", "노트북 #대(운영·환자 모니터)를 모두 종료했나요?": "Did you shut down both laptops (instructor · patient monitor)?", "데모콕 v#.#": "DEMO Pool v#.#",
 };
 
 const RULES = [
