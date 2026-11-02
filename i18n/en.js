@@ -81,6 +81,15 @@ const EX = {
   "실사나 수리 후 확인처럼 출납과 관계없는 점검을 기록해요.": "Log a check not tied to a loan, such as an audit or post-repair test.",
 
   // 신청
+  "승인 없이 저장하는 즉시 예약이 확정돼요. 같은 기간에 이미 예약된 장비는 고를 수 없어요. 장비 관리자는 다른 사람 이름으로 신청하거나, 이미 가져간 장비를 지난 날짜로 등록할 수 있어요.": "Your booking is confirmed as soon as you save — no approval needed. Equipment already booked for those dates can't be chosen. Equipment admins can request on behalf of someone else, or register equipment that was already taken out with a past date.",
+  "출고됨으로 등록": "Register as checked out", "이미 가져간 장비예요. 저장하면 바로 ‘출고’ 상태가 돼요.": "The equipment was already taken out. It becomes 'checked out' as soon as you save.",
+  "출고 등록": "Register checkout", "저장하면 바로 연체로 보여요": "It will show as overdue right after you save", "지난 날짜로 시작하는 예약이에요": "This booking starts on a past date",
+  "사용 시작일은 1년 전까지만 정할 수 있어요.": "The start date can be at most 1 year ago.",
+  "출고됨으로 등록하려면 사용 시작일이 오늘이나 그 전이어야 해요.": "To register as checked out, the start date must be today or earlier.",
+  "반납 예정일이 이미 지났어요. 장비를 이미 가져갔다면 ‘출고됨으로 등록’을 켜 주세요.": "The due date has already passed. If the equipment was already taken out, turn on 'Register as checked out'.",
+  "다른 사람 이름으로 신청하거나 출고됨으로 등록하는 건 장비 관리자만 할 수 있어요.": "Only equipment admins can request on behalf of someone else or register as checked out.",
+  "신청자는 사용 중인 사용자 중에서 골라 주세요.": "Please choose the requester from active users.",
+  "이미 출고 중인 장비가 들어 있어요. 그 장비의 반납을 먼저 처리해 주세요.": "Some equipment is already checked out. Please process its return first.",
   "승인 없이 저장하는 즉시 예약이 확정돼요. 같은 기간에 이미 예약된 장비는 고를 수 없어요.": "Your booking is confirmed as soon as you save — no approval needed. Equipment already booked for those dates can't be chosen.",
   "사용 시작일": "Start date", "반납 예정일": "Return date", "기간:": "Period:", "제품명·자산번호 검색": "Search name, asset no.", "가능한 장비만": "Available only",
   "가능": "Available", "예약 겹침": "Booked", "조건에 맞는 장비가 없어요. 검색어나 필터를 바꿔 주세요.": "No equipment matches. Try another search or filter.",
@@ -265,6 +274,11 @@ const RULES = [
   [/^‘(.+)’ 단계로 바꿨어요\.$/, (m, t) => `Changed to ‘${t(m[1])}’.`],
   [/^(.+) 장비를 찾지 못했어요\. 지워졌거나 잘못된 라벨일 수 있어요\.$/, m => `Couldn't find equipment ${m[1]}. It may have been deleted, or the label may be wrong.`],
   [/^(\S+) 예약을 고쳤어요\.$/, m => `Booking ${m[1]} updated.`],
+  [/^(\S+) (.+)님 이름으로 출고 등록했어요\.$/, m => `Registered checkout ${m[1]} for ${m[2]}.`],
+  [/^(\S+) 출고 등록했어요\.$/, m => `Registered checkout ${m[1]}.`],
+  [/^(\S+) (.+)님 이름으로 예약을 확정했어요\.( 배송 탭에서 물류사 요청 메일을 보내 주세요\.)?$/, m => `Booking ${m[1]} confirmed for ${m[2]}.` + (m[3] ? " Send the courier request email from the Delivery tab." : "")],
+  [/^(.+) \(나\)$/, m => `${m[1]} (me)`],
+  [/^\(등록: (.+)\)$/, m => `(registered by ${m[1]})`],
   [/^(\S+) 예약을 확정했어요\.( 배송 탭에서 물류사 요청 메일을 보내 주세요\.| 장비 관리자가 물류사에 배송을 요청해요\.)?$/, m => `Booking ${m[1]} confirmed.` + (m[2] ? (m[2].includes("배송 탭") ? " Send the courier request email from the Delivery tab." : " The equipment admin will request delivery from the courier.") : "")],
   [/^(장비 \d+대 )?반납을 신청했어요\. (.+)$/, m => {
     const n = m[1] ? m[1].match(/\d+/)[0] : null, head = n ? `Return submitted for ${n} items.` : "Return submitted.";
