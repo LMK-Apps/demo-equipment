@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>html.splashing,html.splashing body{background:#0f6b5c}@media (prefers-color-scheme:dark){html.splashing,html.splashing body{background:#0a4038}}</style>
+<script src="vendor/qrcode-generator-2.0.4.js" integrity="sha384-e9EFD6BGC90bkW9aDV5xbbBfzwN7G8YImHao2lfLVKV/hPB0E0go+H3I64h7oHtA" crossorigin="anonymous" defer></script>
 <script src="vendor/supabase-js-2.117.3.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
 <style>
 /* Layout: 상단 바 + 탭, 아래는 탭별 작업 화면 */
@@ -208,7 +209,32 @@ pre.mail{white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;backgroun
 .upd span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .upd button{background:var(--accent-ink);color:var(--accent);border:0;border-radius:999px;padding:5px 12px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
 .upd .x{background:transparent;color:inherit;padding:5px 6px;font-weight:400;opacity:.8}
+/* QR 찍기 */
+.scan-box{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:3/4;max-height:60vh;display:flex;align-items:center;justify-content:center}
+.scan-box video{width:100%;height:100%;object-fit:cover}
+.scan-box .aim{position:absolute;width:62%;aspect-ratio:1;border:3px solid #fff;border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+/* QR 라벨 출력: 인쇄할 때는 라벨만 */
+#printArea{display:none}
+@media print{
+  @page{size:A4;margin:0}
+  html,body{background:#fff!important}
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block}
+  .lbl-sheet{width:210mm;height:297mm;box-sizing:border-box;padding:12.9mm 6.5mm;display:grid;grid-template-columns:repeat(3,64mm);grid-auto-rows:33.9mm;column-gap:2.5mm;page-break-after:always;break-after:page}
+  .lbl-sheet:last-child{page-break-after:auto;break-after:auto}
+  .lbl{box-sizing:border-box;display:flex;align-items:center;gap:2.5mm;padding:2mm 3mm;overflow:hidden;color:#000;font-family:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  .lbl.cut{outline:.2mm dashed #999;outline-offset:-.1mm}
+  .lbl svg{width:27mm;height:27mm;flex:none}
+  .lbl .tx{display:flex;flex-direction:column;gap:.8mm;min-width:0}
+  .lbl .app{font-size:6.5pt;color:#555;letter-spacing:.3pt}
+  .lbl .iid{font-family:"IBM Plex Mono",monospace;font-size:12pt;font-weight:700}
+  .lbl .nm{font-size:7.5pt;line-height:1.25;max-height:2.5em;overflow:hidden}
+  .lbl .lb{font-family:"IBM Plex Mono",monospace;font-size:8pt;font-weight:700}
+}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
+.app-foot{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;padding:28px 16px calc(28px + env(safe-area-inset-bottom,0px));font-size:12.5px;color:var(--muted)}
+.app-foot a{color:var(--accent);font-weight:600;text-decoration:none}.app-foot a:hover{text-decoration:underline}
+.gate-guide{font-size:13px;color:var(--accent);font-weight:600;text-decoration:none}
 .gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
 .gate .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;max-width:380px;width:100%;padding:28px 24px;display:flex;flex-direction:column;gap:16px;text-align:center}
 .gate .card h1{font-size:20px;margin:0}
@@ -299,6 +325,7 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
   </div></header>
   <nav class="tabs" aria-label="화면"><div class="wrap" role="tablist" id="tabs"></div></nav>
   <main class="wrap" id="main"><div class="boot">데이터를 불러오는 중…</div></main>
+  <footer class="app-foot"><a href="https://claude.ai/artifact/TtpPMbpznjexx2D3xzmr7i" target="_blank" rel="noopener" id="manualLink">📖 사용 설명서</a><span>문의는 장비 관리자에게</span></footer>
 </div>
 <div id="modalRoot"></div>
 <div class="toast" id="toast" hidden></div>
@@ -310,6 +337,14 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.043", date: "2026-11-02", items: [
+    "QR 라벨: 장비마다 QR 라벨을 붙여 찍으면 그 장비 화면이 열림 (내부 ID 기준이라 이름·자산번호가 바뀌어도 그대로)",
+    "[QR 찍기] (현황·장비 화면): 앱 안에서 카메라로 라벨을 찍음. 로그인이 그대로라 기기 2대 제한에 걸리지 않음",
+    "관리자: 장비 [여러 대 선택] → [QR 라벨 출력], 장비 상세 [QR 라벨]. A4 24칸 라벨지(64×33.9mm) 기준, 시작 칸 고르기와 자르는 선 표시",
+    "폰 카메라로 라벨 링크를 열어도 동작. 로그인 전이면 로그인한 뒤 그 장비 화면을 열어 줌",
+    "장비 상세에서 내가 빌린(출고) 장비면 [반납 신청] 바로 가기",
+    "앱 맨 아래와 로그인 화면에 ‘사용 설명서’ 링크 추가",
+  ] },
   { v: "v0.042", date: "2026-11-02", db: "016_session_limit_login_log.sql", items: [
     "한 계정은 동시에 2대까지 로그인. 3번째 기기로 로그인하면 가장 오래된 로그인이 끊기고, 끊긴 기기에는 ‘다른 기기에서 로그인해서 로그아웃됐어요’ 안내",
     "관리자 [사용자] 탭: ‘최근 로그인’(시각·기기)과 [로그인 기록] 추가. 7일 안에 3종류 넘는 기기로 로그인하면 빨간색으로 표시",
@@ -507,6 +542,7 @@ const CHANGELOG = [
   ] },
 ];
 const APP_VERSION = CHANGELOG[0].v;
+const MANUAL_URL = "https://claude.ai/artifact/TtpPMbpznjexx2D3xzmr7i";   // 사용자 매뉴얼 (Claude 문서)
 const APP_BUILD = CHANGELOG[0].date;
 /* ===================================================================== */
 
@@ -596,6 +632,9 @@ let session = null, profile = null;
 let me = { id: null, isAdmin: false };
 let equipment = [], loans = [], shipments = [], people = [], logins = [];
 let view = (location.hash || "").slice(1) || "home";
+// QR 라벨 링크(#eq/EQ-0001)로 들어오면 장비 화면을 연다. 로그인하느라 주소가 바뀌어도 기억해 둔다.
+let pendingEq = null;
+if (view.startsWith("eq/")) { pendingEq = decodeURIComponent(view.slice(3)); view = "equip"; try { localStorage.setItem("pendingEq", pendingEq); } catch {} }
 let eqSel = null;   // 장비 여러 대 선택 모드 (관리자). null이면 꺼짐
 let filters = { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", ledgerQ: "", ledgerSt: "open" };
 // 기본 사용 기간: 3일 (시작일 포함, 시작일 + 2일). 반납 예정일을 직접 고르면 그 값을 유지한다
@@ -635,7 +674,7 @@ function showGate(kind, extra = "") {
     disabled: `<h1>사용이 중지된 계정이에요</h1><p>다시 써야 한다면 장비 관리자에게 문의해 주세요.</p><button class="btn" id="gateLogout">로그아웃</button>`,
     error: `<h1>불러오지 못했어요</h1><p>${extra}</p><button class="btn pri" id="reload">다시 시도</button><button class="btn" id="gateLogout">로그아웃</button>`,
   }[kind];
-  g.innerHTML = `<div class="card">${body}<div><button class="ver" data-act="changelog" title="버전 기록 보기">${APP_VERSION} · ${APP_BUILD}</button></div></div>`;
+  g.innerHTML = `<div class="card">${body}<a class="gate-guide" href="${MANUAL_URL}" target="_blank" rel="noopener">📖 사용 설명서 보기</a><div><button class="ver" data-act="changelog" title="버전 기록 보기">${APP_VERSION} · ${APP_BUILD}</button></div></div>`;
   $("#kakaoLogin")?.addEventListener("click", async () => {
     const { error } = await sb.auth.signInWithOAuth({ provider: "kakao", options: { redirectTo: location.origin + location.pathname } });
     if (error) fail(error);
@@ -656,8 +695,8 @@ async function loadAll() {
   ]);
   equipment = e; loans = l; shipments = s; people = p;
   if (me.isAdmin) {   // 로그인 기록은 관리자만. 표가 없거나 실패해도 앱은 계속 쓴다
-    const r = await sb.from("login_log").select("user_id,at,user_agent,kicked").order("at", { ascending: false }).limit(1000);
-    logins = r.error ? [] : r.data || [];
+    try { const r = await sb.from("login_log").select("user_id,at,user_agent,kicked").order("at", { ascending: false }).limit(1000); logins = r.error ? [] : r.data || []; }
+    catch { logins = []; }
   }
 }
 
@@ -752,7 +791,7 @@ function vHome() {
   const cnt = k => equipment.filter(e => e.status === k).length;
   return `
   <div class="head"><div class="grow"><h2>오늘 현황</h2><p class="sub">${t.replace(/-/g, ".")} 기준. 연체는 반납 예정일이 지났는데 아직 출고 상태인 건이에요.</p></div>
-    <button class="btn" data-act="refresh">새로 고침</button><button class="btn pri" data-go="request">데모 신청</button></div>
+    <button class="btn" data-act="refresh">새로 고침</button><button class="btn" data-act="scanQR">QR 찍기</button><button class="btn pri" data-go="request">데모 신청</button></div>
   <div class="stats">
     <div class="stat"><b>${cnt("available")}</b><span>사용 가능 장비</span></div>
     <div class="stat"><b>${cnt("onloan")}</b><span>대여 중</span></div>
@@ -988,7 +1027,7 @@ function vEquip() {
   const anyF = !!(filters.eqQ.trim() || filters.eqCat || filters.eqLoc || filters.eqSt);
   return `
   <div class="head"><div class="grow"><h2>장비</h2><p class="sub">장비 ${equipment.length}대. 보관 위치와 최근 점검 결과는 반납 신청과 관리자 점검 때 자동으로 바뀌어요. 행을 누르면 자세히 볼 수 있어요.</p></div>
-    ${me.isAdmin ? `<div class="toolbar" style="margin:0"><button class="btn" data-act="eqSelMode">${eqSel ? "선택 끝내기" : "여러 대 선택"}</button><button class="btn pri" data-act="eqNew">장비 등록</button></div>` : ""}</div>
+    <div class="toolbar" style="margin:0"><button class="btn" data-act="scanQR">QR 찍기</button>${me.isAdmin ? `<button class="btn" data-act="eqSelMode">${eqSel ? "선택 끝내기" : "여러 대 선택"}</button><button class="btn pri" data-act="eqNew">장비 등록</button>` : ""}</div></div>
   <div class="stats">
     <button class="stat stat-btn ${anyF ? "" : "on"}" data-act="eqCard" data-k="all" aria-pressed="${!anyF}"><b>${equipment.filter(e => e.status !== "retired").length}</b><span>전체 보기</span></button>
     ${byLoc.map(([k, n]) => `<button class="stat stat-btn ${filters.eqLoc === k ? "on" : ""}" data-act="eqCard" data-k="loc:${k}" aria-pressed="${filters.eqLoc === k}"><b>${n}</b><span>${k} 보관</span></button>`).join("")}
@@ -1017,6 +1056,7 @@ function vEquip() {
   ${eqSel ? `<div class="bulkbar"><b>${eqSel.size}대 선택</b>
     <button class="btn" data-act="eqSelAll" data-ids="${esc(list.map(e => e.id).join(","))}">표시된 ${list.length}대 모두 선택</button>
     <button class="btn" data-act="eqSelNone" ${eqSel.size ? "" : "disabled"}>선택 해제</button>
+    <button class="btn" data-act="eqLabels" ${eqSel.size ? "" : "disabled"}>QR 라벨 출력</button>
     <button class="btn pri" data-act="eqBulk" ${eqSel.size ? "" : "disabled"}>위치·상태 일괄 변경</button></div>` : ""}`}`;
 }
 
@@ -1345,6 +1385,105 @@ function loginLog(uid) {
     <div class="actions"><button class="btn" data-close-btn>닫기</button></div>`);
 }
 
+/* ---------- QR ---------- */
+const eqLink = iid => `${location.origin}${location.pathname}#eq/${encodeURIComponent(iid)}`;
+function openEqByIid(iid) {
+  const e = equipment.find(x => (x.internal_id || "").toUpperCase() === String(iid).toUpperCase());
+  try { history.replaceState(null, "", "#equip"); } catch {}
+  if (!e) return toast(`${iid} 장비를 찾지 못했어요. 지워졌거나 잘못된 라벨일 수 있어요.`);
+  if (view !== "equip") go("equip");
+  eqView(e.id);
+}
+// QR 라벨 내용에서 내부 ID를 꺼낸다 (링크 또는 EQ-0001 그대로)
+const iidFromQR = t => { const m = String(t).match(/#eq\/([A-Za-z]+-\d+)/) || String(t).trim().match(/^(EQ-\d+)$/i); return m ? decodeURIComponent(m[1]) : null; };
+
+// 앱 안에서 QR 찍기: 홈 화면 앱의 로그인을 그대로 쓰고, 2대 제한에도 걸리지 않는다
+let scanStream = null, scanTimer = null;
+function stopScan() { if (scanTimer) cancelAnimationFrame(scanTimer); scanTimer = null; if (scanStream) scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+function loadScript(src, sri) {
+  return new Promise((ok, no) => { if (document.querySelector(`script[src="${src}"]`)) return ok();
+    const s = document.createElement("script"); s.src = src; s.integrity = sri; s.crossOrigin = "anonymous"; s.onload = ok; s.onerror = () => no(new Error("스캔 도구를 불러오지 못했어요.")); document.head.appendChild(s); });
+}
+async function scanQR() {
+  modal(`<h2>QR 찍기</h2><p class="meta">장비에 붙은 데모콕 QR 라벨을 네모 안에 맞춰 주세요.</p>
+    <div class="scan-box"><video id="scV" playsinline muted></video><div class="aim"></div></div>
+    <div class="notice" id="scMsg">카메라를 켜는 중…</div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button></div>`, async m => {
+    const msg = t => { const n = $("#scMsg", m); if (n) n.textContent = t; };
+    if (!navigator.mediaDevices?.getUserMedia) return msg("이 브라우저에서는 카메라를 쓸 수 없어요. 폰 카메라로 라벨을 찍어도 장비 화면이 열려요.");
+    try { scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }); }
+    catch { return msg("카메라를 쓸 수 없어요. 브라우저 설정에서 카메라 권한을 허용해 주세요."); }
+    if (!document.body.contains(m)) return stopScan();
+    const v = $("#scV", m); v.srcObject = scanStream; await v.play().catch(() => {});
+    let detect;
+    if ("BarcodeDetector" in window) {
+      try { const bd = new BarcodeDetector({ formats: ["qr_code"] }); detect = async () => (await bd.detect(v))[0]?.rawValue; } catch {}
+    }
+    if (!detect) {
+      try { await loadScript("vendor/jsqr-1.4.0.js", "sha384-b5Ya4Bq3qCyz39m2ISh+4DxjAIljdeFwK/BsXLuj9gugaNwAcj/ia15fxNZL9Nlx"); }
+      catch (e) { return msg(e.message); }
+      const c = document.createElement("canvas"), ctx = c.getContext("2d", { willReadFrequently: true });
+      detect = async () => {
+        const w = v.videoWidth, h = v.videoHeight; if (!w) return null;
+        const k = Math.min(1, 640 / Math.max(w, h)); c.width = w * k; c.height = h * k;
+        ctx.drawImage(v, 0, 0, c.width, c.height);
+        return window.jsQR(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height, { inversionAttempts: "dontInvert" })?.data;
+      };
+    }
+    msg("QR 라벨을 비춰 주세요.");
+    let last = "";
+    const tick = async () => {
+      if (!scanStream) return;
+      let text = null; try { text = await detect(); } catch {}
+      if (text && text !== last) {
+        last = text;
+        const iid = iidFromQR(text);
+        if (iid) { closeModal(); return openEqByIid(iid); }
+        msg("데모콕 장비 라벨이 아니에요. 장비에 붙은 QR을 찍어 주세요.");
+      }
+      scanTimer = requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
+
+// QR 라벨 출력 (A4 24칸 라벨지: 64×33.9mm, 3열 8행)
+const LABEL_PER_SHEET = 24;
+function qrSvg(text) {
+  const q = window.qrcode(0, "M"); q.addData(text); q.make();
+  const n = q.getModuleCount(); let d = "";
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`;
+  return `<svg viewBox="-2 -2 ${n + 4} ${n + 4}" shape-rendering="crispEdges" aria-hidden="true"><rect x="-2" y="-2" width="${n + 4}" height="${n + 4}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+}
+function labelForm(ids) {
+  const rows = ids.map(eqById).filter(e => e && e.internal_id).sort((a, b) => a.internal_id.localeCompare(b.internal_id));
+  if (!rows.length) return toast("내부 ID가 있는 장비를 골라 주세요.");
+  modal(`<h2>QR 라벨 출력</h2><p class="meta">장비 ${rows.length}대. A4 24칸 라벨지(한 칸 64×33.9mm, 3열 8행) 기준이에요. 처음에는 일반 종이에 뽑아서 라벨지에 겹쳐 보고 칸이 맞는지 확인해 주세요.</p>
+    <div class="fields">
+      <label class="f"><span>시작 칸 (이미 쓴 칸 건너뛰기)</span><select id="lbStart">${Array.from({ length: LABEL_PER_SHEET }, (_, i) => `<option value="${i}">${i + 1}번째 칸 (${Math.floor(i / 3) + 1}줄 ${i % 3 + 1}번째)</option>`).join("")}</select></label>
+      <label class="f"><span>종이</span><select id="lbCut"><option value="0">라벨지 (선 없음)</option><option value="1">일반 종이 (자르는 선 표시)</option></select></label>
+    </div>
+    <div class="notice">라벨 ${rows.length}장 · A4 ${Math.ceil(rows.length / LABEL_PER_SHEET)}장. 인쇄 창에서 <b>배율 100%(실제 크기)</b>, <b>여백 없음</b>으로 맞춰 주세요. 오래 쓰려면 투명 테이프로 덮어 주세요.</div>
+    <div class="notice bad" id="lbErr" hidden></div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="lbGo">인쇄</button></div>`, m => {
+    $("#lbGo", m).addEventListener("click", () => {
+      if (!window.qrcode) { $("#lbErr", m).textContent = "QR 도구를 아직 불러오지 못했어요. 잠시 뒤에 다시 눌러 주세요."; $("#lbErr", m).hidden = false; return; }
+      printLabels(rows, +$("#lbStart", m).value, $("#lbCut", m).value === "1");
+    });
+  });
+}
+function printLabels(rows, skip, cut) {
+  const cells = [...Array(skip).fill(null), ...rows], sheets = [];
+  for (let i = 0; i < cells.length; i += LABEL_PER_SHEET) sheets.push(cells.slice(i, i + LABEL_PER_SHEET));
+  let area = $("#printArea"); if (!area) { area = document.createElement("div"); area.id = "printArea"; document.body.appendChild(area); }
+  area.innerHTML = sheets.map(sh => `<div class="lbl-sheet">${sh.map(e => e ? `<div class="lbl ${cut ? "cut" : ""}">${qrSvg(eqLink(e.internal_id))}
+      <div class="tx"><span class="app">데모콕 · LMK</span><span class="iid">${esc(e.internal_id)}</span>${e.label ? `<span class="lb">${esc(e.label)}</span>` : ""}<span class="nm">${esc(e.name)}</span></div></div>`
+    : `<div class="lbl"></div>`).join("")}</div>`).join("");
+  const done = () => { area.innerHTML = ""; window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  setTimeout(() => window.print(), 50);
+}
+
 /* ---------- 모달 ---------- */
 function modal(html, onMount) {
   const root = $("#modalRoot");
@@ -1363,7 +1502,7 @@ function showChangelog() {
       ${c.db ? `<div class="meta" style="margin-top:4px">DB 변경: <span class="mono">${esc(c.db)}</span></div>` : ""}</div>`).join("")}</div>
     <div class="actions"><button class="btn" data-close-btn>닫기</button></div>`);
 }
-function closeModal() { $("#modalRoot").innerHTML = ""; }
+function closeModal() { stopScan(); $("#modalRoot").innerHTML = ""; }
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); if (e.key === "Enter" && e.target.id === "rQ") e.preventDefault(); });
 async function busy(btn, fn) { if (btn) btn.disabled = true; try { await fn(); } catch (e) { fail(e); } finally { if (btn) btn.disabled = false; } }
 
@@ -1454,6 +1593,7 @@ function eqView(id) {
   const e = eqById(id); if (!e) return;
   const t = todayStr();
   const sched = loans.filter(l => l.equipment_id === id && ACTIVE(l.status)).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const myOut = loans.find(l => l.equipment_id === id && l.status === "out" && l.requester_id === me.id);
   const hist = loans.filter(l => l.equipment_id === id && l.status === "done").sort((a, b) => (b.returned_at || "").localeCompare(a.returned_at || "")).slice(0, 5);
   modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta">${idTag(e)}${e.label ? ` <span class="lbl-tag">${esc(e.label)}</span>` : ""} <span class="mono">${esc(e.asset_no || "자산번호 없음")}</span> · ${esc(e.item_no || "품목번호 없음")} · S/N ${esc(e.serial_no || "–")} · ${esc(e.location)}</div></div>${pill(EQ_STATUS, e.status)}</div>
     <div><h3>최근 점검</h3><div style="margin-top:4px">${checkCell(e)}</div></div>
@@ -1462,9 +1602,10 @@ function eqView(id) {
     <div><h3>이력</h3><div class="hist" id="eqHist"><div class="ev"><span class="t"></span><span class="meta">불러오는 중…</span></div></div></div>
     <div hidden><h3>최근 반납</h3><div class="list">${hist.map(l => `<div class="row"><div class="main"><span class="mono">${fmtT(l.returned_at)}</span> · ${esc(nameOf(l.requester_id))}</div><span class="pill ${l.return_condition === "ok" ? "p-ok" : "p-warn"}">${esc(CONDS[l.return_condition] || "–")}</span></div>`).join("") || `<div class="empty">반납 기록이 없어요.</div>`}</div></div>
     ${e.note ? `<div class="meta">메모: ${esc(e.note)}</div>` : ""}
-    <div class="actions"><button class="btn" data-close-btn>닫기</button>${me.isAdmin ? `<button class="btn" id="eCheck">상태 점검 기록</button><button class="btn" id="eEdit">수정</button>` : ""}<button class="btn pri" id="eReq" ${["repair","retired","inspect"].includes(e.status) ? "disabled" : ""}>이 장비 신청</button></div>`, m => {
+    <div class="actions"><button class="btn" data-close-btn>닫기</button>${me.isAdmin ? `<button class="btn" id="eLabel1">QR 라벨</button><button class="btn" id="eCheck">상태 점검 기록</button><button class="btn" id="eEdit">수정</button>` : ""}${myOut ? `<button class="btn" data-act="return" data-id="${myOut.id}">반납 신청</button>` : ""}<button class="btn pri" id="eReq" ${["repair","retired","inspect"].includes(e.status) ? "disabled" : ""}>이 장비 신청</button></div>`, m => {
     $("#eEdit", m)?.addEventListener("click", () => eqForm(e));
     $("#eCheck", m)?.addEventListener("click", () => eqCheck(e));
+    $("#eLabel1", m)?.addEventListener("click", () => labelForm([e.id]));
     loadHistory(e.id, $("#eqHist", m));
     $("#eReq", m).addEventListener("click", () => { draft.picks = new Set([id]); closeModal(); go("request"); });
   });
@@ -1869,6 +2010,8 @@ document.addEventListener("click", e => {
     case "eqSelAll": a.dataset.ids.split(",").filter(Boolean).forEach(id => eqSel.add(id)); render(); break;
     case "eqSelNone": eqSel.clear(); render(); break;
     case "eqBulk": if (eqSel && eqSel.size) eqBulk(); break;
+    case "eqLabels": if (eqSel && eqSel.size) labelForm([...eqSel]); break;
+    case "scanQR": scanQR(); break;
     case "eqReset": Object.assign(filters, { eqQ: "", eqCat: "", eqLoc: "", eqSt: "" }); render(); break;
     case "eqCard": {
       const [t, v] = a.dataset.k.split(":");
@@ -1996,6 +2139,9 @@ async function start() {
   const r = $("#meRole"); r.textContent = me.isAdmin ? "장비 관리자" : "신청자"; r.classList.toggle("admin", me.isAdmin);
   renderTabs();
   try { await loadAll(); render(); hideSplash(); } catch (e) { showGate("error", esc(errText(e))); return; }
+  try { pendingEq = pendingEq || localStorage.getItem("pendingEq"); localStorage.removeItem("pendingEq"); } catch {}
+  if (pendingEq) { openEqByIid(pendingEq); pendingEq = null; }
+  window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (h.startsWith("eq/")) openEqByIid(decodeURIComponent(h.slice(3))); });
   setTimeout(() => checkVersion(true), 3000);
   setInterval(() => { if (document.visibilityState === "visible") refresh(true); }, 60000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(true); });
