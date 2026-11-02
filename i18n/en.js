@@ -29,6 +29,8 @@ const EX = {
   "가입 요청이 장비 관리자에게 전달됐어요. 승인되면 이 화면을 새로 고쳐 주세요.": "Your sign-up request was sent to the equipment admin. After approval, please refresh this screen.",
   "사용이 중지된 계정이에요": "This account is disabled", "다시 써야 한다면 장비 관리자에게 문의해 주세요.": "If you need access again, please contact the equipment admin.",
   "불러오지 못했어요": "Could not load",
+  "장비 관리자로 지정됐어요. 관리자 메뉴가 열렸어요.": "You are now an equipment admin. The admin menu is now open.",
+  "권한이 신청자로 바뀌었어요. 관리자 메뉴가 닫혔어요.": "Your role changed to applicant. The admin menu is now closed.",
   "다른 기기에서 같은 계정으로 로그인해서 이 기기는 로그아웃됐어요. 한 계정은 동시에 2대까지 쓸 수 있어요.": "You were logged out because the same account logged in on another device. One account can be used on up to 2 devices at a time.",
 
   // 메뉴

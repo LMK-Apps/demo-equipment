@@ -396,6 +396,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.053", date: "2026-11-02", items: ["관리자가 역할(장비 관리자↔신청자)이나 상태(사용 중지 등)를 바꾸면, 상대방 앱이 1분 안에(또는 앱을 다시 볼 때) 새 권한으로 다시 열림. 바뀐 권한은 안내로 알려 줌", "표시 이름을 바꾸면 상대방 화면 오른쪽 위 이름도 1분 안에 바뀜"] },
   { v: "v0.052", date: "2026-11-02", items: ["관리자 [사용자] 탭: 표 머리글(표시 이름·카카오 이름·상태·역할·최근 로그인)을 누르면 그 기준으로 정렬. 한 번 더 누르면 반대 순서"] },
   { v: "v0.051", date: "2026-11-02", items: [
     "영어 화면의 앱 이름을 ‘DEMO Pool’로 정함 (부제는 LMK / Laerdal Medical Korea)",
@@ -813,8 +814,23 @@ function deviceOf(ua = "") {
   const br = /KAKAOTALK/i.test(ua) ? "카카오톡 앱" : /SamsungBrowser/.test(ua) ? "삼성 인터넷" : /Edg\//.test(ua) ? "Edge" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /FxiOS|Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "";
   return br ? `${os} · ${br}` : os;
 }
+// 관리자가 내 역할·상태를 바꾸면 1분 안에(또는 앱을 다시 볼 때) 새 권한으로 앱을 다시 연다
+async function roleGuard() {
+  try {
+    const { data, error } = await sb.from("profiles").select("role,status,display_name").eq("id", me.id);
+    if (error || !data) return false;
+    const p = data[0];
+    if (!p || p.status !== "active" || p.role !== profile.role) {
+      try { sessionStorage.setItem("roleChanged", p?.status === "active" ? p.role : "-"); } catch {}
+      location.reload(); return true;
+    }
+    if (p.display_name !== profile.display_name) { profile.display_name = p.display_name; $("#meName").textContent = p.display_name || "나"; }
+  } catch {}
+  return false;
+}
 async function refresh(quiet) {
   if (await sessionGuard(false)) return;
+  if (await roleGuard()) return;
   try { await loadAll(); softRender(); }
   catch (e) { if (!quiet) fail(e); }
   checkVersion();
@@ -2250,6 +2266,8 @@ async function start() {
   try { pendingEq = pendingEq || localStorage.getItem("pendingEq"); localStorage.removeItem("pendingEq"); } catch {}
   if (pendingEq) { openEqByIid(pendingEq); pendingEq = null; }
   window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (h.startsWith("eq/")) openEqByIid(decodeURIComponent(h.slice(3))); });
+  let rc = null; try { rc = sessionStorage.getItem("roleChanged"); sessionStorage.removeItem("roleChanged"); } catch {}
+  if (rc === "admin" || rc === "applicant") toast(rc === "admin" ? "장비 관리자로 지정됐어요. 관리자 메뉴가 열렸어요." : "권한이 신청자로 바뀌었어요. 관리자 메뉴가 닫혔어요.");
   setTimeout(() => checkVersion(true), 3000);
   setInterval(() => { if (document.visibilityState === "visible") refresh(true); }, 60000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(true); });
