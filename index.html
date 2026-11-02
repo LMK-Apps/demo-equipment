@@ -310,6 +310,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.042", date: "2026-11-02", db: "016_session_limit_login_log.sql", items: [
+    "한 계정은 동시에 2대까지 로그인. 3번째 기기로 로그인하면 가장 오래된 로그인이 끊기고, 끊긴 기기에는 ‘다른 기기에서 로그인해서 로그아웃됐어요’ 안내",
+    "관리자 [사용자] 탭: ‘최근 로그인’(시각·기기)과 [로그인 기록] 추가. 7일 안에 3종류 넘는 기기로 로그인하면 빨간색으로 표시",
+    "로그인 기록은 시각과 기기·브라우저 이름만 남기고 IP는 남기지 않음. 장비 관리자만 볼 수 있고 90일 뒤 자동 삭제",
+  ] },
   { v: "v0.041", date: "2026-11-02", items: [
     "장비 탭 [여러 대 선택] (관리자): 장비를 여러 대 골라 보관 위치와 상태를 한 번에 변경. ‘표시된 장비 모두 선택’으로 필터 결과를 한꺼번에 고를 수 있음",
     "일괄 변경 때 대여 중이거나 반납 확인을 기다리는 장비는 상태를 바꾸지 않음 (출고·반납 확인으로 처리). 앞으로 예약이 있는 장비를 점검·수리·폐기로 바꾸면 미리 알려 줌",
@@ -589,7 +594,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { fl
 
 let session = null, profile = null;
 let me = { id: null, isAdmin: false };
-let equipment = [], loans = [], shipments = [], people = [];
+let equipment = [], loans = [], shipments = [], people = [], logins = [];
 let view = (location.hash || "").slice(1) || "home";
 let eqSel = null;   // 장비 여러 대 선택 모드 (관리자). null이면 꺼짐
 let filters = { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", ledgerQ: "", ledgerSt: "open" };
@@ -650,8 +655,34 @@ async function loadAll() {
     must(sb.from("profiles").select("id,display_name,kakao_name,role,status,created_at").order("created_at")),
   ]);
   equipment = e; loans = l; shipments = s; people = p;
+  if (me.isAdmin) {   // 로그인 기록은 관리자만. 표가 없거나 실패해도 앱은 계속 쓴다
+    const r = await sb.from("login_log").select("user_id,at,user_agent,kicked").order("at", { ascending: false }).limit(1000);
+    logins = r.error ? [] : r.data || [];
+  }
+}
+
+/* ---------- 기기 2대 제한 ---------- */
+// 로그인 직후와 1분마다 확인한다. 다른 기기 때문에 끊긴 로그인이면 이 기기에서 로그아웃한다.
+async function sessionGuard(first) {
+  try {
+    const { data, error } = await sb.rpc("session_check");
+    if (error || !data) return false;
+    if (data.status === "revoked") {
+      try { sessionStorage.setItem("kicked", "1"); } catch {}
+      await sb.auth.signOut({ scope: "local" }); location.reload(); return true;
+    }
+    if (first && data.status === "new" && data.kicked > 0) toast(`다른 기기의 로그인 ${data.kicked}개를 끊었어요. 한 계정은 동시에 2대까지 쓸 수 있어요.`);
+  } catch {}
+  return false;
+}
+// 브라우저가 알려 주는 정보로 기기·브라우저 이름을 짧게 만든다
+function deviceOf(ua = "") {
+  const os = /iPad/.test(ua) ? "iPad" : /iPhone/.test(ua) ? "iPhone" : /Android/.test(ua) ? "Android" : /Windows/.test(ua) ? "Windows PC" : /Macintosh|Mac OS X/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "기타 기기";
+  const br = /KAKAOTALK/i.test(ua) ? "카카오톡 앱" : /SamsungBrowser/.test(ua) ? "삼성 인터넷" : /Edg\//.test(ua) ? "Edge" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /FxiOS|Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "";
+  return br ? `${os} · ${br}` : os;
 }
 async function refresh(quiet) {
+  if (await sessionGuard(false)) return;
   try { await loadAll(); softRender(); }
   catch (e) { if (!quiet) fail(e); }
   checkVersion();
@@ -1280,20 +1311,38 @@ function vUsers() {
   <div class="head"><div class="grow"><h2>사용자</h2><p class="sub">카카오로 처음 로그인하면 ‘승인 대기’로 올라와요. 사내 메신저로 본인인지 확인한 뒤 승인해 주세요. 승인할 때 실명이나 이니셜로 표시 이름을 정할 수 있어요. 본인 계정의 권한은 바꿀 수 없어요.</p></div></div>
   ${admins < 2 ? `<div class="notice">장비 관리자가 ${admins}명이에요. 관리자를 2명 이상 두면 한 사람이 자리를 비워도 승인과 점검을 할 수 있어요.</div>` : ""}
   <div class="tbl-wrap"><table>
-    <thead><tr><th>표시 이름</th><th>카카오 이름</th><th>상태</th><th>역할</th><th>가입일</th><th></th></tr></thead>
+    <thead><tr><th>표시 이름</th><th>카카오 이름</th><th>상태</th><th>역할</th><th>최근 로그인</th><th></th></tr></thead>
     <tbody>${list.map(p => { const self = p.id === me.id; return `<tr>
       <td>${esc(p.display_name || "(이름 없음)")}${self ? ` <span class="meta">(나)</span>` : ""}</td>
       <td class="meta">${esc(p.kakao_name || "–")}</td>
       <td>${pill(USER_STATUS, p.status)}</td>
       <td>${p.role === "admin" ? `<span class="pill p-acc">장비 관리자</span>` : `<span class="pill">신청자</span>`}</td>
-      <td class="mono">${(p.created_at || "").slice(0, 10)}</td>
-      <td>${[`<button class="btn sm" data-act="uName" data-uid="${p.id}">이름 수정</button>`].concat(self ? [] : [
+      <td>${loginCell(p.id)}</td>
+      <td>${[`<button class="btn sm" data-act="uName" data-uid="${p.id}">이름 수정</button>`, `<button class="btn sm" data-act="uLogins" data-uid="${p.id}">로그인 기록</button>`].concat(self ? [] : [
         p.status === "pending" ? `<button class="btn sm pri" data-act="uApprove" data-uid="${p.id}">승인</button>` : "",
         p.status === "disabled" ? `<button class="btn sm pri" data-act="uStatus" data-uid="${p.id}" data-v="active">다시 사용</button>` : "",
         p.status !== "disabled" ? `<button class="btn sm danger" data-act="uStatus" data-uid="${p.id}" data-v="disabled">${p.status === "pending" ? "거절" : "사용 중지"}</button>` : "",
         p.status === "active" ? `<button class="btn sm" data-act="uRole" data-uid="${p.id}" data-v="${p.role === "admin" ? "applicant" : "admin"}">${p.role === "admin" ? "관리자 해제" : "관리자로 지정"}</button>` : "",
       ]).join(" ")}</td></tr>`; }).join("")}</tbody>
   </table></div>`;
+}
+
+// 최근 로그인: 마지막 로그인 시각·기기, 최근 7일 기기 수 (많으면 강조)
+function loginCell(uid) {
+  const mine = logins.filter(x => x.user_id === uid);
+  if (!mine.length) return `<span class="meta">기록 없음</span>`;
+  const week = new Date(Date.now() - 7 * 864e5).toISOString();
+  const devs = new Set(mine.filter(x => x.at >= week).map(x => deviceOf(x.user_agent))).size;
+  return `<span class="mono">${fmtT(mine[0].at)}</span><div class="meta">${esc(deviceOf(mine[0].user_agent))}${devs > 2 ? ` · <b class="t-bad">7일간 기기 ${devs}종</b>` : ""}</div>`;
+}
+function loginLog(uid) {
+  const p = people.find(x => x.id === uid) || {}, rows = logins.filter(x => x.user_id === uid).slice(0, 50);
+  modal(`<h2>로그인 기록</h2><p class="meta">${esc(p.display_name || "")}${p.kakao_name ? ` (카카오: ${esc(p.kakao_name)})` : ""} · 최근 50건 · 90일이 지나면 지워져요. 한 계정은 동시에 2대까지 로그인할 수 있고, 3번째 기기로 로그인하면 가장 오래된 로그인이 끊겨요.</p>
+    ${rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>시각</th><th>기기</th></tr></thead><tbody>${rows.map(x => `<tr>
+      <td class="mono">${fmtT(x.at)}</td><td>${esc(deviceOf(x.user_agent))}${x.kicked ? `<div class="meta">다른 로그인 ${x.kicked}개를 끊음</div>` : ""}</td></tr>`).join("")}</tbody></table></div>
+    <details><summary class="meta">브라우저 원문 보기</summary><div class="meta mono" style="margin-top:6px;word-break:break-all;line-height:1.6">${rows.slice(0, 10).map(x => `${fmtT(x.at)} ${esc(x.user_agent || "–")}`).join("<br>")}</div></details>`
+      : `<div class="empty">아직 기록이 없어요. 이 기능을 켠 뒤 로그인한 것부터 남아요.</div>`}
+    <div class="actions"><button class="btn" data-close-btn>닫기</button></div>`);
 }
 
 /* ---------- 모달 ---------- */
@@ -1846,6 +1895,7 @@ document.addEventListener("click", e => {
       break;
     }
     case "csv": exportCsv(); break;
+    case "uLogins": loginLog(a.dataset.uid); break;
     case "uName": case "uApprove": {
       const p = people.find(x => x.id === a.dataset.uid); if (!p) break;
       nameForm(p, a.dataset.act === "uApprove");
@@ -1926,11 +1976,14 @@ async function start() {
   const { data } = await sb.auth.getSession();
   session = data.session;
   if (!session) {
-    showGate("login", oauthErr ? `<div class="notice bad">로그인하지 못했어요: ${esc(oauthErr)}</div>` : "");
+    let kicked = false; try { kicked = sessionStorage.getItem("kicked") === "1"; sessionStorage.removeItem("kicked"); } catch {}
+    showGate("login", oauthErr ? `<div class="notice bad">로그인하지 못했어요: ${esc(oauthErr)}</div>`
+      : kicked ? `<div class="notice">다른 기기에서 같은 계정으로 로그인해서 이 기기는 로그아웃됐어요. 한 계정은 동시에 2대까지 쓸 수 있어요.</div>` : "");
     return;
   }
   if (location.search) { try { history.replaceState(null, "", location.pathname + location.hash); } catch {} }
   me.id = session.user.id;
+  if (await sessionGuard(true)) return;
   try {
     const rows = await must(sb.from("profiles").select("*").eq("id", me.id));
     profile = rows[0] || null;
