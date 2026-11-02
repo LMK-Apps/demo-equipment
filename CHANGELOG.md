@@ -4,6 +4,7 @@
 
 | 버전 | 날짜 | DB 변경 |
 | --- | --- | --- |
+| v0.040 | 2026-11-02 | `015_digest_friday_checkouts.sql` |
 | v0.039 | 2026-11-02 | `014_digest_tomorrow_returns.sql` |
 | v0.038 | 2026-11-02 | `013_bundle_return_edit_notify.sql` |
 | v0.037 | 2026-11-02 | 없음 |
@@ -43,6 +44,12 @@
 | v0.003 | 2026-10-28 | `001_return_form.sql` |
 | v0.002 | 2026-10-28 | 없음 |
 | v0.001 | 2026-10-27 | `schema.sql` |
+
+## v0.040 · 2026-11-02
+
+- Teams 아침 요약의 ‘출고 예정’도 금요일에는 토·일·월 출고를 날짜와 함께 표시 (월요일 출고가 빠지던 문제)
+
+DB 변경: `015_digest_friday_checkouts.sql`를 SQL Editor에서 먼저 실행한다.
 
 ## v0.039 · 2026-11-02
 
