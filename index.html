@@ -13,6 +13,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>html.splashing,html.splashing body{background:#0f6b5c}@media (prefers-color-scheme:dark){html.splashing,html.splashing body{background:#0a4038}}</style>
+<script>
+/* 언어: ?lang=en|ko 로 바꾸면 이 기기에 기억한다. 공개 전(I18N_PUBLIC=false)에는 고른 사람만 영어로 본다. */
+window.I18N_PUBLIC = false;
+window.LANG = (() => {
+  let q = null, saved = null;
+  try { q = new URLSearchParams(location.search).get("lang"); if (q === "en" || q === "ko") localStorage.setItem("lang", q); saved = localStorage.getItem("lang"); } catch {}
+  if (saved === "en" || saved === "ko") return saved;
+  if (!window.I18N_PUBLIC) return "ko";
+  return /^ko\b/i.test(navigator.language || "ko") ? "ko" : "en";
+})();
+if (window.LANG === "en") { document.documentElement.lang = "en"; document.write('<script src="i18n/en.js"><\/script>'); }
+</script>
 <script src="vendor/qrcode-generator-2.0.4.js" integrity="sha384-e9EFD6BGC90bkW9aDV5xbbBfzwN7G8YImHao2lfLVKV/hPB0E0go+H3I64h7oHtA" crossorigin="anonymous" defer></script>
 <script src="vendor/supabase-js-2.117.3.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
 <style>
@@ -325,18 +337,65 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
   </div></header>
   <nav class="tabs" aria-label="화면"><div class="wrap" role="tablist" id="tabs"></div></nav>
   <main class="wrap" id="main"><div class="boot">데이터를 불러오는 중…</div></main>
-  <footer class="app-foot"><a href="manual/" target="_blank" rel="noopener" id="manualLink">📖 사용 설명서</a><span>문의는 장비 관리자에게</span></footer>
+  <footer class="app-foot"><a href="manual/" target="_blank" rel="noopener" id="manualLink">📖 사용 설명서</a><span>문의는 장비 관리자에게</span><span id="langSw"></span></footer>
 </div>
 <div id="modalRoot"></div>
 <div class="toast" id="toast" hidden></div>
 <div class="upd" id="upd" role="status" hidden><span id="updTxt">새 버전이 있어요.</span><button type="button" id="updGo">새로 고침</button><button type="button" class="x" id="updX" aria-label="닫기">✕</button></div>
 
 <script>
+/* ===== 영어 화면: 화면에 나오는 한국어 글자를 사전(i18n/en.js)으로 바꾼다. 한국어일 때는 아무것도 하지 않는다. ===== */
+(() => {
+  const D = window.LANG === "en" && window.I18N_EN; if (!D) return;
+  const H = /[가-힣]/, SKIP = new Set(["SCRIPT", "STYLE", "TEXTAREA", "PRE", "CODE"]), miss = window.__i18nMissing = new Set();
+  const SEPS = [" · ", " → ", " – ", " / ", ": ", " ~ ", ", "];
+  const core = s => {
+    if (!H.test(s)) return s;
+    if (D.EX[s] != null) return D.EX[s];
+    const pre = s.match(/^(·|↳)\s+/); if (pre) return pre[0] + core(s.slice(pre[0].length));
+    const nums = []; const t = s.replace(/\d+/g, m => (nums.push(m), "#"));
+    if (D.TPL[t] != null) { let i = 0; const v = D.TPL[t]; return /\{\d\}/.test(v) ? v.replace(/\{(\d)\}/g, (_, k) => nums[k]) : v.replace(/#/g, () => nums[i++] ?? "#"); }
+    for (const [re, fn] of D.RULES) { const m = s.match(re); if (m && fn) return fn(m, core); }
+    for (const sep of SEPS) if (s.includes(sep)) return s.split(sep).map(p => core(p.trim())).join(sep);
+    let out = D.day(s); for (const [k, v] of D.WORDS) if (out.includes(k)) out = out.split(k).join(v);
+    if (H.test(out)) miss.add(s);
+    return out;
+  };
+  const tr = raw => { if (!raw || !H.test(raw)) return raw; const a = raw.match(/^\s*/)[0], b = raw.match(/\s*$/)[0]; return a + core(raw.trim()) + b; };
+  window.tr = tr;
+  const skip = el => { for (let e = el; e && e !== document; e = e.parentElement) { if (SKIP.has(e.tagName) || (e.dataset && "i18nSkip" in e.dataset)) return true; } return false; };
+  const fix = n => {
+    if (n.nodeType === 3) {
+      if (!H.test(n.nodeValue) || skip(n.parentElement)) return;
+      const p = n.parentElement;
+      if (p && p.tagName === "OPTION" && !p.hasAttribute("value")) p.setAttribute("value", p.textContent);   // DB로 가는 값은 한국어 그대로
+      const v = tr(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v;
+      return;
+    }
+    if (n.nodeType !== 1 || (n.dataset && "i18nSkip" in n.dataset)) return;
+    if (SKIP.has(n.tagName)) { if (n.tagName === "TEXTAREA") { const v = n.getAttribute("placeholder"); if (v && H.test(v)) { const w = tr(v); if (w !== v) n.setAttribute("placeholder", w); } } return; }
+    for (const a of ["placeholder", "title", "aria-label"]) { const v = n.getAttribute(a); if (v && H.test(v)) { const w = tr(v); if (w !== v) n.setAttribute(a, w); } }
+    if (n.tagName === "OPTION" && !n.hasAttribute("value") && H.test(n.textContent)) n.setAttribute("value", n.textContent);
+    for (const c of n.childNodes) fix(c);
+  };
+  const run = root => fix(root);
+  new MutationObserver(ms => { for (const m of ms) {
+    if (m.type === "characterData") fix(m.target);
+    else if (m.type === "attributes") { const el = m.target, v = el.getAttribute(m.attributeName); if (v && H.test(v)) { const w = tr(v); if (w !== v) el.setAttribute(m.attributeName, w); } }
+    else m.addedNodes.forEach(fix);
+  } }).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["placeholder", "title", "aria-label"] });
+  run(document.body); run(document.querySelector("title"));
+})();
+
 /* ===== 설정: Supabase 프로젝트 주소와 공개 키 (공개돼도 되는 값) ===== */
 const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.050", date: "2026-11-02", items: [
+    "영어 화면 준비 (아직 숨김): 주소 끝에 ?lang=en을 붙여 열면 그 기기에서 영어로 보임. ?lang=ko로 되돌림",
+    "영어 모드에서도 분류·목적·위치처럼 DB로 가는 값은 한국어로 저장됨. Teams 알림, 물류사 메일 문안, 버전 기록, 사용 설명서는 한국어 그대로",
+  ] },
   { v: "v0.049", date: "2026-11-02", items: [
     "사용 설명서 ‘시작하기’에 홈 화면 추가 안내 그림(아이폰·안드로이드) 추가",
   ] },
@@ -693,7 +752,7 @@ function showGate(kind, extra = "") {
     disabled: `<h1>사용이 중지된 계정이에요</h1><p>다시 써야 한다면 장비 관리자에게 문의해 주세요.</p><button class="btn" id="gateLogout">로그아웃</button>`,
     error: `<h1>불러오지 못했어요</h1><p>${extra}</p><button class="btn pri" id="reload">다시 시도</button><button class="btn" id="gateLogout">로그아웃</button>`,
   }[kind];
-  g.innerHTML = `<div class="card">${body}<a class="gate-guide" href="${MANUAL_URL}" target="_blank" rel="noopener">📖 사용 설명서 보기</a><div><button class="ver" data-act="changelog" title="버전 기록 보기">${APP_VERSION} · ${APP_BUILD}</button></div></div>`;
+  g.innerHTML = `<div class="card">${body}<a class="gate-guide" href="${MANUAL_URL}" target="_blank" rel="noopener">📖 사용 설명서 보기</a>${langSwitch() ? `<div class="meta">${langSwitch()}</div>` : ""}<div><button class="ver" data-act="changelog" title="버전 기록 보기">${APP_VERSION} · ${APP_BUILD}</button></div></div>`;
   $("#kakaoLogin")?.addEventListener("click", async () => {
     const { error } = await sb.auth.signInWithOAuth({ provider: "kakao", options: { redirectTo: location.origin + location.pathname } });
     if (error) fail(error);
@@ -703,7 +762,13 @@ function showGate(kind, extra = "") {
 }
 async function logout() { await sb.auth.signOut(); location.hash = ""; location.reload(); }
 $("#logout").addEventListener("click", logout);
-$("#manualLink").href = MANUAL_URL;   // 버전을 붙여 예전 매뉴얼이 보이지 않게
+$("#manualLink").href = MANUAL_URL;
+// 언어 바꾸기 링크: 공개 전에는 영어를 고른 기기에만 보인다
+function langSwitch() {
+  if (!window.I18N_PUBLIC && window.LANG !== "en") return "";
+  return `<span data-i18n-skip><a href="?lang=ko" ${window.LANG === "ko" ? 'aria-current="true"' : ""}>한국어</a> · <a href="?lang=en" ${window.LANG === "en" ? 'aria-current="true"' : ""}>English</a></span>`;
+}
+$("#langSw").innerHTML = langSwitch();   // 버전을 붙여 예전 매뉴얼이 보이지 않게
 
 /* ---------- 데이터 ---------- */
 async function loadAll() {
@@ -1516,7 +1581,7 @@ function modal(html, onMount) {
 }
 function showChangelog() {
   modal(`<h2>버전 기록</h2><p class="meta">지금 보고 있는 버전은 <b>${APP_VERSION}</b>이에요. 새로 올렸는데 번호가 그대로면 강력 새로 고침(PC: Ctrl+Shift+R)을 해 주세요.</p>
-    <div class="log" style="display:flex;flex-direction:column;gap:14px;max-height:60vh;overflow:auto">${CHANGELOG.map(c => `<div>
+    ${window.LANG === "en" ? `<p class="meta">버전 기록은 한국어로만 적혀 있어요.</p>` : ""}<div class="log" data-i18n-skip style="display:flex;flex-direction:column;gap:14px;max-height:60vh;overflow:auto">${CHANGELOG.map(c => `<div>
       <h3><span class="mono">${esc(c.v)}</span><span class="meta">${esc(c.date)}</span>${c.v === APP_VERSION ? `<span class="pill p-acc">현재</span>` : ""}</h3>
       <ul>${c.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>
       ${c.db ? `<div class="meta" style="margin-top:4px">DB 변경: <span class="mono">${esc(c.db)}</span></div>` : ""}</div>`).join("")}</div>
