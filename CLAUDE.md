@@ -7,4 +7,4 @@
 - 비밀 키(`sb_secret_`, `service_role`), DB 비밀번호는 절대 커밋하지 않는다. 공개 키(`sb_publishable_`)만 허용한다.
 - `main`에 올리면 GitHub Pages로 바로 배포된다. 올리기 전에 스크립트 문법 검사와 브라우저 확인을 한다.
 - 사용자 안내 문구는 한국어, 짧은 문장, 존댓말 안내문("~해 주세요")으로 쓴다.
-- 사용자 매뉴얼은 `manual/manual.md`가 원본이다. 고친 뒤 `python3 tools/make_manual.py`로 `manual/index.html`을 다시 만든다. 앱 맨 아래와 로그인 화면의 '사용 설명서' 링크가 `manual/`을 연다. 그림은 `manual/img/`에 둔다.
+- 사용자 매뉴얼은 `manual/manual.md`가 원본이다. 고친 뒤 `python3 tools/make_manual.py`로 `manual/index.html`을 다시 만든다. 앱 맨 아래와 로그인 화면의 '사용 설명서' 링크가 `manual/`을 연다. 그림은 `manual/img/`에 둔다. 매뉴얼을 만들 때 CHANGELOG 맨 위 버전과 오늘 날짜가 ‘최종 업데이트’로 들어가므로, 앱 버전 항목을 먼저 추가한 뒤 만든다.

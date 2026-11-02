@@ -3,6 +3,7 @@
 사용법: python3 tools/make_manual.py   (markdown 패키지 필요: pip install markdown)
 manual/index.html은 직접 고치지 않는다. manual.md를 고친 뒤 다시 만든다.
 """
+import datetime
 import html
 import pathlib
 import re
@@ -23,8 +24,17 @@ def slug(text, used):
     return s
 
 
+def app_version():
+    """index.html CHANGELOG 맨 위 버전 (매뉴얼이 어느 앱 버전 기준인지)"""
+    m = re.search(r'const CHANGELOG = \[\s*\{ v: "(v[\d.]+)"', (ROOT / "index.html").read_text(encoding="utf-8"))
+    return m.group(1) if m else "v0.000"
+
+
 def build():
     md = SRC.read_text(encoding="utf-8")
+    ver = app_version()
+    today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d")
+    stamp = f'<p class="stamp">최종 업데이트 <b>{today}</b> · 앱 <b>{ver}</b> 기준</p>'
     title = re.search(r"^# (.+)$", md, re.M).group(1).strip()
     body = markdown.markdown(md, extensions=["tables", "sane_lists"])
     used, toc = set(), []
@@ -37,7 +47,8 @@ def build():
 
     body = re.sub(r"<h2>(.*?)</h2>", add_id, body)
     body = body.replace("<table>", '<div class="tw"><table>').replace("</table>", "</table></div>")
-    body = re.sub(r'<img alt="([^"]*)" src="([^"]+)" ?/?>', r'<figure><img src="\2" alt="\1" loading="lazy"><figcaption>\1</figcaption></figure>', body)
+    # 그림 주소에 버전을 붙여 브라우저가 예전 그림을 다시 쓰지 않게 한다
+    body = re.sub(r'<img alt="([^"]*)" src="([^"]+)" ?/?>', lambda m: f'<figure><img src="{m.group(2)}?v={ver}" alt="{m.group(1)}" loading="lazy"><figcaption>{m.group(1)}</figcaption></figure>', body)
     body = re.sub(r"<p>(<figure>.*?</figure>)</p>", r"\1", body, flags=re.S)
     toc_html = "".join(f'<a href="#{i}">{html.escape(t)}</a>' for i, t in toc)
     page = f"""<!doctype html>
@@ -76,20 +87,21 @@ figure{{margin:16px 0}}
 figure img{{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}}
 figcaption{{font-size:13px;color:var(--muted);margin-top:6px}}
 ol,ul{{padding-left:22px}} li{{margin:4px 0}}
+.stamp{{margin:-2px 0 0;font-size:13.5px;color:var(--muted)}}
 .foot{{margin-top:48px;font-size:13px;color:var(--muted);text-align:center}}
 </style>
 </head>
 <body>
 <div class="top"><b>데모콕 사용 설명서</b><a href="../">앱으로 돌아가기 →</a></div>
 <main>
-{body.replace('</h1>', '</h1><nav class="toc">' + toc_html + '</nav>', 1)}
-<p class="foot">이 페이지는 manual/manual.md에서 자동으로 만들어져요.</p>
+{body.replace('</h1>', '</h1>' + stamp + '<nav class="toc">' + toc_html + '</nav>', 1)}
+<p class="foot">최종 업데이트 {today} · 앱 {ver} 기준<br>내용이 앱과 다르면 장비 관리자에게 알려 주세요.</p>
 </main>
 </body>
 </html>
 """
     OUT.write_text(page, encoding="utf-8")
-    print(f"{OUT.relative_to(ROOT)}: {len(toc)} sections")
+    print(f"{OUT.relative_to(ROOT)}: {len(toc)} sections · {today} · {ver}")
 
 
 if __name__ == "__main__":
