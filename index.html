@@ -192,6 +192,10 @@ tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .modal>.modal-x+h2{padding-right:40px}
 .modal .actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 pre.mail{white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;background:var(--sunk);border-radius:6px;padding:12px;margin:0;max-height:320px;overflow:auto}
+.upd{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:90;display:flex;align-items:center;gap:10px;background:var(--accent);color:var(--accent-ink);padding:8px 8px 8px 14px;border-radius:999px;font-size:13px;box-shadow:0 4px 14px #0003;width:max-content;max-width:calc(100% - 32px)}
+.upd span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.upd button{background:var(--accent-ink);color:var(--accent);border:0;border-radius:999px;padding:5px 12px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+.upd .x{background:transparent;color:inherit;padding:5px 6px;font-weight:400;opacity:.8}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
 .gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
 .gate .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;max-width:380px;width:100%;padding:28px 24px;display:flex;flex-direction:column;gap:16px;text-align:center}
@@ -286,6 +290,7 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
 </div>
 <div id="modalRoot"></div>
 <div class="toast" id="toast" hidden></div>
+<div class="upd" id="upd" role="status" hidden><span id="updTxt">새 버전이 있어요.</span><button type="button" id="updGo">새로 고침</button><button type="button" class="x" id="updX" aria-label="닫기">✕</button></div>
 
 <script>
 /* ===== 설정: Supabase 프로젝트 주소와 공개 키 (공개돼도 되는 값) ===== */
@@ -293,6 +298,9 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.037", date: "2026-11-02", items: [
+    "새 버전 안내: 앱을 쓰는 중에 새 버전이 배포되면 화면 위에 ‘새 버전이 있어요 [새로 고침]’ 띠 표시 (5분에 한 번 확인)",
+  ] },
   { v: "v0.036", date: "2026-10-30", items: [
     "첫 로딩 화면 추가: 초록 바탕에 ‘콕’과 노란 점, 물결이 한 번 퍼짐 (아이콘과 같은 모양)",
     "데이터를 다 불러오면 바로 닫힘 (최소 0.6초, 0.2초 동안 서서히). 8초가 넘으면 ‘다시 시도’ 버튼 표시",
@@ -616,7 +624,28 @@ async function loadAll() {
 async function refresh(quiet) {
   try { await loadAll(); softRender(); }
   catch (e) { if (!quiet) fail(e); }
+  checkVersion();
 }
+
+/* ---------- 새 버전 안내 ---------- */
+// 배포된 index.html의 첫 CHANGELOG 버전을 읽어 지금 화면보다 새것이면 위에 안내 띠를 띄운다.
+// 5분에 한 번 이하로만 확인한다. [✕]로 닫으면 그 버전은 다시 묻지 않는다.
+const verNum = v => Number(String(v).replace(/^v/, "")) || 0;
+let verChecked = 0, verDismissed = "";
+async function checkVersion(force) {
+  if (!force && Date.now() - verChecked < 5 * 60 * 1000) return;
+  verChecked = Date.now();
+  try {
+    const res = await fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return;
+    const m = (await res.text()).match(/const CHANGELOG = \[\s*\{ v: "(v[\d.]+)"/);
+    if (!m || verNum(m[1]) <= verNum(APP_VERSION) || m[1] === verDismissed) return;
+    $("#updTxt").textContent = `새 버전(${m[1]})이 있어요.`;
+    $("#upd").dataset.v = m[1]; $("#upd").hidden = false;
+  } catch {}
+}
+$("#updGo").addEventListener("click", () => location.reload());
+$("#updX").addEventListener("click", () => { verDismissed = $("#upd").dataset.v || ""; $("#upd").hidden = true; });
 
 /* ---------- 탭 ---------- */
 // 윗줄: 모든 사용자 · 아랫줄: 장비 관리자만
@@ -1707,6 +1736,7 @@ async function start() {
   const r = $("#meRole"); r.textContent = me.isAdmin ? "장비 관리자" : "신청자"; r.classList.toggle("admin", me.isAdmin);
   renderTabs();
   try { await loadAll(); render(); hideSplash(); } catch (e) { showGate("error", esc(errText(e))); return; }
+  setTimeout(() => checkVersion(true), 3000);
   setInterval(() => { if (document.visibilityState === "visible") refresh(true); }, 60000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(true); });
 }
