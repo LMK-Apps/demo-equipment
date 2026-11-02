@@ -182,6 +182,12 @@ tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .r2-note{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .c-ok{color:var(--ok)}.c-minor{color:var(--warn)}.c-broken,.c-missing{color:var(--bad)}
 .r2-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none}
+/* 장비 여러 대 선택 (관리자) */
+.r2-chk{flex:none;width:22px;height:22px;border-radius:6px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--accent-ink)}
+.r2.sel{background:var(--accent-soft)}.r2.sel:hover{background:var(--accent-soft)}
+.r2.sel .r2-chk{background:var(--accent);border-color:var(--accent)}
+.bulkbar{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:0 6px 18px #0002}
+.bulkbar b{margin-right:auto}
 .pick{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);max-height:420px;overflow:auto}
 .pick label{display:flex;gap:10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);cursor:pointer}
 .pick label:first-child{border-top:0}
@@ -304,6 +310,10 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.041", date: "2026-11-02", items: [
+    "장비 탭 [여러 대 선택] (관리자): 장비를 여러 대 골라 보관 위치와 상태를 한 번에 변경. ‘표시된 장비 모두 선택’으로 필터 결과를 한꺼번에 고를 수 있음",
+    "일괄 변경 때 대여 중이거나 반납 확인을 기다리는 장비는 상태를 바꾸지 않음 (출고·반납 확인으로 처리). 앞으로 예약이 있는 장비를 점검·수리·폐기로 바꾸면 미리 알려 줌",
+  ] },
   { v: "v0.040", date: "2026-11-02", db: "015_digest_friday_checkouts.sql", items: [
     "Teams 아침 요약의 ‘출고 예정’도 금요일에는 토·일·월 출고를 날짜와 함께 표시 (월요일 출고가 빠지던 문제)",
   ] },
@@ -581,6 +591,7 @@ let session = null, profile = null;
 let me = { id: null, isAdmin: false };
 let equipment = [], loans = [], shipments = [], people = [];
 let view = (location.hash || "").slice(1) || "home";
+let eqSel = null;   // 장비 여러 대 선택 모드 (관리자). null이면 꺼짐
 let filters = { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", ledgerQ: "", ledgerSt: "open" };
 // 기본 사용 기간: 3일 (시작일 포함, 시작일 + 2일). 반납 예정일을 직접 고르면 그 값을 유지한다
 const DEFAULT_DAYS = 3;
@@ -684,7 +695,7 @@ function renderTabs() {
     + (me.isAdmin ? `<div class="tab-row admin"><span class="tab-label">관리자</span>${ADMIN_TABS().map(btn).join("")}</div>` : "");
 }
 $("#tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (!b) return; go(b.dataset.tab); });
-function go(v) { if (v !== "request" && draft.edit) draft = newDraft(); view = v; try { history.replaceState(null, "", "#" + v); } catch {} render(); window.scrollTo(0, 0); }
+function go(v) { if (v !== "request" && draft.edit) draft = newDraft(); if (v !== "equip") eqSel = null; view = v; try { history.replaceState(null, "", "#" + v); } catch {} render(); window.scrollTo(0, 0); }
 
 /* ---------- 화면 ---------- */
 function render() {
@@ -946,7 +957,7 @@ function vEquip() {
   const anyF = !!(filters.eqQ.trim() || filters.eqCat || filters.eqLoc || filters.eqSt);
   return `
   <div class="head"><div class="grow"><h2>장비</h2><p class="sub">장비 ${equipment.length}대. 보관 위치와 최근 점검 결과는 반납 신청과 관리자 점검 때 자동으로 바뀌어요. 행을 누르면 자세히 볼 수 있어요.</p></div>
-    ${me.isAdmin ? `<button class="btn pri" data-act="eqNew">장비 등록</button>` : ""}</div>
+    ${me.isAdmin ? `<div class="toolbar" style="margin:0"><button class="btn" data-act="eqSelMode">${eqSel ? "선택 끝내기" : "여러 대 선택"}</button><button class="btn pri" data-act="eqNew">장비 등록</button></div>` : ""}</div>
   <div class="stats">
     <button class="stat stat-btn ${anyF ? "" : "on"}" data-act="eqCard" data-k="all" aria-pressed="${!anyF}"><b>${equipment.filter(e => e.status !== "retired").length}</b><span>전체 보기</span></button>
     ${byLoc.map(([k, n]) => `<button class="stat stat-btn ${filters.eqLoc === k ? "on" : ""}" data-act="eqCard" data-k="loc:${k}" aria-pressed="${filters.eqLoc === k}"><b>${n}</b><span>${k} 보관</span></button>`).join("")}
@@ -962,14 +973,69 @@ function vEquip() {
   <div class="list2">${list.map(e => {
       const next = loans.filter(l => l.equipment_id === e.id && ACTIVE(l.status) && l.due_date >= t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
       const cur = e.status === "onloan" ? loans.find(l => l.equipment_id === e.id && l.status === "out") : null;
-      return `<div class="r2" data-act="eqView" data-id="${e.id}">
+      const on = eqSel && eqSel.has(e.id);
+      return `<div class="r2 ${on ? "sel" : ""}" data-act="${eqSel ? "eqPick" : "eqView"}" data-id="${e.id}" ${eqSel ? `role="checkbox" aria-checked="${!!on}"` : ""}>
+        ${eqSel ? `<span class="r2-chk" aria-hidden="true">${on ? "✓" : ""}</span>` : ""}
         <div class="r2-main">
           <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b>${idTag(e)}${e.label ? `<span class="lbl-tag">${esc(e.label)}</span>` : ""}${e.asset_no ? `<span class="mono meta">${esc(eqNo(e))}</span>` : ""}${e.item_no ? `<span class="mono meta">${esc(e.item_no)}</span>` : ""}</div>
           <div class="r2-l2"><span>${esc(e.category)}</span><span>보관 ${esc(e.location)}</span>${cur ? `<span>지금 ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</span>` : ""}<span>점검 ${condText(e.last_check)}${e.last_check_at ? ` ${fmtD(e.last_check_at.slice(0, 10))}` : ""}</span><span>다음 예약 ${next ? `<span class="mono">${fmtD(next.start_date)}–${fmtD(next.due_date)}</span>` : "없음"}</span></div>
         </div>
         <div class="r2-side">${pill(EQ_STATUS, e.status)}</div></div>`;
     }).join("") || `<div class="empty">조건에 맞는 장비가 없어요.</div>`}
-  </div>`}`;
+  </div>
+  ${eqSel ? `<div class="bulkbar"><b>${eqSel.size}대 선택</b>
+    <button class="btn" data-act="eqSelAll" data-ids="${esc(list.map(e => e.id).join(","))}">표시된 ${list.length}대 모두 선택</button>
+    <button class="btn" data-act="eqSelNone" ${eqSel.size ? "" : "disabled"}>선택 해제</button>
+    <button class="btn pri" data-act="eqBulk" ${eqSel.size ? "" : "disabled"}>위치·상태 일괄 변경</button></div>` : ""}`}`;
+}
+
+/* ---------- 장비 일괄 변경 (관리자) ---------- */
+// 대여 중이거나 반납 확인을 기다리는 장비는 상태를 바꾸지 않는다 (출고·반납 확인 흐름이 상태를 정한다).
+const BULK_ST = ["available", "inspect", "repair", "retired"];
+function eqBulk() {
+  const ids = [...eqSel], rows = ids.map(eqById).filter(Boolean);
+  const held = rows.filter(e => e.status === "onloan" || loans.some(l => l.equipment_id === e.id && ["out", "checking"].includes(l.status)));
+  const future = rows.filter(e => loans.some(l => l.equipment_id === e.id && l.status === "reserved"));
+  modal(`<h2>위치·상태 일괄 변경</h2><p class="meta">고른 장비 ${rows.length}대에 똑같이 적용해요. 바꾸지 않을 항목은 ‘그대로 두기’로 두세요.</p>
+    <div class="fields">
+      <label class="f"><span>보관 위치</span><select id="bLoc"><option value="">그대로 두기</option>${LOCS.map(c => `<option>${c}</option>`).join("")}<option value="__etc">기타 (직접 기록)</option></select></label>
+      <label class="f" id="bLocEtcWrap" hidden><span>기타 위치</span><input id="bLocEtc" placeholder="예: OO병원 시뮬레이션센터"></label>
+      <label class="f"><span>상태</span><select id="bSt"><option value="">그대로 두기</option>${BULK_ST.map(k => `<option value="${k}">${EQ_STATUS[k][0]}</option>`).join("")}</select></label>
+    </div>
+    <div class="notice" id="bSum"></div>
+    <details><summary class="meta">고른 장비 보기</summary><div class="meta" style="margin-top:6px;line-height:1.7">${rows.map(e => `${esc(e.name)} <span class="mono">${esc(eqNo(e))}</span> · ${esc(e.location)} · ${esc(EQ_STATUS[e.status]?.[0] || e.status)}`).join("<br>")}</div></details>
+    <div class="notice bad" id="bErr" hidden></div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="bOk">적용</button></div>`, m => {
+    const loc = () => $("#bLoc", m).value === "__etc" ? $("#bLocEtc", m).value.trim() : $("#bLoc", m).value;
+    const paint = () => {
+      $("#bLocEtcWrap", m).hidden = $("#bLoc", m).value !== "__etc";
+      const st = $("#bSt", m).value, L = loc(), parts = [];
+      if (L) parts.push(`보관 위치 → <b>${esc(L)}</b> (${rows.length}대)`);
+      if (st) parts.push(`상태 → <b>${esc(EQ_STATUS[st][0])}</b> (${rows.length - held.length}대)`);
+      const warn = [];
+      if (st && held.length) warn.push(`대여 중이거나 반납 확인을 기다리는 ${held.length}대는 상태를 바꾸지 않아요. 출고·반납 확인으로 처리해 주세요.`);
+      if ((st === "repair" || st === "retired" || st === "inspect") && future.length) warn.push(`앞으로 예약이 있는 장비가 ${future.length}대 있어요. 예약은 그대로 남으니 필요하면 신청자에게 알려 주세요.`);
+      $("#bSum", m).innerHTML = (parts.length ? parts.join("<br>") : "바꿀 항목을 골라 주세요.") + (warn.length ? `<br><br>${warn.join("<br>")}` : "");
+    };
+    ["#bLoc", "#bSt"].forEach(sel => $(sel, m).addEventListener("change", paint));
+    $("#bLocEtc", m).addEventListener("input", paint);
+    paint();
+    $("#bOk", m).addEventListener("click", () => {
+      const err = $("#bErr", m); err.hidden = true;
+      const L = loc(), st = $("#bSt", m).value;
+      if ($("#bLoc", m).value === "__etc" && !L) { err.textContent = "기타를 골랐다면 위치를 직접 입력해 주세요."; err.hidden = false; return; }
+      if (!L && !st) { err.textContent = "보관 위치나 상태 중 하나는 골라 주세요."; err.hidden = false; return; }
+      const stIds = st ? ids.filter(id => !held.some(e => e.id === id)) : [];
+      if (st && !L && !stIds.length) { err.textContent = "고른 장비가 모두 대여 중이거나 반납 확인을 기다리고 있어서 상태를 바꿀 수 없어요."; err.hidden = false; return; }
+      busy($("#bOk", m), async () => {
+        if (L) await must(sb.from("equipment").update({ location: L }).in("id", ids));
+        if (stIds.length) await must(sb.from("equipment").update({ status: st }).in("id", stIds));
+        closeModal(); eqSel = null;
+        toast(`장비 ${ids.length}대를 바꿨어요.${st && held.length ? ` (대여 중 ${held.length}대는 상태 제외)` : ""}`);
+        await refresh();
+      });
+    });
+  });
 }
 
 function conflictsFor(eqId, start, due, ignoreId) {
@@ -1749,6 +1815,11 @@ document.addEventListener("click", e => {
     case "calDay": calDay(a.dataset.d); break;
     case "eqNew": eqForm(); break;
     case "eqView": eqView(a.dataset.id); break;
+    case "eqSelMode": eqSel = eqSel ? null : new Set(); render(); break;
+    case "eqPick": { const id = a.dataset.id; eqSel.has(id) ? eqSel.delete(id) : eqSel.add(id); render(); break; }
+    case "eqSelAll": a.dataset.ids.split(",").filter(Boolean).forEach(id => eqSel.add(id)); render(); break;
+    case "eqSelNone": eqSel.clear(); render(); break;
+    case "eqBulk": if (eqSel && eqSel.size) eqBulk(); break;
     case "eqReset": Object.assign(filters, { eqQ: "", eqCat: "", eqLoc: "", eqSt: "" }); render(); break;
     case "eqCard": {
       const [t, v] = a.dataset.k.split(":");
