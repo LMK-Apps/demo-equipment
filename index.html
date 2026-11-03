@@ -203,6 +203,16 @@ tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .r2-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .r2-l1{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;min-width:0}
 .r2-l1 .id-tag{font-size:12px}
+.r2.grp{background:var(--surface)}
+.grp-arrow{flex:none;width:16px;color:var(--muted);transition:transform .15s;display:inline-block}
+.r2.grp.open .grp-arrow,.pgrp[data-open="1"] .grp-arrow{transform:rotate(90deg)}
+.grp-n{font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:99px;padding:1px 8px}
+.r2.child{padding-left:42px;background:var(--bg)}
+.pgrp{border-top:1px solid var(--line)}
+.pick>.pgrp:first-child{border-top:0}
+.pgrp-h{display:flex;width:100%;gap:10px;align-items:center;padding:10px 12px;background:none;border:0;font:inherit;color:var(--fg);text-align:left;cursor:pointer}
+.pgrp-h .main{flex:1;min-width:0}
+.pgrp-b label{padding-left:40px;background:var(--bg)}
 .r2-title{font-size:14px;font-weight:600;min-width:0;overflow-wrap:anywhere}
 .r2-l1 .meta{flex:none}
 .lbl-tag{flex:none;display:inline-block;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--fg);background:var(--sunk);border-radius:4px;padding:1px 6px;vertical-align:1px}
@@ -425,6 +435,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.064", date: "2026-11-03", items: ["[장비] 목록과 [데모 신청] 장비 고르기: 같은 모델(장비 이름이 같은 장비)이 2대 이상이면 모델 줄 하나로 묶음. 모델 줄에 대수와 상태(사용 가능·대여 중 등)를 보여 주고, 누르면 펼쳐져서 실제 장비(RJ1~RJ6 등)를 보거나 고를 수 있음. 검색하거나 이미 고른 장비가 있으면 자동으로 펼침"] },
   { v: "v0.063", date: "2026-11-03", items: ["[장비] 목록·[출납 대장]: 줄 맨 앞에 라벨 배지(예: SM3G)를 두고, 라벨이 없으면 내부 ID 배지를 둠. 이름 뒤에는 내부 ID·자산번호·품목번호를 한 번씩만 회색으로 표시 (전에는 내부 ID와 라벨이 배지와 글자로 두 번 나왔고, 자산번호 자리에 내부 ID가 나왔음)", "[장비 수정] 창의 자산번호 칸이 내부 ID·라벨로 미리 채워지던 버그 고침. 저장하면 그 값이 자산번호로 들어가던 문제였음. 이미 이렇게 들어간 값(EQ-로 시작)은 화면·물류사 메일·CSV에서 ‘자산번호 없음’으로 봄"] },
   { v: "v0.062", date: "2026-11-03", items: ["신청 상세·장비 상세: 라벨(예: LAAS1)을 초록 배지로 강조하고, 내부 ID(EQ-0000)는 회색 글자로 표시. 라벨이 없는 장비는 내부 ID를 그대로 강조"] },
   { v: "v0.061", date: "2026-11-03", items: ["장비 관리자 [반납 확인]: 같은 신청번호에 반납 확인 중인 장비가 2대 이상이면 일괄 확인 창이 열림. 장비별 자가점검 결과와 확인 후 처리(사용 가능·수리 필요, 보관 위치)를 보고, 고른 장비를 한 번에 ‘자가점검대로 확인’. 고칠 장비는 [개별 확인]으로 기존 창을 엶"] },
@@ -784,6 +795,14 @@ let view = (location.hash || "").slice(1) || "home";
 // QR 라벨 링크(#eq/EQ-0001)로 들어오면 장비 화면을 연다. 로그인하느라 주소가 바뀌어도 기억해 둔다.
 let pendingEq = null;
 if (view.startsWith("eq/")) { pendingEq = decodeURIComponent(view.slice(3)); view = "equip"; try { localStorage.setItem("pendingEq", pendingEq); } catch {} }
+// 모델(장비 이름이 같은 장비)별 묶음: 펼친 모델을 기억한다
+const modelKey = e => (e && e.name || "").trim().toLowerCase();
+const eqOpen = new Set(), pickOpen = new Set();
+function groupByModel(list) {
+  const m = new Map();
+  list.forEach(e => { const k = modelKey(e); if (!m.has(k)) m.set(k, []); m.get(k).push(e); });
+  return [...m.entries()].map(([k, items]) => ({ k, items }));
+}
 let eqSel = null;   // 장비 여러 대 선택 모드 (관리자). null이면 꺼짐
 let filters = { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", ledgerQ: "", ledgerSt: "open" };
 // 기본 사용 기간: 3일 (시작일 포함, 시작일 + 2일). 반납 예정일을 직접 고르면 그 값을 유지한다
@@ -1212,6 +1231,18 @@ function vStats() {
   <p class="meta">가동률 = 대여 일수 ÷ 기간 일수. 장비를 누르면 상세와 이력을 볼 수 있어요.</p>`;
 }
 
+function eqRow(e, t, child) {
+      const next = loans.filter(l => l.equipment_id === e.id && ACTIVE(l.status) && l.due_date >= t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
+      const cur = e.status === "onloan" ? loans.find(l => l.equipment_id === e.id && l.status === "out") : null;
+      const on = eqSel && eqSel.has(e.id);
+      return `<div class="r2 ${on ? "sel" : ""}${child ? " child" : ""}" data-act="${eqSel ? "eqPick" : "eqView"}" data-id="${e.id}" ${eqSel ? `role="checkbox" aria-checked="${!!on}"` : ""}>
+        ${eqSel ? `<span class="r2-chk" aria-hidden="true">${on ? "✓" : ""}</span>` : ""}
+        <div class="r2-main">
+          <div class="r2-l1">${frontTag(e)}${child ? "" : `<b class="r2-title">${esc(e.name)}</b>`}${backId(e)}${assetNo(e) ? `<span class="mono meta" title="자산번호">${esc(assetNo(e))}</span>` : ""}${e.item_no ? `<span class="mono meta" title="품목번호">${esc(e.item_no)}</span>` : ""}</div>
+          <div class="r2-l2"><span>${esc(e.category)}</span><span>보관 ${esc(e.location)}</span>${cur ? `<span>지금 ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</span>` : ""}<span>점검 ${condText(e.last_check)}${e.last_check_at ? ` ${fmtD(e.last_check_at.slice(0, 10))}` : ""}</span><span>다음 예약 ${next ? `<span class="mono">${fmtD(next.start_date)}–${fmtD(next.due_date)}</span>` : "없음"}</span></div>
+        </div>
+        <div class="r2-side">${pill(EQ_STATUS, e.status)}</div></div>`;
+}
 function vEquip() {
   const q = filters.eqQ.trim().toLowerCase();
   const list = equipment.filter(e => (!filters.eqSt || e.status === filters.eqSt) && (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q)));
@@ -1234,17 +1265,17 @@ function vEquip() {
   ${catChips("eq", filters.eqCat)}
   ${anyF ? `<p class="meta" style="margin:-4px 0 0">${list.length}대 표시 중${filters.eqSt === "repair" ? " · 수리 필요만" : ""}</p>` : ""}
   ${equipment.length === 0 ? `<div class="panel"><div class="empty">아직 등록된 장비가 없어요. ${me.isAdmin ? "‘장비 등록’으로 첫 장비를 추가해 주세요." : "장비 관리자가 장비를 등록하면 여기에 나타나요."}</div></div>` : `
-  <div class="list2">${list.map(e => {
-      const next = loans.filter(l => l.equipment_id === e.id && ACTIVE(l.status) && l.due_date >= t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
-      const cur = e.status === "onloan" ? loans.find(l => l.equipment_id === e.id && l.status === "out") : null;
-      const on = eqSel && eqSel.has(e.id);
-      return `<div class="r2 ${on ? "sel" : ""}" data-act="${eqSel ? "eqPick" : "eqView"}" data-id="${e.id}" ${eqSel ? `role="checkbox" aria-checked="${!!on}"` : ""}>
-        ${eqSel ? `<span class="r2-chk" aria-hidden="true">${on ? "✓" : ""}</span>` : ""}
-        <div class="r2-main">
-          <div class="r2-l1">${frontTag(e)}<b class="r2-title">${esc(e.name)}</b>${backId(e)}${assetNo(e) ? `<span class="mono meta" title="자산번호">${esc(assetNo(e))}</span>` : ""}${e.item_no ? `<span class="mono meta" title="품목번호">${esc(e.item_no)}</span>` : ""}</div>
-          <div class="r2-l2"><span>${esc(e.category)}</span><span>보관 ${esc(e.location)}</span>${cur ? `<span>지금 ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</span>` : ""}<span>점검 ${condText(e.last_check)}${e.last_check_at ? ` ${fmtD(e.last_check_at.slice(0, 10))}` : ""}</span><span>다음 예약 ${next ? `<span class="mono">${fmtD(next.start_date)}–${fmtD(next.due_date)}</span>` : "없음"}</span></div>
-        </div>
-        <div class="r2-side">${pill(EQ_STATUS, e.status)}</div></div>`;
+  <div class="list2">${groupByModel(list).map(g => {
+      if (g.items.length === 1) return eqRow(g.items[0], t, false);
+      const open = eqOpen.has(g.k) || !!q || !!eqSel, f = g.items[0];
+      const cnt = st => g.items.filter(e => e.status === st).length;
+      const sum = [["available", "사용 가능"], ["onloan", "대여 중"], ["inspect", "점검 중"], ["repair", "수리 중"]].map(([k, tx]) => cnt(k) ? `<span>${tx} ${cnt(k)}</span>` : "").join("");
+      const tags = g.items.map(e => esc(e.label || e.internal_id || "")).join(", ");
+      return `<div class="r2 grp${open ? " open" : ""}" data-act="eqGrp" data-k="${esc(g.k)}" aria-expanded="${open}">
+        <span class="grp-arrow" aria-hidden="true">▸</span>
+        <div class="r2-main"><div class="r2-l1"><b class="r2-title">${esc(f.name)}</b><span class="grp-n">${g.items.length}대</span></div>
+          <div class="r2-l2"><span>${esc(f.category)}</span>${sum}<span class="mono">${tags}</span></div></div></div>
+        ${open ? g.items.map(e => eqRow(e, t, true)).join("") : ""}`;
     }).join("") || `<div class="empty">조건에 맞는 장비가 없어요.</div>`}
   </div>
   ${eqSel ? `<div class="bulkbar"><b>${eqSel.size}대 선택</b>
@@ -1384,7 +1415,7 @@ function vRequest() {
   const proxy = me.isAdmin && !draft.edit, outReg = proxy && draft.out;
   const badRange = !start || !due || due < start || start > maxStart() || start < minStart() || overMonth(start, due);
   const rows = equipment.filter(e => e.status !== "retired").sort((a, b) => a.category.localeCompare(b.category) || (a.internal_id || "").localeCompare(b.internal_id || ""));
-  const pickHtml = rows.map(e => {
+  const pickRow = (e, child) => {
     const c = badRange ? [] : conflictsFor(e.id, start, due);
     const own = draft.edit && draft.own.has(e.id);
     const busyNow = outReg && e.status === "onloan";
@@ -1394,9 +1425,13 @@ function vRequest() {
     const title = c.length ? `${c[0].loan_no} (${fmtD(c[0].start_date)}–${fmtD(c[0].due_date)})` : why;
     const hay = `${e.name} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.item_no} ${e.serial_no} ${e.location} ${e.category}`.toLowerCase();
     return `<label class="${blocked ? "off" : ""}" data-hay="${esc(hay)}" data-cat="${esc(e.category)}" data-loc="${esc(locGroup(e.location))}" data-ok="${blocked ? "0" : "1"}"><input type="checkbox" data-pick="${e.id}" ${draft.picks.has(e.id) ? "checked" : ""} ${blocked ? "disabled" : ""}>
-      <div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span><div class="meta">${esc(e.category)} · ${esc(e.location)}</div></div>
+      <div class="main">${child ? `${frontTag(e)} ${backId(e)}` : `${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}`}<div class="meta">${child ? "" : `${esc(e.category)} · `}${esc(e.location)}</div></div>
       ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
-  }).join("");
+  };
+  // 같은 모델이 2대 이상이면 모델 줄 하나로 묶고, 펼치면 실제 장비를 고른다
+  const pickHtml = groupByModel(rows).map(g => g.items.length === 1 ? pickRow(g.items[0], false) : `${(() => { const op = pickOpen.has(g.k) || g.items.some(e => draft.picks.has(e.id)); return `<div class="pgrp" data-grp="${esc(g.k)}" data-open="${op ? 1 : 0}">`; })()}
+      <button type="button" class="pgrp-h" data-act="pickGrp" data-k="${esc(g.k)}"><span class="grp-arrow" aria-hidden="true">▸</span><div class="main"><b>${esc(g.items[0].name)}</b> <span class="grp-n">${g.items.length}대</span><div class="meta">${esc(g.items[0].category)} · <span class="pgrp-st"></span></div></div></button>
+      <div class="pgrp-b" ${pickOpen.has(g.k) || g.items.some(e => draft.picks.has(e.id)) ? "" : "hidden"}>${g.items.map(e => pickRow(e, true)).join("")}</div></div>`).join("");
   const ed = draft.edit, ownerName = ed ? nameOf(draft.owner) : profile?.display_name || "나";
   const owners = proxy ? people.filter(p => p.status === "active").sort((a, b) => (a.id === me.id ? -1 : b.id === me.id ? 1 : (a.display_name || "").localeCompare(b.display_name || "", "ko"))) : [];
   const ownerSel = draft.owner || me.id;
@@ -1472,8 +1507,23 @@ function applyPickFilter() {
       && (!pickF.avail || l.dataset.ok === "1"));
     l.hidden = !ok; if (ok) shown++;
   });
+  list.querySelectorAll(".pgrp").forEach(g => {
+    const vis = [...g.querySelectorAll("label[data-hay]")].filter(l => !l.hidden);
+    g.hidden = !vis.length;
+    const open = pickOpen.has(g.dataset.grp) || g.querySelector("input:checked") || (q.length > 0 && vis.length > 0);
+    g.querySelector(".pgrp-b").hidden = !open; g.dataset.open = open ? "1" : "0";
+  });
+  paintPickGroups();
   $("#pickNone").hidden = shown > 0;
   updatePickCount(shown, total);
+}
+// 모델 줄: 가능 대수와 고른 대수
+function paintPickGroups() {
+  document.querySelectorAll("#pickList .pgrp").forEach(g => {
+    const ls = [...g.querySelectorAll("label[data-hay]")];
+    const ok = ls.filter(l => l.dataset.ok === "1").length, sel = ls.filter(l => l.querySelector("input").checked).length;
+    g.querySelector(".pgrp-st").innerHTML = `가능 ${ok}대${sel ? ` · <b style="color:var(--accent)">${sel}대 선택</b>` : ""}`;
+  });
 }
 function updatePickCount(shown, total) {
   const c = $("#pickCount"); if (!c) return;
@@ -2364,6 +2414,8 @@ document.addEventListener("click", e => {
     case "calDay": calDay(a.dataset.d); break;
     case "eqNew": eqForm(); break;
     case "eqView": eqView(a.dataset.id); break;
+    case "eqGrp": eqOpen.has(a.dataset.k) ? eqOpen.delete(a.dataset.k) : eqOpen.add(a.dataset.k); render(); break;
+    case "pickGrp": { const g = a.closest(".pgrp"), open = g.dataset.open !== "1"; open ? pickOpen.add(a.dataset.k) : pickOpen.delete(a.dataset.k); g.dataset.open = open ? "1" : "0"; g.querySelector(".pgrp-b").hidden = !open; break; }
     case "eqSelMode": eqSel = eqSel ? null : new Set(); render(); break;
     case "eqPick": { const id = a.dataset.id; eqSel.has(id) ? eqSel.delete(id) : eqSel.add(id); render(); break; }
     case "eqSelAll": a.dataset.ids.split(",").filter(Boolean).forEach(id => eqSel.add(id)); render(); break;
@@ -2446,7 +2498,7 @@ document.addEventListener("change", e => {
     if (id === "rStart" && draft.start && draft.start <= maxStart() && overMonth(draft.start, draft.due)) draft.due = addMonth1(draft.start);
     const keep = collectReqFields(); render(); restoreReqFields(keep);
   }
-  else if (e.target.dataset.pick) { e.target.checked ? draft.picks.add(e.target.dataset.pick) : draft.picks.delete(e.target.dataset.pick); updatePickCount(); }
+  else if (e.target.dataset.pick) { e.target.checked ? draft.picks.add(e.target.dataset.pick) : draft.picks.delete(e.target.dataset.pick); updatePickCount(); paintPickGroups(); }
   else if (id === "rLoc" || id === "rAvail") { pickF[{ rLoc: "loc", rAvail: "avail" }[id]] = id === "rAvail" ? e.target.checked : e.target.value; applyPickFilter(); }
   else if (id === "rDelivery") { $("#shipBox").hidden = !e.target.checked; }
   else if (id === "rOwner") { draft.owner = e.target.value; }
