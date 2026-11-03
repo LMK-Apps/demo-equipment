@@ -471,6 +471,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.080", date: "2026-11-03", items: ["일반 화면에서 내부 ID(EQ-0000)를 숨김: 현황·일정·장비 목록·데모 신청·내 신청·배송·출납 대장·반납·통계·상세 창. 라벨(예: SM3G, RA1)만 보이고, 라벨이 없으면 장비 이름만", "내부 ID가 그대로 보이는 곳: 장비 등록·수정 창, 장비 상세(관리자만), QR 라벨 인쇄, CSV, 물류사 요청 메일 문안. 검색은 EQ 번호로도 계속 됨"] },
   { v: "v0.079", date: "2026-11-03", db: "022_purpose_v2.sql", items: [
     "신청 목적 정리: 영업 데모 · 고객 교육·지원 · 학회·전시 · 장기 대여 · 내부 사용 · 기타. 목적을 고르면 아래에 정의가 한 줄로 보임",
     "목적이 ‘기타’면 ‘기타 내용’ 칸이 나타나고, 적어야 신청·수정할 수 있음. 상세와 출납 대장에 ‘기타 · 내용’으로 보임",
@@ -843,19 +844,23 @@ function checkCell(e) {
 }
 const condText = k => k ? `<b class="c-${k}">${esc(CONDS[k] || k)}</b>` : "기록 없음";
 // 장비 짧은 표시: 내부 ID + 라벨 (자산번호는 겹치거나 비어 있을 수 있음)
-const eqNo = e => !e ? "" : [e.internal_id, e.label].filter(Boolean).join(" ");
+// 화면에 보이는 장비 번호: 라벨만 (내부 ID EQ-0000은 일반 화면에서 숨긴다)
+const eqNo = e => !e ? "" : (e.label || "");
+// 내부 ID까지 포함한 번호: 물류사 메일·CSV·QR 등 장비를 정확히 구분해야 하는 곳에서만 쓴다
+const eqNoFull = e => !e ? "" : [e.internal_id, e.label].filter(Boolean).join(" ");
+const eqParen = e => eqNo(e) ? ` (<span class="mono">${esc(eqNo(e))}</span>)` : "";
+const eqParenT = e => eqNo(e) ? ` (${eqNo(e)})` : "";
+const eqDot = e => eqNo(e) ? ` · <span class="mono">${esc(eqNo(e))}</span>` : "";
 const idTag = e => e && e.internal_id ? `<span class="id-tag" title="내부 ID (바뀌지 않음)">${esc(e.internal_id)}</span>` : "";
 // 상세 화면: 라벨(예: LAAS1)을 강조하고 내부 ID는 회색으로. 라벨이 없으면 내부 ID를 강조한다.
-const keyTag = e => !e ? "" : e.label
-  ? `<span class="id-tag" title="라벨">${esc(e.label)}</span>${e.internal_id ? ` <span class="mono meta" title="내부 ID (바뀌지 않음)">${esc(e.internal_id)}</span>` : ""}`
-  : idTag(e);
+const keyTag = e => e && e.label ? `<span class="id-tag" title="라벨">${esc(e.label)}</span>` : "";
 // 목록 줄: 맨 앞에 라벨 배지(없으면 내부 ID 배지), 이름 뒤에는 라벨이 있을 때만 내부 ID를 회색으로
-const frontTag = e => !e ? "" : e.label ? `<span class="id-tag" title="라벨">${esc(e.label)}</span>` : idTag(e);
+const frontTag = e => e && e.label ? `<span class="id-tag" title="라벨">${esc(e.label)}</span>` : "";
 // 자산번호: 예전 버그로 내부 ID·라벨이 들어간 값(EQ-0001 SM3G 등)은 자산번호가 아니므로 비어 있는 것으로 본다
 const assetNo = e => { const a = (e && e.asset_no || "").trim(); return !a || /^EQ-\d{4}\b/.test(a) ? "" : a; };
 // 구성품을 한 줄로 (줄바꿈·쉼표로 나뉜 항목을 ' · '로 잇는다)
 const compLine = e => (e && e.components || "").split(/\s*[\n,]\s*/).map(x => x.trim()).filter(Boolean).join(" · ");
-const backId = e => e && e.label && e.internal_id ? `<span class="mono meta" title="내부 ID (바뀌지 않음)">${esc(e.internal_id)}</span>` : "";
+const backId = () => "";   // 일반 화면에서는 내부 ID를 보이지 않는다
 const pill = (map, k) => { const [t, c] = map[k] || [k || "–", ""]; return `<span class="pill ${c}">${esc(t)}</span>`; };
 
 if (!window.supabase || SUPABASE_KEY.includes("REPLACE_ME")) {
@@ -1138,7 +1143,7 @@ function vCal() {
       .sort(eqCmp);
     const rows = eqs.map(e => {
       const mine = monthLoans.filter(l => l.equipment_id === e.id);
-      return `<tr><td class="eqc"><b>${esc(e.name)}</b><div class="meta mono">${esc(eqNo(e))} · ${esc(e.location)}</div></td>${days.map(d => {
+      return `<tr><td class="eqc"><b>${esc(e.name)}</b><div class="meta mono">${esc([eqNo(e), e.location].filter(Boolean).join(" · "))}</div></td>${days.map(d => {
         const key = ds(d), l = mine.find(x => x.start_date <= key && key <= loanEnd(x));
         const today = key === t ? "today " : "";
         if (!l) return `<td class="d ${d.getDay() % 6 === 0 ? "we " : ""}${today}"></td>`;
@@ -1214,7 +1219,7 @@ function loanView(id) {
   const pre = t => `<span style="white-space:pre-wrap">${esc(t)}</span>`;
   const shipTxt = (x, map) => `${esc(map[x.status]?.[0] || x.status)} · ${esc(x.recipient || "")} ${esc(x.phone || "")} · ${esc(x.address || "")}${x.requested_date ? ` · 희망일 ${fmtD(x.requested_date)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.carrier || "")} ${esc(x.tracking_no)}</span>` : ""}`;
   modal(`<h2>${esc(e.name)}</h2>
-    <div class="lv-sub"><span class="meta">${keyTag(e)} · <span class="mono">${esc(l.loan_no)}</span></span>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</div>
+    <div class="lv-sub"><span class="meta">${keyTag(e) ? keyTag(e) + " · " : ""}<span class="mono">${esc(l.loan_no)}</span></span>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</div>
     <div class="lv-sec"><h3>신청</h3><div class="fields">
       ${f("기간", `<span class="mono">${fmtD(l.start_date)} ~ ${fmtD(l.due_date)}</span> (${daysBetween(l.start_date, l.due_date) + 1}일)${l.extension_count ? ` · 연장 ${l.extension_count}회` : ""}`)}
       ${f("신청자", esc(nameOf(l.requester_id)) + (() => { const by = loans.find(x => x.loan_no === l.loan_no && x.created_by)?.created_by; return by && by !== l.requester_id ? ` <span class="meta">(등록: ${esc(nameOf(by))})</span>` : ""; })())}
@@ -1223,7 +1228,7 @@ function loanView(id) {
       ${f("고객사·기관", esc(l.customer || "–"))}
       ${f("신청일", l.created_at ? `<span class="mono">${fmtT(l.created_at)}</span>` : "–")}
       ${splitNote(l.note).memo ? f("메모", pre(splitNote(l.note).memo), true) : ""}
-      ${group.length ? f("함께 신청한 장비", group.map(x => `${esc(eqById(x.equipment_id)?.name)} (<span class="mono">${esc(eqNo(eqById(x.equipment_id)))}</span>)`).join(", "), true) : ""}
+      ${group.length ? f("함께 신청한 장비", group.map(x => `${esc(eqById(x.equipment_id)?.name)} ${eqParen(eqById(x.equipment_id))}`).join(", "), true) : ""}
     </div></div>
     <div class="lv-sec"><h3>출고·배송</h3><div class="fields">
       ${f("출고", l.checkout_at ? `<span class="mono">${fmtT(l.checkout_at)}</span>` : "아직 출고 전")}
@@ -1390,7 +1395,7 @@ function vEquip() {
       const open = eqOpen.has(g.k) || !!q || !!eqSel, f = g.items[0];
       const cnt = st => g.items.filter(e => e.status === st).length;
       const sum = [["available", "사용 가능"], ["onloan", "대여 중"], ["inspect", "점검 중"], ["repair", "수리 중"]].map(([k, tx]) => cnt(k) ? `<span>${tx} ${cnt(k)}</span>` : "").join("");
-      const tags = g.items.map(e => esc(e.label || e.internal_id || "")).join(", ");
+      const tags = g.items.map(e => esc(e.label || "")).filter(Boolean).join(", ");
       return `<div class="r2 grp${open ? " open" : ""}" data-act="eqGrp" data-k="${esc(g.k)}" aria-expanded="${open}">
         <span class="grp-arrow" aria-hidden="true">▸</span>
         <div class="r2-main"><div class="r2-l1"><b class="r2-title">${esc(modelName(f))}</b><span class="grp-n">${g.items.length}대</span></div>
@@ -1649,7 +1654,7 @@ function paintPickGroups() {
 function updatePickCount(shown, total) {
   const c = $("#pickCount"); if (!c) return;
   if (shown === undefined) { const ls = [...document.querySelectorAll("#pickList label[data-hay]")]; total = ls.length; shown = ls.filter(l => !l.hidden).length; }
-  const names = [...draft.picks].map(id => eqById(id)).filter(Boolean).map(e => `${e.name} (${eqNo(e)})`);
+  const names = [...draft.picks].map(id => eqById(id)).filter(Boolean).map(e => `${e.name}${eqParenT(e)}`);
   c.innerHTML = `<b>선택 ${draft.picks.size}대</b>${names.length ? ` · ${esc(names.join(", "))}` : ""}<br><span>전체 ${total}대 중 ${shown}대 표시</span>`;
 }
 
@@ -1690,7 +1695,7 @@ function vShip() {
     const l = g[0], o = shipOf(l.loan_no, "outbound") || {}, p = shipOf(l.loan_no, "pickup"), c = o.id ? o : (p || {});
     return `<div class="panel">
       <div class="head"><div class="grow"><h3><span class="mono">${esc(l.loan_no)}</span> · ${esc(l.customer || l.purpose)}</h3>
-        <div class="meta">${g.map(x => `${esc(eqById(x.equipment_id)?.name)} (${esc(eqNo(eqById(x.equipment_id)))})`).join(", ")}</div></div>
+        <div class="meta">${g.map(x => `${esc(eqById(x.equipment_id)?.name)} ${eqParen(eqById(x.equipment_id))}`).join(", ")}</div></div>
         ${[...new Set(g.map(x => x.status))].map(k => pill(LOAN_STATUS, k)).join(" ")}</div>
       <div class="meta">${o.id ? "수령" : "회수 담당"} ${esc(c.recipient)} · ${esc(c.phone)} · ${esc(c.address)}</div>
       ${o.id ? `<div class="row"><div class="main"><b>출고 배송</b><div class="meta">도착 희망 ${fmtD(o.requested_date)}${trackTxt(o)}</div></div>
@@ -2047,7 +2052,7 @@ function bindVerdict(m, condName) {
 }
 function eqCheck(e) {
   const lent = e.status === "onloan" || e.status === "inspect";
-  modal(`<h2>상태 점검 기록</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(eqNo(e))}</span>) · 실사나 수리 후 확인처럼 출납과 관계없는 점검을 기록해요.</p>
+  modal(`<h2>상태 점검 기록</h2><p class="meta">${esc(e.name)} ${eqParen(e)} · 실사나 수리 후 확인처럼 출납과 관계없는 점검을 기록해요.</p>
     <div class="fields">${Object.entries(CONDS).map(([k, t]) => `<label class="check"><input type="radio" name="kc" value="${k}" ${(e.last_check || "ok") === k ? "checked" : ""}> ${t}</label>`).join("")}</div>
     <label class="f"><span>점검 메모</span><textarea id="kNote"></textarea></label>
     ${lent ? `<div class="notice">지금 ${esc(EQ_STATUS[e.status][0])} 상태라서 장비 상태는 바꾸지 않고 점검 결과만 기록해요.</div>` : verdictHtml(e.last_check || "ok")}
@@ -2073,7 +2078,7 @@ function eqView(id) {
   const sched = loans.filter(l => l.equipment_id === id && ACTIVE(l.status)).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const myOut = loans.find(l => l.equipment_id === id && l.status === "out" && l.requester_id === me.id);
   const hist = loans.filter(l => l.equipment_id === id && l.status === "done").sort((a, b) => (b.returned_at || "").localeCompare(a.returned_at || "")).slice(0, 5);
-  modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta">${keyTag(e)} · <span class="mono">${esc(assetNo(e) || "자산번호 없음")}</span> · ${esc(e.item_no || "품목번호 없음")} · S/N ${esc(e.serial_no || "–")} · ${esc(e.location)}</div></div>${pill(EQ_STATUS, e.status)}</div>
+  modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta">${keyTag(e) ? keyTag(e) + " · " : ""}${me.isAdmin && e.internal_id ? `<span class="mono" title="내부 ID (관리자만 보임)">${esc(e.internal_id)}</span> · ` : ""}<span class="mono">${esc(assetNo(e) || "자산번호 없음")}</span> · ${esc(e.item_no || "품목번호 없음")} · S/N ${esc(e.serial_no || "–")} · ${esc(e.location)}</div></div>${pill(EQ_STATUS, e.status)}</div>
     <div><h3>최근 점검</h3><div style="margin-top:4px">${checkCell(e)}</div></div>
     <div><h3>구성품</h3><div class="meta" style="white-space:pre-wrap">${esc(e.components || "등록된 구성품이 없어요.")}</div></div>
     <div><h3>예약 일정</h3><div class="list">${sched.map(l => `<div class="row"><div class="main"><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}</span> · ${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)}</div>${l.status === "out" && l.due_date < t ? `<span class="pill p-bad">연체</span>` : pill(LOAN_STATUS, l.status)}</div>`).join("") || `<div class="empty">잡힌 예약이 없어요.</div>`}</div></div>
@@ -2197,7 +2202,7 @@ function returnForm(l) {
       ${(() => { const subs = new Set(its.map(x => checksOf(x).find(c => c.k === q.k)?.sub || "")); return subs.size === 1 && q.sub ? `<p class="meta">${esc(q.sub)}</p>` : ""; })()}
       <div class="qq-pick" hidden>
         <p class="meta">이상이 있는 장비를 모두 골라 주세요.</p>
-        <div class="flow-opts">${its.map(x => `<button class="opt" data-qx="${x.id}" aria-pressed="false">${esc(eqOf(x).name)}<span class="opt-sub">${esc(eqNo(eqOf(x)))}${q.k === "parts" && eqOf(x).components ? ` · 구성품: ${esc(eqOf(x).components.replace(/\s*\n\s*/g, ", "))}` : ""}</span></button>`).join("")}</div>
+        <div class="flow-opts">${its.map(x => `<button class="opt" data-qx="${x.id}" aria-pressed="false">${esc(eqOf(x).name)}<span class="opt-sub">${esc(eqNo(eqOf(x)))}${q.k === "parts" && eqOf(x).components ? `${eqNo(eqOf(x)) ? " · " : ""}구성품: ${esc(eqOf(x).components.replace(/\s*\n\s*/g, ", "))}` : ""}</span></button>`).join("")}</div>
       </div>
       <div class="flow-yn"><button class="big yn-n" data-yn="n" aria-pressed="false">아니오</button><button class="big yn-y" data-yn="y" aria-pressed="false">예</button></div>
       <div class="flow-foot qq-foot" hidden><div class="notice bad" hidden></div><button class="btn pri big" data-qq-next>다음</button></div>
@@ -2211,7 +2216,7 @@ function returnForm(l) {
     </section>`;
   const head = () => {
     const its = items();
-    return its.length === 1 ? `${esc(eqOf(its[0]).name)} · <span class="mono">${esc(eqNo(eqOf(its[0])))}</span>`
+    return its.length === 1 ? `${esc(eqOf(its[0]).name)}${eqDot(eqOf(its[0]))}`
       : `<span class="mono">${esc(l.loan_no)}</span> · 장비 ${its.length}대`;
   };
   modal(`<div class="flow">
@@ -2220,7 +2225,7 @@ function returnForm(l) {
     ${multi ? `<section data-step="items">
       <p class="flow-k">반납할 장비</p><h2 class="flow-q">어떤 장비를 반납하나요?</h2>
       <p class="meta">같은 신청번호(${esc(l.loan_no)})의 장비예요. 함께 반납할 장비를 모두 골라 주세요.</p>
-      <div class="flow-opts">${cands.map(x => `<button class="opt" data-sel="${x.id}" aria-pressed="true">${esc(eqOf(x).name)}<span class="opt-sub">${esc(eqNo(eqOf(x)))} · ${esc(eqOf(x).category || "")} · 반납 예정 ${fmtD(x.due_date)}</span></button>`).join("")}</div>
+      <div class="flow-opts">${cands.map(x => `<button class="opt" data-sel="${x.id}" aria-pressed="true">${esc(eqOf(x).name)}<span class="opt-sub">${esc([eqNo(eqOf(x)), eqOf(x).category].filter(Boolean).join(" · "))} · 반납 예정 ${fmtD(x.due_date)}</span></button>`).join("")}</div>
       <div class="flow-foot"><div class="notice bad" id="iErr" hidden></div><button class="btn pri big" id="iNext">다음</button></div>
     </section>` : ""}
     <section data-step="place" hidden>
@@ -2317,7 +2322,7 @@ function returnForm(l) {
       $("#fBack", m).style.visibility = i === 0 ? "hidden" : "visible";
       const sec = m.querySelector(`section[data-step="${id}"]`);
       const qx = sec?.dataset.lid && cands.find(c => c.id === sec.dataset.lid);
-      $("#fEq", m).innerHTML = qx ? `${esc(eqOf(qx).name)} · <span class="mono">${esc(eqNo(eqOf(qx)))}</span>` : head();
+      $("#fEq", m).innerHTML = qx ? `${esc(eqOf(qx).name)}${eqDot(eqOf(qx))}` : head();
       if (id === "pickup" && $("#rpBundle", m)) {
         const others = loans.filter(x => x.loan_no === l.loan_no && x.status !== "cancelled" && !st.sel.has(x.id)).length;
         $("#rpBundle", m).textContent = others ? `같은 신청번호의 다른 장비 ${others}대도 나중에 이 정보로 회수돼요.` : "";
@@ -2379,7 +2384,7 @@ function returnForm(l) {
     $("#scNote", m).addEventListener("input", () => { $("#mErr", m).hidden = true; memoLabel(); });
     const memoMiss = () => {
       const x = missingMemo(); if (!x) return false;
-      $("#mErr", m).textContent = items().length > 1 ? `${eqOf(x).name} (${eqNo(eqOf(x))}): 문구를 고르거나 직접 적어 주세요.` : "문구를 고르거나 직접 적어 주세요.";
+      $("#mErr", m).textContent = items().length > 1 ? `${eqOf(x).name}${eqParenT(eqOf(x))}: 문구를 고르거나 직접 적어 주세요.` : "문구를 고르거나 직접 적어 주세요.";
       $("#mErr", m).hidden = false; return true;
     };
     $("#memoNext", m).addEventListener("click", () => { $("#mErr", m).hidden = true; keepNotes(); if (!memoMiss()) next(); });
@@ -2439,7 +2444,7 @@ function inspect(l, single) {
   const self = l.return_self_check, selfNote = l.return_self_note || "";
   const defLoc = placeOf(l) || e.location;
   const defRepair = self === "broken" || self === "missing";
-  modal(`<h2>반납 확인</h2><p class="meta">${esc(e.name)} (<span class="mono">${esc(eqNo(e))}</span>) · ${esc(nameOf(l.requester_id))} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</p>
+  modal(`<h2>반납 확인</h2><p class="meta">${esc(e.name)} ${eqParen(e)} · ${esc(nameOf(l.requester_id))} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</p>
     ${self ? `<div class="panel" style="gap:6px">
       <h3>반납자 자가점검</h3>
       <div><span class="pill ${CHECK_PILL[self] || ""}">${esc(CONDS[self])}</span> <span class="meta">${esc(retLabel(l) || "–")} · ${fmtT(l.returned_at)}</span></div>
@@ -2630,7 +2635,7 @@ document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
   const a = e.target.closest("[data-act]"); if (!a) return;
   const l = loans.find(x => x.id === a.dataset.id);
-  const eqName = l ? `${esc(eqById(l.equipment_id)?.name)} (${esc(eqNo(eqById(l.equipment_id)))})` : "";
+  const eqName = l ? `${esc(eqById(l.equipment_id)?.name)} ${eqParen(eqById(l.equipment_id))}` : "";
   switch (a.dataset.act) {
     case "refresh": busy(a, () => refresh()); break;
     case "changelog": showChangelog(); break;
