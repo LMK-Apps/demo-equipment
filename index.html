@@ -220,6 +220,7 @@ tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .r2-l2{display:flex;flex-wrap:wrap;font-size:12.5px;color:var(--muted);min-width:0}
 .r2-l2>span:not(:last-child)::after{content:"·";margin:0 7px;opacity:.6}
 .r2-l2 b{font-weight:600}
+.r2-comp{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .r2-note{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .c-ok{color:var(--ok)}.c-minor{color:var(--warn)}.c-broken,.c-missing{color:var(--bad)}
 .r2-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none}
@@ -435,6 +436,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.065", date: "2026-11-03", items: ["[장비] 목록의 개별 장비 줄과 [데모 신청] 장비 고르기에 구성품을 한 줄로 표시. 길면 줄임표(…)로 자르고, 마우스를 올리면 전체가 보임"] },
   { v: "v0.064", date: "2026-11-03", items: ["[장비] 목록과 [데모 신청] 장비 고르기: 같은 모델(장비 이름이 같은 장비)이 2대 이상이면 모델 줄 하나로 묶음. 모델 줄에 대수와 상태(사용 가능·대여 중 등)를 보여 주고, 누르면 펼쳐져서 실제 장비(RJ1~RJ6 등)를 보거나 고를 수 있음. 검색하거나 이미 고른 장비가 있으면 자동으로 펼침"] },
   { v: "v0.063", date: "2026-11-03", items: ["[장비] 목록·[출납 대장]: 줄 맨 앞에 라벨 배지(예: SM3G)를 두고, 라벨이 없으면 내부 ID 배지를 둠. 이름 뒤에는 내부 ID·자산번호·품목번호를 한 번씩만 회색으로 표시 (전에는 내부 ID와 라벨이 배지와 글자로 두 번 나왔고, 자산번호 자리에 내부 ID가 나왔음)", "[장비 수정] 창의 자산번호 칸이 내부 ID·라벨로 미리 채워지던 버그 고침. 저장하면 그 값이 자산번호로 들어가던 문제였음. 이미 이렇게 들어간 값(EQ-로 시작)은 화면·물류사 메일·CSV에서 ‘자산번호 없음’으로 봄"] },
   { v: "v0.062", date: "2026-11-03", items: ["신청 상세·장비 상세: 라벨(예: LAAS1)을 초록 배지로 강조하고, 내부 ID(EQ-0000)는 회색 글자로 표시. 라벨이 없는 장비는 내부 ID를 그대로 강조"] },
@@ -778,6 +780,8 @@ const keyTag = e => !e ? "" : e.label
 const frontTag = e => !e ? "" : e.label ? `<span class="id-tag" title="라벨">${esc(e.label)}</span>` : idTag(e);
 // 자산번호: 예전 버그로 내부 ID·라벨이 들어간 값(EQ-0001 SM3G 등)은 자산번호가 아니므로 비어 있는 것으로 본다
 const assetNo = e => { const a = (e && e.asset_no || "").trim(); return !a || /^EQ-\d{4}\b/.test(a) ? "" : a; };
+// 구성품을 한 줄로 (줄바꿈·쉼표로 나뉜 항목을 ' · '로 잇는다)
+const compLine = e => (e && e.components || "").split(/\s*[\n,]\s*/).map(x => x.trim()).filter(Boolean).join(" · ");
 const backId = e => e && e.label && e.internal_id ? `<span class="mono meta" title="내부 ID (바뀌지 않음)">${esc(e.internal_id)}</span>` : "";
 const pill = (map, k) => { const [t, c] = map[k] || [k || "–", ""]; return `<span class="pill ${c}">${esc(t)}</span>`; };
 
@@ -1240,6 +1244,7 @@ function eqRow(e, t, child) {
         <div class="r2-main">
           <div class="r2-l1">${frontTag(e)}${child ? "" : `<b class="r2-title">${esc(e.name)}</b>`}${backId(e)}${assetNo(e) ? `<span class="mono meta" title="자산번호">${esc(assetNo(e))}</span>` : ""}${e.item_no ? `<span class="mono meta" title="품목번호">${esc(e.item_no)}</span>` : ""}</div>
           <div class="r2-l2"><span>${esc(e.category)}</span><span>보관 ${esc(e.location)}</span>${cur ? `<span>지금 ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</span>` : ""}<span>점검 ${condText(e.last_check)}${e.last_check_at ? ` ${fmtD(e.last_check_at.slice(0, 10))}` : ""}</span><span>다음 예약 ${next ? `<span class="mono">${fmtD(next.start_date)}–${fmtD(next.due_date)}</span>` : "없음"}</span></div>
+          ${compLine(e) ? `<div class="r2-comp" title="${esc(e.components)}"><span>구성품</span> ${esc(compLine(e))}</div>` : ""}
         </div>
         <div class="r2-side">${pill(EQ_STATUS, e.status)}</div></div>`;
 }
@@ -1425,7 +1430,7 @@ function vRequest() {
     const title = c.length ? `${c[0].loan_no} (${fmtD(c[0].start_date)}–${fmtD(c[0].due_date)})` : why;
     const hay = `${e.name} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.item_no} ${e.serial_no} ${e.location} ${e.category}`.toLowerCase();
     return `<label class="${blocked ? "off" : ""}" data-hay="${esc(hay)}" data-cat="${esc(e.category)}" data-loc="${esc(locGroup(e.location))}" data-ok="${blocked ? "0" : "1"}"><input type="checkbox" data-pick="${e.id}" ${draft.picks.has(e.id) ? "checked" : ""} ${blocked ? "disabled" : ""}>
-      <div class="main">${child ? `${frontTag(e)} ${backId(e)}` : `${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}`}<div class="meta">${child ? "" : `${esc(e.category)} · `}${esc(e.location)}</div></div>
+      <div class="main">${child ? `${frontTag(e)} ${backId(e)}` : `${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}`}<div class="meta">${child ? "" : `${esc(e.category)} · `}${esc(e.location)}</div>${compLine(e) ? `<div class="r2-comp" title="${esc(e.components)}"><span>구성품</span> ${esc(compLine(e))}</div>` : ""}</div>
       ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
   };
   // 같은 모델이 2대 이상이면 모델 줄 하나로 묶고, 펼치면 실제 장비를 고른다
