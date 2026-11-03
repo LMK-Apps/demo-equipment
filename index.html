@@ -471,6 +471,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.078", date: "2026-11-03", items: ["[일정] 분류 버튼 추가 (전체·시뮬레이터·BLS·MBL·Skill T.·기타). 고르면 그 분류 장비의 일정만 보임. 버튼 숫자는 이번 달 일정의 장비 수. 달력·장비별 보기 둘 다 적용"] },
   { v: "v0.077", date: "2026-11-03", items: ["[일정] 달력 칸을 늘려 한 주에 일정 막대를 7줄까지 보여 줌 (전에는 3줄). 넘칠 때만 ‘+N건 더’ 표시. 일정이 적은 주는 칸 높이가 그만큼만 늘어남"] },
   { v: "v0.076", date: "2026-11-03", items: ["[통계] 예약 건도 포함: 장비별 막대에서 사용(반납 완료·진행 중)은 진한 초록, 예약(예정)은 연한 초록으로 이어 붙여 표시. 대여 횟수·일수 옆에 ‘+ 예약 n’ 표시, 정렬은 사용+예약 합계 순", "요약에 ‘예약 일수 (예정)’ 추가. 신청 건수와 목적·고객사·신청자별 순위에 앞으로 시작할 예약도 포함하고, 순위 막대도 사용(진한 초록)·예약(연한 초록)으로 나눔", "예약만 있는 장비는 ‘예약만’으로 표시하고 미사용 장비 수에서 뺌. 마지막 사용 칸에 다음 예약일 표시. 가동률은 실제 사용 일수 기준 그대로"] },
   { v: "v0.075", date: "2026-11-03", db: "021_loan_info_edit.sql", items: ["장비 관리자: 출고·반납 확인 중·반납 완료인 신청도 상세의 [신청 정보 수정]으로 신청자·사용 기간·목적·고객사·내부/외부 요청자·메모를 고칠 수 있음. 같은 신청번호의 장비 전체에 적용되고, 바뀐 내용은 Teams로 알림", "출고된 신청은 사용 시작일을 오늘 뒤로 옮길 수 없음. 바꾼 기간이 다른 예약과 겹치면 저장되지 않음"] },
@@ -800,9 +801,10 @@ const CHECKS_BY_CATEGORY = {
   ],
 };
 // 분류 버튼 줄 (매뉴얼 목차와 같은 모양). scope: eq = 장비 탭, req = 데모 신청
-function catChips(scope, cur) {
+function catChips(scope, cur, countOf) {
   const live = equipment.filter(e => e.status !== "retired");
-  return `<div class="cat-chips" role="group" aria-label="분류">${[["", "전체"], ...CATS.map(c => [c, c])].map(([v, t]) => `<button type="button" class="cat-chip" data-act="catChip" data-scope="${scope}" data-v="${esc(v)}" aria-pressed="${cur === v}">${esc(t)}<span class="n">${v ? live.filter(e => e.category === v).length : live.length}</span></button>`).join("")}</div>`;
+  const n = countOf || (v => v ? live.filter(e => e.category === v).length : live.length);
+  return `<div class="cat-chips" role="group" aria-label="분류">${[["", "전체"], ...CATS.map(c => [c, c])].map(([v, t]) => `<button type="button" class="cat-chip" data-act="catChip" data-scope="${scope}" data-v="${esc(v)}" aria-pressed="${cur === v}">${esc(t)}<span class="n">${n(v)}</span></button>`).join("")}</div>`;
 }
 const checksFor = e => CHECKS_BY_CATEGORY[e && e.category] || CHECKS_DEFAULT;
 const COND_RANK = { ok:0, minor:1, broken:2, missing:3 };
@@ -868,7 +870,7 @@ const DEFAULT_DAYS = 3;
 const defaultDue = start => addDays(start, DEFAULT_DAYS - 1);
 let draft = { start: todayStr(), due: defaultDue(todayStr()), dueSet: false, picks: new Set() };
 let pickF = { q: "", cat: "", loc: "", avail: false };
-let cal = { ym: todayStr().slice(0, 7), mode: "month", mine: false, loc: "" };
+let cal = { ym: todayStr().slice(0, 7), mode: "month", mine: false, loc: "", cat: "" };
 
 const isOverdue = l => l.status === "out" && l.due_date < todayStr();
 const eqById = id => equipment.find(e => e.id === id);
@@ -1078,9 +1080,10 @@ const DOW = ["일","월","화","수","목","금","토"];
 const ds = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const loanEnd = l => isOverdue(l) ? (todayStr() > l.due_date ? todayStr() : l.due_date) : l.due_date;
 const calClass = l => isOverdue(l) ? "c-overdue" : ({ reserved: "c-reserved", out: "c-out", checking: "c-checking", done: "c-done" })[l.status] || "c-done";
-function calLoans() {
+function calLoans(anyCat) {
   return loans.filter(l => l.status !== "cancelled"
     && (!cal.mine || l.requester_id === me.id)
+    && (anyCat || !cal.cat || eqById(l.equipment_id)?.category === cal.cat)
     && (!cal.loc || locGroup(eqById(l.equipment_id)?.location) === cal.loc))
     .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.loan_no.localeCompare(b.loan_no) || loanEqCmp(a, b));
 }
@@ -1090,7 +1093,11 @@ function vCal() {
   const [y, m] = cal.ym.split("-").map(Number);
   const first = new Date(y, m - 1, 1), last = new Date(y, m, 0);
   const list = calLoans(), t = todayStr();
-  const monthLoans = list.filter(l => l.start_date <= ds(last) && loanEnd(l) >= ds(first));
+  const inMonth = l => l.start_date <= ds(last) && loanEnd(l) >= ds(first);
+  const monthLoans = list.filter(inMonth);
+  // 분류 버튼 숫자: 이번 달 일정 중 그 분류 장비 수 (분류 고르기 전 기준)
+  const allMonth = calLoans(true).filter(inMonth);
+  const catN = v => v ? allMonth.filter(l => eqById(l.equipment_id)?.category === v).length : allMonth.length;
   const head = `
   <div class="head"><div class="grow"><h2>일정</h2><p class="sub">누가 어떤 장비를 언제 쓰는지 보여 줘요. 일정을 누르면 자세히 볼 수 있어요.</p></div>
     <button class="btn pri" data-go="request">데모 신청</button></div>
@@ -1101,11 +1108,12 @@ function vCal() {
     <select id="calLoc"><option value="">전체 위치</option>${[...LOCS, "기타"].map(c => `<option ${cal.loc === c ? "selected" : ""}>${c}</option>`).join("")}</select>
     <label class="check"><input type="checkbox" id="calMine" ${cal.mine ? "checked" : ""}> 내 신청만</label>
   </div>
+  ${catChips("cal", cal.cat, catN)}
   <div class="legend"><span><i class="c-reserved"></i>예약</span><span><i class="c-out"></i>출고</span><span><i class="c-overdue"></i>연체</span><span><i class="c-checking"></i>반납 확인 중</span><span><i class="c-done"></i>반납 완료</span><span class="meta">· 이번 달 ${new Set(monthLoans.map(l => l.loan_no)).size}건, 장비 ${monthLoans.length}대</span></div>`;
 
   if (cal.mode === "equip") {
     const days = []; for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) days.push(new Date(d));
-    const eqs = equipment.filter(e => e.status !== "retired" && (!cal.loc || locGroup(e.location) === cal.loc))
+    const eqs = equipment.filter(e => e.status !== "retired" && (!cal.loc || locGroup(e.location) === cal.loc) && (!cal.cat || e.category === cal.cat))
       .filter(e => !cal.mine || monthLoans.some(l => l.equipment_id === e.id))
       .sort(eqCmp);
     const rows = eqs.map(e => {
@@ -2623,6 +2631,7 @@ document.addEventListener("click", e => {
     case "catChip": {
       const v = a.dataset.v;
       if (a.dataset.scope === "eq") { filters.eqCat = v; render(); break; }
+      if (a.dataset.scope === "cal") { cal.cat = v; render(); break; }
       pickF.cat = v;   // 신청 화면은 입력한 내용을 지키려고 다시 그리지 않는다
       a.parentElement.querySelectorAll(".cat-chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
       applyPickFilter(); break;
