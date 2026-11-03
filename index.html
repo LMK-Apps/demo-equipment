@@ -437,6 +437,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.067", date: "2026-11-03", db: "020_return_date_edit.sql", items: ["장비 관리자: 신청 상세의 [반납] 칸에서 ‘실제 반납일’을 고칠 수 있음. 같은 신청번호의 반납 장비에 한 번에 적용 가능. 연체 반납 여부와 통계의 연체 비율은 실제 반납일로 셈", "반납 신청을 앱에 기록한 시각은 ‘앱에 기록한 시각’으로 따로 남고 바뀌지 않음 (실제 반납일과 다를 때만 보임)", "상세의 반납 칸: 실제 반납일이 반납 예정일보다 늦으면 ‘연체 N일’ 표시"] },
   { v: "v0.066", date: "2026-11-03", db: "019_equipment_model.sql", items: ["장비에 ‘모델 (묶음 이름)’ 칸 추가. 비워 두면 지금처럼 제품명으로 묶고, 값을 넣으면 제품명이 달라도 같은 모델로 묶음. [장비 수정]에서 기존 모델 이름을 골라 넣을 수 있음", "RA1~RA4를 ‘Resusci Anne QCPR’ 한 묶음으로. 묶음 안에서 제품명이 서로 다르면 펼친 줄마다 제품명도 같이 보여 줌 (Torso·AED 구분)", "검색에 모델 이름도 포함"] },
   { v: "v0.065", date: "2026-11-03", items: ["[장비] 목록의 개별 장비 줄과 [데모 신청] 장비 고르기에 구성품을 한 줄로 표시. 길면 줄임표(…)로 자르고, 마우스를 올리면 전체가 보임"] },
   { v: "v0.064", date: "2026-11-03", items: ["[장비] 목록과 [데모 신청] 장비 고르기: 같은 모델(장비 이름이 같은 장비)이 2대 이상이면 모델 줄 하나로 묶음. 모델 줄에 대수와 상태(사용 가능·대여 중 등)를 보여 주고, 누르면 펼쳐져서 실제 장비(RJ1~RJ6 등)를 보거나 고를 수 있음. 검색하거나 이미 고른 장비가 있으면 자동으로 펼침"] },
@@ -1133,7 +1134,9 @@ function loanView(id) {
       ${f("배송", !l.delivery ? "직접 수령" : o ? shipTxt(o, OUT_STATUS) : "배송 (배송 정보는 신청한 본인과 장비 관리자만 볼 수 있어요)", true)}
     </div></div>
     ${l.return_method || l.returned_at ? `<div class="lv-sec"><h3>반납</h3><div class="fields">
-      ${f("반납 신청", `${esc(retLabel(l) || "–")}${l.returned_at ? ` · <span class="mono">${fmtT(l.returned_at)}</span>` : ""}`, true)}
+      ${f("반납 방법", esc(retLabel(l) || "–"))}
+      ${l.returned_at ? f("실제 반납일", `<span class="mono">${fmtT(l.returned_at)}</span>${kstDate(l.returned_at) > l.due_date ? ` <span class="pill p-bad">연체 ${daysBetween(l.due_date, kstDate(l.returned_at))}일</span>` : ""}${me.isAdmin && ["checking", "done"].includes(l.status) ? ` <button class="btn sm" data-act="retDate" data-id="${l.id}">수정</button>` : ""}`) : ""}
+      ${l.return_recorded_at && fmtT(l.return_recorded_at) !== fmtT(l.returned_at) ? f("앱에 기록한 시각", `<span class="mono">${fmtT(l.return_recorded_at)}</span>`) : ""}
       ${l.return_method === "pickup" && p ? f("회수", shipTxt(p, PICK_STATUS), true) : ""}
       ${f("반납자 자가점검", l.return_self_check ? `<span class="pill ${CHECK_PILL[l.return_self_check] || ""}">${esc(CONDS[l.return_self_check])}</span>` : "–")}
       ${l.return_self_note ? f("자가점검 메모", pre(l.return_self_note), true) : ""}
@@ -2322,6 +2325,33 @@ function inspect(l, single) {
   });
 }
 
+// 실제 반납일 수정 (장비 관리자). 앱에 기록한 시각은 그대로 남는다.
+function retDateEdit(l) {
+  if (!me.isAdmin || !l.returned_at) return;
+  const e = eqById(l.equipment_id) || {}, cur = kstDate(l.returned_at), t = todayStr();
+  const others = loans.filter(x => x.loan_no === l.loan_no && x.id !== l.id && ["checking", "done"].includes(x.status) && x.returned_at);
+  modal(`<h2>실제 반납일 수정</h2>
+    <p class="meta">${esc(e.name)} <span class="mono">${esc(eqNo(e))}</span> · <span class="mono">${esc(l.loan_no)}</span> · 기간 ${fmtD(l.start_date)}–${fmtD(l.due_date)}</p>
+    <p class="meta">장비를 실제로 돌려받은 날로 고쳐 주세요. 반납 예정일보다 늦으면 연체 반납으로 셈해요. 앱에 기록한 시각(<span class="mono">${fmtT(l.return_recorded_at || l.returned_at)}</span>)은 바뀌지 않고 따로 남아요.</p>
+    <div class="fields"><label class="f req"><span>실제 반납일</span><input type="date" id="rdDate" value="${esc(cur)}" min="${esc(l.start_date)}" max="${esc(t)}"></label></div>
+    ${others.length ? `<label class="check"><input type="checkbox" id="rdAll" checked> 같은 신청번호의 반납 장비 ${others.length}대에도 똑같이 적용</label>` : ""}
+    <p class="meta" id="rdHint"></p>
+    <div class="notice bad" id="rdErr" hidden></div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="rdOk">저장</button></div>`, m => {
+    const d = $("#rdDate", m), hint = $("#rdHint", m), ok = $("#rdOk", m);
+    const paint = () => { const v = d.value; hint.innerHTML = !v ? "" : v > l.due_date ? `<b class="t-bad">반납 예정일보다 ${daysBetween(l.due_date, v)}일 늦어요. 연체 반납으로 남아요.</b>` : "반납 예정일 안에 반납한 것으로 남아요."; };
+    d.addEventListener("input", paint); paint();
+    ok.addEventListener("click", async () => {
+      const err = $("#rdErr", m); err.hidden = true;
+      if (!d.value) { err.textContent = "실제 반납일을 골라 주세요."; err.hidden = false; return; }
+      ok.disabled = true;
+      const { data, error } = await sb.rpc("set_return_date", { p_loan_id: l.id, p_date: d.value, p_all: !!$("#rdAll", m)?.checked });
+      ok.disabled = false;
+      if (error) { err.textContent = errText(error); err.hidden = false; return; }
+      closeModal(); toast(data > 1 ? `장비 ${data}대의 실제 반납일을 ${fmtD(d.value)}로 고쳤어요.` : `실제 반납일을 ${fmtD(d.value)}로 고쳤어요.`); await refresh();
+    });
+  });
+}
 function inspectBulk(l, group) {
   const rows = [...group].sort((a, b) => (a.id === l.id ? -1 : b.id === l.id ? 1 : eqNo(eqById(a.equipment_id) || {}).localeCompare(eqNo(eqById(b.equipment_id) || {}))));
   const plan = x => { const e = eqById(x.equipment_id) || {}; return { e, self: x.return_self_check, repair: x.return_self_check === "broken" || x.return_self_check === "missing", loc: placeOf(x) || e.location }; };
@@ -2456,6 +2486,7 @@ document.addEventListener("click", e => {
     case "extend": l && extend(l); break;
     case "editRes": l && editReservation(l); break;
     case "addOut": l && addOutItems(l); break;
+    case "retDate": l && retDateEdit(l); break;
     case "voidOut": l && voidOutItem(l); break;
     case "cancel": l && confirmBox("신청 취소", `${esc(l.loan_no)} · ${eqName} 예약을 취소해요.`, "예약 취소",
       async () => { await must(sb.from("loans").update({ status: "cancelled" }).eq("id", l.id)); toast("예약을 취소했어요."); }, true); break;
