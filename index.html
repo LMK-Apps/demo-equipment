@@ -114,6 +114,14 @@ h3{font-size:14px;margin:0;font-weight:600}
 .cat-chip.bad{background:var(--bad-soft);color:var(--bad)}
 .cat-chip.bad[aria-pressed="true"]{background:var(--bad);color:#fff}
 .lg-list{display:flex;flex-direction:column;gap:12px}
+.hg{border-top:1px solid var(--line);padding:10px 0}
+.list>.hg:first-child{border-top:0;padding-top:2px}
+.hg-h{display:flex;gap:10px;align-items:center}
+.hg-h .main{flex:1;min-width:0}
+.hg-items{margin:6px 0 0 6px;padding-left:14px;border-left:2px solid var(--line);display:flex;flex-direction:column}
+.hg-item{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:13.5px;cursor:pointer}
+.hg-item .main{flex:1;min-width:0}
+.hg-item:hover b{text-decoration:underline}
 .lg-grp{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
 .lg-h{padding:11px 14px;background:var(--surface);display:flex;flex-direction:column;gap:4px;cursor:pointer}
 .lg-h:hover{background:var(--sunk)}
@@ -458,6 +466,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.074", date: "2026-11-03", items: ["[현황] 출고 예정: 대여번호별로 묶음. 묶음 머리에 고객사·신청자·기간·배송 여부와 [출고 처리 N대], 아래에 장비 줄(분류 순서)을 들여써서 보여 줌. 장비별 [출고]도 그대로 있음", "장비 관리자: 같은 대여번호의 예약 장비를 한 번에 출고 처리 (확인 창에 장비와 구성품 목록)"] },
   { v: "v0.073", date: "2026-11-03", items: ["[장비]: QR 찍기·여러 대 선택·장비 등록 버튼을 분류 버튼 줄의 오른쪽으로 옮김", "분류 버튼(예: 기타)을 고른 상태에서 [장비 등록]을 누르면 그 분류가 미리 선택됨 (전체면 시뮬레이터)"] },
   { v: "v0.072", date: "2026-11-03", items: ["작성 창(장비 수정, 반납 신청, 예약 수정, 반납 확인 등 입력 칸이 있는 창)은 창 바깥을 눌러도 닫히지 않음. [닫기]나 ✕로만 닫힘. 바깥을 누르면 창이 살짝 흔들리고 안내가 한 번 뜸", "작성 중에 내용을 입력했으면 Esc로도 닫히지 않음", "보기 창(상세 등)도 창 안에서 끌어서 바깥에서 놓은 경우에는 닫히지 않음"] },
   { v: "v0.071", date: "2026-11-03", items: ["장비 순서 규칙을 하나로 통일: 분류 순서(시뮬레이터 → BLS → MBL → Skill T. → 기타), 같은 분류 안에서는 내부 ID 순. [내 신청]·[출납 대장]·신청 상세·반납 신청·반납 확인·[장비] 목록·[데모 신청]·일정(장비별)·물류사 메일·CSV에 모두 적용", "[내 신청]: 최근 신청이 위로, 같은 신청번호의 장비는 위 규칙대로 붙어서 보임"] },
@@ -1013,6 +1022,25 @@ function loanLine(l, extra = "") {
     <div class="meta">${esc(l.customer || l.purpose)} · ${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? " · 배송" : ""}</div></div>${extra}</div>`;
 }
 
+// 홈 출고 예정: 대여번호별 묶음. 머리에 신청 정보와 [출고 처리 N대], 아래에 장비 줄
+function homeCheckoutGroups(list) {
+  const groups = [...list.reduce((m, l) => (m.has(l.loan_no) ? m.get(l.loan_no).push(l) : m.set(l.loan_no, [l]), m), new Map()).values()]
+    .map(g => g.sort(loanEqCmp)).sort((a, b) => a[0].start_date.localeCompare(b[0].start_date) || a[0].loan_no.localeCompare(b[0].loan_no));
+  return groups.map(g => { const l = g[0], ri = reqInfo(l);
+    return `<div class="hg">
+      <div class="hg-h"><div class="main"><b class="mono">${esc(l.loan_no)}</b> <span class="grp-n">장비 ${g.length}대</span>
+        <div class="meta">${esc(l.customer || l.purpose)} · ${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? " · 배송" : ""}</div></div>
+        ${me.isAdmin ? (g.length > 1 ? `<button class="btn sm pri" data-act="checkoutAll" data-no="${esc(l.loan_no)}">출고 처리 ${g.length}대</button>` : `<button class="btn sm pri" data-act="checkout" data-id="${l.id}">출고 처리</button>`) : pill(LOAN_STATUS, l.status)}</div>
+      <div class="hg-items">${g.map(x => { const e = eqById(x.equipment_id) || {};
+        return `<div class="hg-item" data-act="loanView" data-id="${x.id}"><span class="main">${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}</span>${me.isAdmin && g.length > 1 ? `<button class="btn sm" data-act="checkout" data-id="${x.id}">출고</button>` : ""}</div>`; }).join("")}</div></div>`; }).join("");
+}
+// 같은 대여번호의 예약 장비를 한 번에 출고 (관리자)
+function checkoutAll(no) {
+  const rows = loans.filter(x => x.loan_no === no && x.status === "reserved").sort(loanEqCmp);
+  if (!rows.length) return;
+  confirmBox("출고 처리", `<span class="mono">${esc(no)}</span> · ${esc(nameOf(rows[0].requester_id))} · 장비 ${rows.length}대를 한 번에 출고해요. 구성품을 확인했는지 봐 주세요.<br><br>${rows.map(x => { const e = eqById(x.equipment_id) || {}; return `<b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span>${compLine(e) ? `<br><span class="meta">구성품 ${esc(compLine(e))}</span>` : ""}`; }).join("<br>")}`, `${rows.length}대 출고`,
+    async () => { await must(sb.from("loans").update({ status: "out" }).in("id", rows.map(x => x.id))); toast(`장비 ${rows.length}대를 출고 처리했어요.`); });
+}
 function vHome() {
   const t = todayStr();
   const out = loans.filter(isOverdue).sort((a, b) => a.due_date.localeCompare(b.due_date));
@@ -1031,7 +1059,7 @@ function vHome() {
   </div>
   <div class="grid2">
     <div class="panel"><h3>연체</h3><div class="list">${out.length ? out.map(l => loanLine(l, `<span class="pill p-bad">${daysBetween(l.due_date, t)}일 지남</span>`)).join("") : `<div class="empty">연체된 장비가 없어요.</div>`}</div></div>
-    <div class="panel"><h3>출고 예정 (오늘·내일)</h3><div class="list">${startSoon.length ? startSoon.map(l => loanLine(l, me.isAdmin ? `<button class="btn sm pri" data-act="checkout" data-id="${l.id}">출고 처리</button>` : pill(LOAN_STATUS, l.status))).join("") : `<div class="empty">예정된 출고가 없어요.</div>`}</div></div>
+    <div class="panel"><h3>출고 예정 (오늘·내일)</h3><div class="list">${startSoon.length ? homeCheckoutGroups(startSoon) : `<div class="empty">예정된 출고가 없어요.</div>`}</div></div>
     <div class="panel"><h3>오늘 반납 예정</h3><div class="list">${dueToday.length ? dueToday.map(l => loanLine(l)).join("") : `<div class="empty">오늘 반납 예정인 장비가 없어요.</div>`}</div></div>
     <div class="panel"><h3>반납 확인 대기</h3><div class="list">${checking.length ? checking.map(l => loanLine(l, me.isAdmin ? `<button class="btn sm pri" data-act="inspect" data-id="${l.id}">반납 확인</button>` : pill(LOAN_STATUS, l.status))).join("") : `<div class="empty">확인을 기다리는 반납이 없어요.</div>`}</div></div>
   </div>`;
@@ -2560,6 +2588,7 @@ document.addEventListener("click", e => {
     case "extend": l && extend(l); break;
     case "editRes": l && editReservation(l); break;
     case "addOut": l && addOutItems(l); break;
+    case "checkoutAll": checkoutAll(a.dataset.no); break;
     case "retDate": l && retDateEdit(l); break;
     case "voidOut": l && voidOutItem(l); break;
     case "cancel": l && confirmBox("신청 취소", `${esc(l.loan_no)} · ${eqName} 예약을 취소해요.`, "예약 취소",
