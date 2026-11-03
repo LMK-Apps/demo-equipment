@@ -285,22 +285,28 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 .calnav{display:flex;align-items:center;gap:8px}
 .calnav b{font-size:16px;min-width:96px;text-align:center;font-variant-numeric:tabular-nums}
-.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.cal{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.cal-h,.cal .wk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .cal .dow{font-size:11.5px;font-weight:600;color:var(--muted);text-align:center;padding:6px 0;background:var(--sunk);border-bottom:1px solid var(--line)}
-.cal .day{min-height:104px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px;display:flex;flex-direction:column;gap:2px;min-width:0;cursor:pointer}
-.cal .day:nth-child(7n){border-right:0}
+.cal .wk{grid-template-rows:24px repeat(3,19px) 19px 1fr;row-gap:2px;min-height:104px;border-bottom:1px solid var(--line)}
+.cal .wk:last-child{border-bottom:0}
+.cal .day{grid-row:1/-1;border-right:1px solid var(--line);padding:4px;min-width:0;cursor:pointer}
+.cal .day:nth-child(7){border-right:0}
+.cal .wk .chip{position:relative;z-index:1;align-self:stretch;width:auto;margin:0 4px}
+.cal .wk .chip.l-cut{margin-left:0;border-top-left-radius:0;border-bottom-left-radius:0}
+.cal .wk .chip.r-cut{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.cal .wk .more{position:relative;z-index:1;grid-row:5;align-self:center;pointer-events:none}
 .cal .day.out{background:var(--bg)}
 .cal .day.out .dn{opacity:.45}
 .cal .dn{font-size:12px;font-family:var(--mono);color:var(--muted);display:flex;justify-content:space-between;align-items:center}
 .cal .day.today .dn b{background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:0 6px}
 .cal .sun .dn b{color:var(--bad)} .cal .day.today.sun .dn b{color:var(--accent-ink)}
 .chip{font-size:11px;line-height:17px;padding:0 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;border:0;text-align:left;font-family:inherit;width:100%}
-.chip.cont{opacity:.55}
 .c-reserved{background:var(--accent-soft);color:var(--accent)} .c-out{background:var(--info-soft);color:var(--info)}
 .c-checking{background:var(--warn-soft);color:var(--warn)} .c-overdue{background:var(--bad-soft);color:var(--bad)} .c-done{background:var(--sunk);color:var(--muted)}
 .more{font-size:11px;color:var(--muted);padding-left:4px}
 .cnt{display:none;font-size:11px;font-weight:600;color:var(--accent);font-family:var(--mono)}
-@media (max-width:640px){.cal .day{min-height:56px}.cal .chip,.cal .more{display:none}.cnt{display:block}}
+@media (max-width:640px){.cal .wk{grid-template-rows:auto;min-height:56px}.cal .chip,.cal .more{display:none!important}.cnt{display:block}}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .tl td.d{padding:0;width:26px;min-width:26px;height:30px;border-left:1px solid var(--line);text-align:center;font-size:10.5px;font-weight:600;cursor:default}
@@ -397,6 +403,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.055", date: "2026-11-03", items: ["[일정] 달력: 여러 날 일정을 날짜마다 따로 쓰지 않고 막대 하나로 이어서 보여 줌. 주가 바뀌면 다음 줄에서 이어지고, 잘린 쪽 끝은 평평하게 표시. 겹치는 일정은 줄을 나눠 쌓고, 한 주에 3줄이 넘으면 날짜마다 ‘+N건 더’로 표시"] },
   { v: "v0.054", date: "2026-11-02", db: "017_proxy_request.sql", items: [
     "장비 관리자는 [데모 신청]에서 신청자를 골라 다른 사람 이름으로 신청할 수 있음 (사용 중인 사용자만). 신청은 그 사람의 [내 신청]에 들어가고, 등록한 관리자는 상세에 ‘등록: 이름’으로 남음",
     "장비 관리자는 사용 시작일을 지난 날짜(1년 전까지)로 정할 수 있고, 대여 기간 1달 제한도 받지 않음",
@@ -973,19 +980,42 @@ function vCal() {
       : `<div class="panel"><div class="empty">조건에 맞는 장비가 없어요.</div></div>`);
   }
 
-  const start = new Date(first); start.setDate(1 - first.getDay());
-  const cells = [];
-  for (let d = new Date(start); cells.length < 42 && (d <= last || cells.length % 7); d.setDate(d.getDate() + 1)) {
-    const key = ds(d), items = onDay(monthLoans, key), inMonth = d.getMonth() === m - 1;
-    const chips = items.slice(0, 3).map(l => {
-      const cont = key !== l.start_date && d.getDay() !== 0;
-      return `<button class="chip ${calClass(l)}${cont ? " cont" : ""}" data-act="calLoan" data-id="${l.id}" title="${esc(chipLabel(l))} (${fmtD(l.start_date)}–${fmtD(l.due_date)})">${cont ? "↳ " : ""}${esc(chipLabel(l))}</button>`;
+  // 주(週) 줄마다 일정을 막대로 그린다. 여러 날 일정은 막대 하나로 이어진다.
+  const LANES = 3, start = new Date(first); start.setDate(1 - first.getDay());
+  const order = new Map(monthLoans.map((l, i) => [l.id, i]));
+  const weeks = [];
+  for (let w = new Date(start); w <= last; w.setDate(w.getDate() + 7)) {
+    const days = []; for (let i = 0; i < 7; i++) { const d = new Date(w); d.setDate(w.getDate() + i); days.push(d); }
+    const k0 = ds(days[0]), k6 = ds(days[6]);
+    // 이번 주에 걸친 일정을 구간(시작 칸, 칸 수)으로 자른다.
+    const segs = monthLoans.filter(l => l.start_date <= k6 && loanEnd(l) >= k0).map(l => {
+      const s = days.findIndex(d => ds(d) >= l.start_date), e = 6 - [...days].reverse().findIndex(d => ds(d) <= loanEnd(l));
+      return { l, s, e, lcut: l.start_date < k0, rcut: loanEnd(l) > k6 };
+    }).sort((a, b) => a.s - b.s || (b.e - b.s) - (a.e - a.s) || order.get(a.l.id) - order.get(b.l.id));
+    // 겹치지 않게 줄(lane)을 배정한다.
+    const used = [];
+    for (const g of segs) {
+      let lane = 0;
+      while ((used[lane] || []).some(o => o.s <= g.e && g.s <= o.e)) lane++;
+      (used[lane] = used[lane] || []).push(g); g.lane = lane;
+    }
+    const cells = days.map((d, i) => {
+      const key = ds(d), n = segs.filter(g => g.s <= i && i <= g.e).length, inMonth = d.getMonth() === m - 1;
+      return `<div class="day${inMonth ? "" : " out"}${key === t ? " today" : ""}${d.getDay() === 0 ? " sun" : ""}" style="grid-column:${i + 1}" data-act="calDay" data-d="${key}">
+        <div class="dn"><b>${d.getDate()}</b><span class="cnt">${n || ""}</span></div></div>`;
     }).join("");
-    cells.push(`<div class="day${inMonth ? "" : " out"}${key === t ? " today" : ""}${d.getDay() === 0 ? " sun" : ""}" data-act="calDay" data-d="${key}">
-      <div class="dn"><b>${d.getDate()}</b><span class="cnt">${items.length || ""}</span></div>${chips}${items.length > 3 ? `<span class="more">+${items.length - 3}건 더</span>` : ""}</div>`);
+    const bars = segs.filter(g => g.lane < LANES).map(g => {
+      const l = g.l;
+      return `<button class="chip ${calClass(l)}${g.lcut ? " l-cut" : ""}${g.rcut ? " r-cut" : ""}" style="grid-row:${g.lane + 2};grid-column:${g.s + 1} / span ${g.e - g.s + 1}" data-act="calLoan" data-id="${l.id}" title="${esc(chipLabel(l))} (${fmtD(l.start_date)}–${fmtD(l.due_date)})">${esc(chipLabel(l))}</button>`;
+    }).join("");
+    const more = days.map((d, i) => {
+      const hid = segs.filter(g => g.lane >= LANES && g.s <= i && i <= g.e).length;
+      return hid ? `<span class="more" style="grid-column:${i + 1}">+${hid}건 더</span>` : "";
+    }).join("");
+    weeks.push(`<div class="wk">${cells}${bars}${more}</div>`);
   }
-  return head + `<div class="cal">${DOW.map(w => `<div class="dow">${w}</div>`).join("")}${cells.join("")}</div>
-    <p class="meta">↳ 표시는 앞에서 이어지는 일정이에요. 휴대폰에서는 날짜를 누르면 그날 일정이 보여요.</p>`;
+  return head + `<div class="cal"><div class="cal-h">${DOW.map(w => `<div class="dow">${w}</div>`).join("")}</div>${weeks.join("")}</div>
+    <p class="meta">여러 날 일정은 막대 하나로 이어져요. 끝이 잘린 막대는 이전·다음 주로 이어지는 일정이에요. 휴대폰에서는 날짜를 누르면 그날 일정이 보여요.</p>`;
 }
 function calDay(key) {
   const items = onDay(calLoans(), key);

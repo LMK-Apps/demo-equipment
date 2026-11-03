@@ -46,7 +46,7 @@ const EX = {
   // 일정
   "누가 어떤 장비를 언제 쓰는지 보여 줘요. 일정을 누르면 자세히 볼 수 있어요.": "Shows who uses which equipment and when. Tap a booking for details.",
   "달력": "Calendar", "장비별": "By equipment", "이번 달": "This month", "이전 달": "Previous month", "다음 달": "Next month", "내 신청만": "Mine only",
-  "↳ 표시는 앞에서 이어지는 일정이에요. 휴대폰에서는 날짜를 누르면 그날 일정이 보여요.": "↳ marks a booking continued from earlier. On a phone, tap a date to see that day.",
+  "여러 날 일정은 막대 하나로 이어져요. 끝이 잘린 막대는 이전·다음 주로 이어지는 일정이에요. 휴대폰에서는 날짜를 누르면 그날 일정이 보여요.": "Multi-day bookings show as one bar. A bar with a cut end continues from the previous week or into the next. On a phone, tap a date to see that day.",
   "막대 첫 칸에 신청자 이름 앞 두 글자가 보여요. 칸을 누르면 자세히 볼 수 있어요.": "Each bar starts with the first two letters of the requester's name. Tap a cell for details.",
   "월": "Mon", "화": "Tue", "수": "Wed", "목": "Thu", "금": "Fri", "토": "Sat", "일": "Sun",
 
