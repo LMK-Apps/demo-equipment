@@ -258,6 +258,8 @@ tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .overlay{position:fixed;inset:0;background:rgba(10,14,12,.45);display:flex;align-items:flex-start;justify-content:center;z-index:20;padding:24px 12px;overflow:auto}
 .modal{background:var(--surface);border-radius:12px;max-width:560px;width:100%;padding:18px;display:flex;flex-direction:column;gap:14px;border:1px solid var(--line)}
 .modal{position:relative}
+.modal.nudge{animation:nudge .28s ease}
+@keyframes nudge{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 .modal-x{position:absolute;top:10px;right:10px;font-size:18px}
 .modal>.modal-x+h2{padding-right:40px}
 .modal .actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
@@ -452,6 +454,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.072", date: "2026-11-03", items: ["작성 창(장비 수정, 반납 신청, 예약 수정, 반납 확인 등 입력 칸이 있는 창)은 창 바깥을 눌러도 닫히지 않음. [닫기]나 ✕로만 닫힘. 바깥을 누르면 창이 살짝 흔들리고 안내가 한 번 뜸", "작성 중에 내용을 입력했으면 Esc로도 닫히지 않음", "보기 창(상세 등)도 창 안에서 끌어서 바깥에서 놓은 경우에는 닫히지 않음"] },
   { v: "v0.071", date: "2026-11-03", items: ["장비 순서 규칙을 하나로 통일: 분류 순서(시뮬레이터 → BLS → MBL → Skill T. → 기타), 같은 분류 안에서는 내부 ID 순. [내 신청]·[출납 대장]·신청 상세·반납 신청·반납 확인·[장비] 목록·[데모 신청]·일정(장비별)·물류사 메일·CSV에 모두 적용", "[내 신청]: 최근 신청이 위로, 같은 신청번호의 장비는 위 규칙대로 붙어서 보임"] },
   { v: "v0.070", date: "2026-11-03", items: ["[출납 대장] 상태 버튼 순서: [전체]를 맨 앞으로. 처음 열 때는 그대로 [대여 중]이 선택됨"] },
   { v: "v0.069", date: "2026-11-03", items: ["[출납 대장] 대여번호 줄을 토글로: 처음엔 번호 줄만 보이고, 누르면 장비 목록이 들여쓴 하위 줄로 펼쳐짐. 검색 중이거나 상세에서 ‘출납 대장에서 보기’로 오면 펼친 채로 보임"] },
@@ -1869,7 +1872,19 @@ function modal(html, onMount) {
   const x = html.includes('class="flow"') ? "" : `<button class="icon-btn modal-x" data-close-btn aria-label="닫기">✕</button>`;
   root.innerHTML = `<div class="overlay"><div class="modal" role="dialog" aria-modal="true">${x}${html}</div></div>`;
   const ov = root.firstElementChild;
-  ov.addEventListener("click", e => { if (e.target === ov || e.target.closest("[data-close-btn]")) closeModal(); });
+  // 작성 창(입력 칸이 있는 창)은 바깥을 눌러도 닫지 않는다. 닫기·✕로만 닫는다.
+  // 다른 창도 창 안에서 누르기 시작해 바깥에서 뗀 경우(글자 선택 등)는 닫지 않는다.
+  const isForm = !!ov.querySelector("input,textarea,select,.flow");
+  let downOut = false;
+  ov.addEventListener("pointerdown", e => { downOut = e.target === ov; });
+  ov.addEventListener("click", e => {
+    if (e.target.closest("[data-close-btn]")) return closeModal();
+    if (e.target !== ov || !downOut) return;
+    if (!isForm) return closeModal();
+    const m = ov.firstElementChild; m.classList.remove("nudge"); void m.offsetWidth; m.classList.add("nudge");
+    if (!ov.dataset.hinted) { ov.dataset.hinted = "1"; toast("작성 중인 창은 [닫기]나 ✕를 눌러 닫아 주세요."); }
+  });
+  ov.addEventListener("input", () => { ov.dataset.dirty = "1"; });
   onMount && onMount(ov.firstElementChild);
   const f = ov.querySelector("input:not([type=radio]),select,textarea,button:not(.modal-x)"); f && f.focus();
 }
@@ -1882,7 +1897,8 @@ function showChangelog() {
     <div class="actions"><button class="btn" data-close-btn>닫기</button></div>`);
 }
 function closeModal() { stopScan(); $("#modalRoot").innerHTML = ""; }
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); if (e.key === "Enter" && e.target.id === "rQ") e.preventDefault(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { const ov = $("#modalRoot .overlay"); if (ov && ov.dataset.dirty) toast("작성 중인 내용이 있어요. [닫기]나 ✕를 눌러 닫아 주세요."); else closeModal(); } if (e.key === "Enter" && e.target.id === "rQ") e.preventDefault(); });
 async function busy(btn, fn) { if (btn) btn.disabled = true; try { await fn(); } catch (e) { fail(e); } finally { if (btn) btn.disabled = false; } }
 
 function confirmBox(title, body, okText, fn, danger) {

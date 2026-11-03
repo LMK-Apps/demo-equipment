@@ -206,6 +206,7 @@ const EX = {
   "반납 신청을 한 장비만 반납일을 고칠 수 있어요.": "You can only edit the return date of returned equipment.",
   "실제 반납일은 오늘이나 그 전 날짜로 정해 주세요.": "The actual return date must be today or earlier.",
   "대여번호(신청번호)별로 묶어서 보여 줘요. 번호 줄을 누르면 장비 목록이 펼쳐지고, 장비 줄을 누르면 자세히 볼 수 있어요.": "Grouped by request number. Tap a request to show its equipment, then tap an equipment row for details.", "직접 수령": "Pickup in person",
+  "작성 중인 창은 [닫기]나 ✕를 눌러 닫아 주세요.": "To close this form, tap [Close] or ✕.", "작성 중인 내용이 있어요. [닫기]나 ✕를 눌러 닫아 주세요.": "You have unsaved input. Tap [Close] or ✕ to close.",
   // 서버 오류 메시지
   "같은 기간에 이미 예약된 장비가 있어요. 장비나 기간을 바꿔 주세요.": "Some equipment is already booked for those dates. Change the equipment or dates.",
   "같은 신청번호의 장비만 함께 반납할 수 있어요.": "Only items with the same request number can be returned together.",
