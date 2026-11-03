@@ -196,6 +196,7 @@ const EX = {
   "직접 점검해야 해요. [개별 확인]을 눌러 주세요.": "This needs a manual check. Tap [Check individually].",
   "확인하면 → 장비": "On confirm → equipment", "· 보관 위치": "· Storage",
   "라벨": "Label",
+  "모델 (묶음 이름)": "Model (group name)", "비워 두면 제품명으로 묶어요": "Leave empty to group by product name",
   // 서버 오류 메시지
   "같은 기간에 이미 예약된 장비가 있어요. 장비나 기간을 바꿔 주세요.": "Some equipment is already booked for those dates. Change the equipment or dates.",
   "같은 신청번호의 장비만 함께 반납할 수 있어요.": "Only items with the same request number can be returned together.",
