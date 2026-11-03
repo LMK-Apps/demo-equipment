@@ -104,6 +104,10 @@ h3{font-size:14px;margin:0;font-weight:600}
 .pill{display:inline-flex;align-items:center;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap;background:var(--sunk);color:var(--muted)}
 .p-ok{background:var(--ok-soft);color:var(--ok)}.p-warn{background:var(--warn-soft);color:var(--warn)}.p-bad{background:var(--bad-soft);color:var(--bad)}.p-info{background:var(--info-soft);color:var(--info)}.p-acc{background:var(--accent-soft);color:var(--accent)}
 .cat-chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.chip-bar>.chip-acts{margin:0 0 0 auto}
+.chip-bar>.cat-chips{flex:1 1 360px}
+@media (max-width:640px){.chip-bar{flex-direction:column;align-items:stretch}.chip-bar>.cat-chips{flex:none}.chip-bar>.chip-acts{justify-content:flex-end}}
 .cat-chip{font:inherit;font-size:13.5px;font-weight:500;border:0;border-radius:99px;padding:5px 12px;background:var(--accent-soft);color:var(--accent);cursor:pointer;display:inline-flex;gap:5px;align-items:center}
 .cat-chip:hover{filter:brightness(.96)}
 .cat-chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
@@ -454,6 +458,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.073", date: "2026-11-03", items: ["[장비]: QR 찍기·여러 대 선택·장비 등록 버튼을 분류 버튼 줄의 오른쪽으로 옮김", "분류 버튼(예: 기타)을 고른 상태에서 [장비 등록]을 누르면 그 분류가 미리 선택됨 (전체면 시뮬레이터)"] },
   { v: "v0.072", date: "2026-11-03", items: ["작성 창(장비 수정, 반납 신청, 예약 수정, 반납 확인 등 입력 칸이 있는 창)은 창 바깥을 눌러도 닫히지 않음. [닫기]나 ✕로만 닫힘. 바깥을 누르면 창이 살짝 흔들리고 안내가 한 번 뜸", "작성 중에 내용을 입력했으면 Esc로도 닫히지 않음", "보기 창(상세 등)도 창 안에서 끌어서 바깥에서 놓은 경우에는 닫히지 않음"] },
   { v: "v0.071", date: "2026-11-03", items: ["장비 순서 규칙을 하나로 통일: 분류 순서(시뮬레이터 → BLS → MBL → Skill T. → 기타), 같은 분류 안에서는 내부 ID 순. [내 신청]·[출납 대장]·신청 상세·반납 신청·반납 확인·[장비] 목록·[데모 신청]·일정(장비별)·물류사 메일·CSV에 모두 적용", "[내 신청]: 최근 신청이 위로, 같은 신청번호의 장비는 위 규칙대로 붙어서 보임"] },
   { v: "v0.070", date: "2026-11-03", items: ["[출납 대장] 상태 버튼 순서: [전체]를 맨 앞으로. 처음 열 때는 그대로 [대여 중]이 선택됨"] },
@@ -1291,7 +1296,7 @@ function vEquip() {
   const anyF = !!(filters.eqQ.trim() || filters.eqCat || filters.eqLoc || filters.eqSt);
   return `
   <div class="head"><div class="grow"><h2>장비</h2><p class="sub">장비 ${equipment.length}대. 보관 위치와 최근 점검 결과는 반납 신청과 관리자 점검 때 자동으로 바뀌어요. 행을 누르면 자세히 볼 수 있어요.</p></div>
-    <div class="toolbar" style="margin:0"><button class="btn" data-act="scanQR">QR 찍기</button>${me.isAdmin ? `<button class="btn" data-act="eqSelMode">${eqSel ? "선택 끝내기" : "여러 대 선택"}</button><button class="btn pri" data-act="eqNew">장비 등록</button>` : ""}</div></div>
+    </div>
   <div class="stats">
     <button class="stat stat-btn ${anyF ? "" : "on"}" data-act="eqCard" data-k="all" aria-pressed="${!anyF}"><b>${equipment.filter(e => e.status !== "retired").length}</b><span>전체 보기</span></button>
     ${byLoc.map(([k, n]) => `<button class="stat stat-btn ${filters.eqLoc === k ? "on" : ""}" data-act="eqCard" data-k="loc:${k}" aria-pressed="${filters.eqLoc === k}"><b>${n}</b><span>${k} 보관</span></button>`).join("")}
@@ -1301,7 +1306,8 @@ function vEquip() {
     <select id="eqLoc"><option value="">전체 위치</option>${[...LOCS, "기타"].map(c => `<option ${filters.eqLoc === c ? "selected" : ""}>${c}</option>`).join("")}</select>
     <button class="btn" data-act="eqReset" ${anyF ? "" : "disabled"}>필터 초기화</button>
   </div>
-  ${catChips("eq", filters.eqCat)}
+  <div class="chip-bar">${catChips("eq", filters.eqCat)}
+    <div class="toolbar chip-acts"><button class="btn" data-act="scanQR">QR 찍기</button>${me.isAdmin ? `<button class="btn" data-act="eqSelMode">${eqSel ? "선택 끝내기" : "여러 대 선택"}</button><button class="btn pri" data-act="eqNew">장비 등록</button>` : ""}</div></div>
   ${anyF ? `<p class="meta" style="margin:-4px 0 0">${list.length}대 표시 중${filters.eqSt === "repair" ? " · 수리 필요만" : ""}</p>` : ""}
   ${equipment.length === 0 ? `<div class="panel"><div class="empty">아직 등록된 장비가 없어요. ${me.isAdmin ? "‘장비 등록’으로 첫 장비를 추가해 주세요." : "장비 관리자가 장비를 등록하면 여기에 나타나요."}</div></div>` : `
   <div class="list2">${groupByModel(list).map(g => {
@@ -1908,8 +1914,8 @@ function confirmBox(title, body, okText, fn, danger) {
 
 function nextAssetNo() { const n = Math.max(0, ...equipment.map(e => +(/DEMO-(\d+)/.exec(e.asset_no)?.[1] || 0))); return `DEMO-${String(n + 1).padStart(4, "0")}`; }
 
-function eqForm(e) {
-  e = e || { asset_no: "", label: "", name: "", item_no: "", serial_no: "", category: CATS[0], location: LOCS[0], status: "available", components: "", note: "" };
+function eqForm(e, defCat) {
+  e = e || { asset_no: "", label: "", name: "", item_no: "", serial_no: "", category: CATS.includes(defCat) ? defCat : CATS[0], location: LOCS[0], status: "available", components: "", note: "" };
   const isEtc = !!e.location && !LOCS.includes(e.location);
   modal(`<h2>${e.id ? "장비 수정" : "장비 등록"}</h2>
     ${e.internal_id ? `<p class="meta">내부 ID ${idTag(e)} · 다른 정보를 바꿔도 내부 ID는 바뀌지 않아요.</p>` : `<p class="meta">내부 ID(EQ-0000)는 저장할 때 자동으로 붙어요. 한 번 붙으면 바뀌지 않아요.</p>`}
@@ -2519,7 +2525,7 @@ document.addEventListener("click", e => {
     case "calMode": cal.mode = a.dataset.v; render(); break;
     case "calLoan": case "loanView": loanView(a.dataset.id); break;
     case "calDay": calDay(a.dataset.d); break;
-    case "eqNew": eqForm(); break;
+    case "eqNew": eqForm(null, filters.eqCat); break;
     case "eqView": eqView(a.dataset.id); break;
     case "eqGrp": eqOpen.has(a.dataset.k) ? eqOpen.delete(a.dataset.k) : eqOpen.add(a.dataset.k); render(); break;
     case "pickGrp": { const g = a.closest(".pgrp"), open = g.dataset.open !== "1"; open ? pickOpen.add(a.dataset.k) : pickOpen.delete(a.dataset.k); g.dataset.open = open ? "1" : "0"; g.querySelector(".pgrp-b").hidden = !open; break; }
