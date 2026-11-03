@@ -414,6 +414,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.058", date: "2026-11-03", db: "018_checkout_add_void.sql", items: [
+    "장비 관리자: 출고된 신청의 상세에 [장비 추가] 버튼. 같이 가져간 장비를 같은 신청번호·같은 기간으로 바로 출고 상태로 더함 (대신 신청·출고됨으로 등록한 건도 고칠 수 있음)",
+    "장비 관리자: 출고된 장비 상세에 [등록 취소] 버튼. 잘못 넣은 장비 1대를 ‘취소’로 바꾸고 장비를 ‘보관’으로 되돌림. 사유는 메모에 남음. 마지막 장비면 남은 배송·회수 요청도 취소",
+    "Teams 알림: 출고 장비 추가, 출고 등록 취소",
+  ] },
   { v: "v0.057", date: "2026-11-03", items: ["[장비]·[데모 신청] 분류 고르기를 드롭다운 대신 버튼으로 바꿈 (전체·시뮬레이터·BLS·MBL·Skill T.·기타, 분류별 대수 표시). 누르면 바로 그 분류만 보임"] },
   { v: "v0.056", date: "2026-11-03", items: ["[일정] 휴대폰 달력에도 일정 막대를 보여 줌 (전에는 날짜별 건수만 보였음). 글자를 작게 줄여 한 주에 3줄까지 보여 주고, 넘으면 ‘+N건 더’로 표시"] },
   { v: "v0.055", date: "2026-11-03", items: ["[일정] 달력: 여러 날 일정을 날짜마다 따로 쓰지 않고 막대 하나로 이어서 보여 줌. 주가 바뀌면 다음 줄에서 이어지고, 잘린 쪽 끝은 평평하게 표시. 겹치는 일정은 줄을 나눠 쌓고, 한 주에 3줄이 넘으면 날짜마다 ‘+N건 더’로 표시"] },
@@ -1053,7 +1058,7 @@ function loanView(id) {
   const btn = (act, t, cls = "") => `<button class="btn ${cls}" data-act="${act}" data-id="${l.id}">${t}</button>`;
   const acts = [];
   if (l.status === "reserved") { if (adm) acts.push(btn("checkout", "출고", "pri")); if ((mine || adm) && canEditRes(l)) acts.push(btn("editRes", "예약 수정")); if (mine || adm) acts.push(btn("extend", "연장")); if (mine) acts.push(btn("cancel", "예약 취소", "danger")); }
-  if (l.status === "out") { if (mine || adm) acts.push(btn("extend", "연장"), btn("return", "반납 신청", "pri")); }
+  if (l.status === "out") { if (mine || adm) acts.push(btn("extend", "연장"), btn("return", "반납 신청", "pri")); if (adm) acts.push(btn("addOut", "장비 추가"), btn("voidOut", "등록 취소", "danger")); }
   if (l.status === "checking" && adm) acts.push(btn("inspect", "반납 확인", "pri"));
   const f = (label, val, wide) => `<div${wide ? ` class="wide"` : ""}><div class="meta">${label}</div><div>${val}</div></div>`;
   const pre = t => `<span style="white-space:pre-wrap">${esc(t)}</span>`;
@@ -1303,6 +1308,51 @@ function lockShipFields() {
   ["rDelivery", "sName", "sPhone", "sAddr", "sDate"].forEach(id => { const n = $("#" + id); if (n) n.disabled = true; });
 }
 function exitEdit() { draft = newDraft(); go("mine"); }
+
+/* ---------- 출고된 신청 고치기 (장비 관리자) ---------- */
+// 출고 뒤에는 예약 수정을 못 하므로, 빠뜨린 장비를 더하거나 잘못 넣은 장비를 등록 취소한다.
+function addOutItems(l) {
+  if (!me.isAdmin || l.status !== "out") return;
+  const inNo = new Set(loans.filter(x => x.loan_no === l.loan_no && x.status !== "cancelled").map(x => x.equipment_id));
+  const rows = equipment.filter(e => e.status === "available" && !inNo.has(e.id))
+    .filter(e => !loans.some(x => x.equipment_id === e.id && ACTIVE(x.status) && x.start_date <= l.due_date && l.start_date <= x.due_date))
+    .sort((a, b) => a.category.localeCompare(b.category) || (a.internal_id || "").localeCompare(b.internal_id || ""));
+  modal(`<h2>출고 장비 추가 <span class="mono" style="font-size:.7em">${esc(l.loan_no)}</span></h2>
+    <p class="sub">같이 가져간 장비를 이 신청에 더해요. 같은 기간(<span class="mono">${fmtD(l.start_date)} ~ ${fmtD(l.due_date)}</span>)으로 바로 출고 상태가 돼요.</p>
+    ${rows.length ? `<input id="aoQ" type="search" placeholder="장비 이름이나 번호로 찾기" style="margin-bottom:8px">
+      <div class="pick" id="aoList" style="max-height:46vh;overflow:auto">${rows.map(e => `<label data-hay="${esc(`${e.name} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no || ""} ${e.category} ${e.location}`.toLowerCase())}"><input type="checkbox" data-ao="${e.id}">
+        <div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span><div class="meta">${esc(e.category)} · ${esc(e.location)}</div></div></label>`).join("")}</div>`
+      : `<div class="empty">그 기간에 더할 수 있는 장비가 없어요.</div>`}
+    <p class="meta" id="aoCnt">선택 0대</p>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="aoOk" disabled>추가</button></div>`, m => {
+    const ok = $("#aoOk", m), cnt = $("#aoCnt", m);
+    const sel = () => [...m.querySelectorAll("[data-ao]:checked")].map(x => x.dataset.ao);
+    m.addEventListener("change", () => { const n = sel().length; cnt.textContent = `선택 ${n}대`; ok.disabled = !n; });
+    $("#aoQ", m)?.addEventListener("input", ev => { const q = ev.target.value.trim().toLowerCase(); m.querySelectorAll("#aoList label").forEach(x => x.hidden = !!q && !x.dataset.hay.includes(q)); });
+    ok.addEventListener("click", () => busy(ok, async () => {
+      const ids = sel();
+      await must(sb.rpc("add_to_checkout", { p_loan_no: l.loan_no, p_equipment_ids: ids }));
+      closeModal(); toast(`장비 ${ids.length}대를 더했어요.`); await refresh();
+    }));
+  });
+}
+function voidOutItem(l) {
+  if (!me.isAdmin || l.status !== "out") return;
+  const e = eqById(l.equipment_id) || {}, left = loans.filter(x => x.loan_no === l.loan_no && x.status !== "cancelled" && x.id !== l.id).length;
+  modal(`<h2>등록 취소</h2>
+    <p class="sub"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span> · <span class="mono">${esc(l.loan_no)}</span></p>
+    <p class="meta">이 장비를 신청에서 빼요. 잘못 등록한 경우에만 써 주세요. 실제로 쓰고 돌려받은 장비는 [반납 신청]으로 처리해 주세요.</p>
+    <p class="meta">장비는 바로 ‘보관’으로 돌아가요. 이 기록은 ‘취소’로 남고, 사유는 메모에 남아요.${left ? "" : " 이 신청의 마지막 장비라서 남은 배송·회수 요청도 취소돼요."}</p>
+    <label class="f req"><span>사유</span><textarea id="voWhy" rows="2" placeholder="예: 다른 장비를 잘못 골라 등록함"></textarea></label>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn danger" id="voOk" disabled>등록 취소</button></div>`, m => {
+    const ok = $("#voOk", m), why = $("#voWhy", m);
+    why.addEventListener("input", () => ok.disabled = !why.value.trim());
+    ok.addEventListener("click", () => busy(ok, async () => {
+      await must(sb.rpc("void_checkout_item", { p_loan_id: l.id, p_reason: why.value.trim() }));
+      closeModal(); toast("등록을 취소했어요. 장비는 보관으로 돌아갔어요."); await refresh();
+    }));
+  });
+}
 
 function vRequest() {
   const { start, due } = draft;
@@ -2232,6 +2282,8 @@ document.addEventListener("click", e => {
     case "inspect": l && inspect(l); break;
     case "extend": l && extend(l); break;
     case "editRes": l && editReservation(l); break;
+    case "addOut": l && addOutItems(l); break;
+    case "voidOut": l && voidOutItem(l); break;
     case "cancel": l && confirmBox("신청 취소", `${esc(l.loan_no)} · ${eqName} 예약을 취소해요.`, "예약 취소",
       async () => { await must(sb.from("loans").update({ status: "cancelled" }).eq("id", l.id)); toast("예약을 취소했어요."); }, true); break;
     case "mail": mail(a.dataset.no, a.dataset.dir); break;
