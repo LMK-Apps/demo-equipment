@@ -466,6 +466,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.075", date: "2026-11-03", db: "021_loan_info_edit.sql", items: ["장비 관리자: 출고·반납 확인 중·반납 완료인 신청도 상세의 [신청 정보 수정]으로 신청자·사용 기간·목적·고객사·내부/외부 요청자·메모를 고칠 수 있음. 같은 신청번호의 장비 전체에 적용되고, 바뀐 내용은 Teams로 알림", "출고된 신청은 사용 시작일을 오늘 뒤로 옮길 수 없음. 바꾼 기간이 다른 예약과 겹치면 저장되지 않음"] },
   { v: "v0.074", date: "2026-11-03", items: ["[현황] 출고 예정: 대여번호별로 묶음. 묶음 머리에 고객사·신청자·기간·배송 여부와 [출고 처리 N대], 아래에 장비 줄(분류 순서)을 들여써서 보여 줌. 장비별 [출고]도 그대로 있음", "장비 관리자: 같은 대여번호의 예약 장비를 한 번에 출고 처리 (확인 창에 장비와 구성품 목록)"] },
   { v: "v0.073", date: "2026-11-03", items: ["[장비]: QR 찍기·여러 대 선택·장비 등록 버튼을 분류 버튼 줄의 오른쪽으로 옮김", "분류 버튼(예: 기타)을 고른 상태에서 [장비 등록]을 누르면 그 분류가 미리 선택됨 (전체면 시뮬레이터)"] },
   { v: "v0.072", date: "2026-11-03", items: ["작성 창(장비 수정, 반납 신청, 예약 수정, 반납 확인 등 입력 칸이 있는 창)은 창 바깥을 눌러도 닫히지 않음. [닫기]나 ✕로만 닫힘. 바깥을 누르면 창이 살짝 흔들리고 안내가 한 번 뜸", "작성 중에 내용을 입력했으면 Esc로도 닫히지 않음", "보기 창(상세 등)도 창 안에서 끌어서 바깥에서 놓은 경우에는 닫히지 않음"] },
@@ -1173,6 +1174,7 @@ function loanView(id) {
   if (l.status === "reserved") { if (adm) acts.push(btn("checkout", "출고", "pri")); if ((mine || adm) && canEditRes(l)) acts.push(btn("editRes", "예약 수정")); if (mine || adm) acts.push(btn("extend", "연장")); if (mine) acts.push(btn("cancel", "예약 취소", "danger")); }
   if (l.status === "out") { if (mine || adm) acts.push(btn("extend", "연장"), btn("return", "반납 신청", "pri")); if (adm) acts.push(btn("addOut", "장비 추가"), btn("voidOut", "등록 취소", "danger")); }
   if (l.status === "checking" && adm) acts.push(btn("inspect", "반납 확인", "pri"));
+  if (adm && ["out", "checking", "done"].includes(l.status)) acts.push(btn("infoEdit", "신청 정보 수정"));
   const f = (label, val, wide) => `<div${wide ? ` class="wide"` : ""}><div class="meta">${label}</div><div>${val}</div></div>`;
   const pre = t => `<span style="white-space:pre-wrap">${esc(t)}</span>`;
   const shipTxt = (x, map) => `${esc(map[x.status]?.[0] || x.status)} · ${esc(x.recipient || "")} ${esc(x.phone || "")} · ${esc(x.address || "")}${x.requested_date ? ` · 희망일 ${fmtD(x.requested_date)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.carrier || "")} ${esc(x.tracking_no)}</span>` : ""}`;
@@ -2425,6 +2427,41 @@ function inspect(l, single) {
   });
 }
 
+// 출고 뒤 신청 정보 수정 (장비 관리자): 신청자·기간·목적·고객사·요청자·메모. 같은 신청번호 전체에 적용.
+function loanInfoEdit(l) {
+  if (!me.isAdmin) return;
+  const rows = loans.filter(x => x.loan_no === l.loan_no && x.status !== "cancelled");
+  const owners = people.filter(p => p.status === "active" || p.id === l.requester_id).sort((a, b) => (a.display_name || "").localeCompare(b.display_name || "", "ko"));
+  const started = rows.some(x => ["out", "checking", "done"].includes(x.status));
+  modal(`<h2>신청 정보 수정 <span class="mono" style="font-size:.7em">${esc(l.loan_no)}</span></h2>
+    <p class="meta">이 신청의 장비 ${rows.length}대에 똑같이 적용해요. 장비는 [장비 추가]·[등록 취소]로, 실제 반납일은 [반납] 칸에서 고쳐 주세요. 저장하면 Teams로 바뀐 내용을 알려요.</p>
+    <div class="fields">
+      <label class="f req"><span>신청자</span><select id="ieOwner">${owners.map(p => `<option value="${p.id}" ${p.id === l.requester_id ? "selected" : ""}>${esc(p.display_name || "(이름 없음)")}</option>`).join("")}</select></label>
+      <label class="f req"><span>목적</span><select id="iePurpose">${PURPOSES.map(p => `<option ${p === l.purpose ? "selected" : ""}>${p}</option>`).join("")}</select></label>
+      <label class="f req"><span>사용 시작일</span><input type="date" id="ieStart" value="${esc(l.start_date)}" ${started ? `max="${todayStr()}"` : ""}></label>
+      <label class="f req"><span>반납 예정일</span><input type="date" id="ieDue" value="${esc(l.due_date)}"></label>
+      <label class="f"><span>고객사·기관</span><input id="ieCustomer" value="${esc(l.customer || "")}"></label>
+      <label class="f"><span>내부 요청자</span><input id="ieInternal" value="${esc(l.internal_requester || "")}"></label>
+      <label class="f"><span>외부 요청자</span><input id="ieExternal" value="${esc(l.external_requester || "")}"></label>
+      <label class="f wide"><span>메모</span><textarea id="ieNote">${esc(l.note || "")}</textarea></label>
+    </div>
+    <div class="notice bad" id="ieErr" hidden></div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="ieOk">저장</button></div>`, m => {
+    const ok = $("#ieOk", m), err = $("#ieErr", m), show = t => { err.textContent = t; err.hidden = false; };
+    ok.addEventListener("click", async () => {
+      err.hidden = true;
+      const v = id => $(id, m).value, start = v("#ieStart"), due = v("#ieDue");
+      if (!start || !due) return show("사용 시작일과 반납 예정일을 골라 주세요.");
+      if (due < start) return show("반납 예정일은 사용 시작일과 같거나 그 뒤여야 해요.");
+      ok.disabled = true;
+      const { data, error } = await sb.rpc("update_loan_info", { p_loan_no: l.loan_no, p_requester: v("#ieOwner"), p_start: start, p_due: due,
+        p_purpose: v("#iePurpose"), p_customer: v("#ieCustomer"), p_internal: v("#ieInternal"), p_external: v("#ieExternal"), p_note: v("#ieNote") });
+      ok.disabled = false;
+      if (error) return show(errText(error));
+      closeModal(); toast(data ? `${l.loan_no} 신청 정보를 고쳤어요. (장비 ${data}대)` : "바뀐 내용이 없어요."); await refresh();
+    });
+  });
+}
 // 실제 반납일 수정 (장비 관리자). 앱에 기록한 시각은 그대로 남는다.
 function retDateEdit(l) {
   if (!me.isAdmin || !l.returned_at) return;
@@ -2590,6 +2627,7 @@ document.addEventListener("click", e => {
     case "addOut": l && addOutItems(l); break;
     case "checkoutAll": checkoutAll(a.dataset.no); break;
     case "retDate": l && retDateEdit(l); break;
+    case "infoEdit": l && loanInfoEdit(l); break;
     case "voidOut": l && voidOutItem(l); break;
     case "cancel": l && confirmBox("신청 취소", `${esc(l.loan_no)} · ${eqName} 예약을 취소해요.`, "예약 취소",
       async () => { await must(sb.from("loans").update({ status: "cancelled" }).eq("id", l.id)); toast("예약을 취소했어요."); }, true); break;
