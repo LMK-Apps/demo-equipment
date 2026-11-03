@@ -121,7 +121,10 @@ label.f.req>span::after{content:" *";color:var(--bad)}
 .check input{width:18px;height:18px;accent-color:var(--accent)}
 .overlay.full{padding:0;align-items:stretch;background:var(--surface)}
 .modal.full{max-width:560px;margin:0 auto;min-height:100%;border:0;border-radius:0;padding:4px 20px calc(20px + env(safe-area-inset-bottom));gap:0}
-@media (min-width:640px){.overlay.full{padding:32px;align-items:center;background:rgba(10,14,12,.45)}.modal.full{min-height:0;height:min(760px,calc(100vh - 64px));border-radius:20px;border:1px solid var(--line)}}
+@media (min-width:640px){.overlay.full{padding:32px;align-items:center;background:rgba(10,14,12,.45)}.modal.full{min-height:0;height:min(760px,calc(100vh - 64px));border-radius:20px;border:1px solid var(--line);overflow-y:auto;padding-bottom:0}
+  /* PC 창은 높이가 정해져 있다: 내용이 길면 창 안에서 스크롤하고, 진행 막대와 아래 버튼은 늘 보이게 둔다 */
+  .modal.full .flow-top{position:sticky;top:0;z-index:2;background:var(--surface)}
+  .modal.full .flow-foot,.modal.full .flow-yn{position:sticky;bottom:0;z-index:2;background:var(--surface);padding-bottom:20px;box-shadow:0 -10px 12px -10px rgba(0,0,0,.18)}}
 .flow{display:flex;flex-direction:column;flex:1;min-height:0}
 .flow-top{display:flex;align-items:center;gap:10px;height:52px}
 .icon-btn{border:0;background:none;color:var(--fg);font:inherit;font-size:22px;width:40px;height:40px;border-radius:10px;cursor:pointer;flex:none}
@@ -414,6 +417,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.059", date: "2026-11-03", items: ["PC 화면: 반납 신청처럼 단계로 넘어가는 창에서 장비가 많으면 내용이 창 밖으로 넘치던 문제 고침. 목록은 창 안에서 스크롤되고, 위 진행 막대와 아래 버튼은 늘 보임 (휴대폰은 그대로)"] },
   { v: "v0.058", date: "2026-11-03", db: "018_checkout_add_void.sql", items: [
     "장비 관리자: 출고된 신청의 상세에 [장비 추가] 버튼. 같이 가져간 장비를 같은 신청번호·같은 기간으로 바로 출고 상태로 더함 (대신 신청·출고됨으로 등록한 건도 고칠 수 있음)",
     "장비 관리자: 출고된 장비 상세에 [등록 취소] 버튼. 잘못 넣은 장비 1대를 ‘취소’로 바꾸고 장비를 ‘보관’으로 되돌림. 사유는 메모에 남음. 마지막 장비면 남은 배송·회수 요청도 취소",
