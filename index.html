@@ -60,6 +60,8 @@ nav.tabs .wrap{display:flex;flex-direction:column;padding-block:6px}
 .tab-row.admin{margin-top:4px;padding-top:4px;border-top:1px dashed var(--line)}
 .tab-row.admin button{font-size:13px;padding:5px 10px;opacity:.8}
 .tab-row.admin button[aria-selected="true"]{opacity:1}
+.tab-sep{flex:none;width:1px;height:16px;background:var(--line);margin:0 4px}
+.tab-row.admin button.tab-do{opacity:1;font-weight:700;color:var(--accent)}
 .tab-label{flex:none;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--muted);opacity:.75;padding:0 6px 0 12px}
 nav.tabs button{font:inherit;font-weight:500;border:0;background:none;color:var(--muted);padding:7px 12px;border-radius:6px;cursor:pointer;white-space:nowrap;display:flex;gap:6px;align-items:center}
 nav.tabs button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
@@ -473,6 +475,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.083", date: "2026-11-03", db: "024_checkout_note.sql", items: ["관리자 [확인] 탭 추가: 출고 대기(오늘·내일 시작)와 반납 확인 대기를 한 화면에서 처리. 탭에 처리할 건수 배지", "[현황] 맨 위에 [확인하기 N건] 버튼(장비 관리자, 처리할 건이 있을 때만)", "메뉴 정리: 윗줄은 현황 → 데모 신청 → 내 신청 → 일정 → 장비 → 배송 순. 관리자 줄은 할 일(확인) | 기록(출납 대장·통계) | 설정(사용자)으로 나눔", "출고 창에 ‘출고 메모(선택)’ 칸 추가. 묶음 출고도 같은 창. 메모는 신청 상세와 CSV(출고 메모 열)에 보임"] },
   { v: "v0.082", date: "2026-11-03", db: "023_overdue_guard.sql", items: ["연체 장비 처리: 같은 장비의 앞 신청이 아직 출고·반납 확인 중이면 뒤 예약을 출고할 수 없음(화면·DB 모두 막음). 홈 출고 예정에 ‘앞 건 반납 전’ 표시", "홈 연체 목록: 그 장비를 기다리는 뒤 예약과, 같은 모델의 대체 가능 장비 수를 함께 보여줌", "데모 신청: 연체 중인 장비는 고를 수 없음(DB도 막음). 막힌 이유와 반납 예정일을 글자로 표시"] },
   { v: "v0.081", date: "2026-11-03", items: ["데모 신청: 예약이 겹쳐 막힌 장비에 겹치는 예약 기간과 ‘같은 기간 길이로 언제부터 쓸 수 있는지’를 글자로 표시(예: 11/1–11/5 예약돼 있어요. 11/6부터 쓸 수 있어요.)", "장비 탭(관리자): ‘관리자 점검 없음’ 카드 추가. 관리자 점검이나 반납 확인 기록이 한 번도 없는 장비만 모아 봄(실사용). 위치 카드와 함께 쓸 수 있음", "장비 탭(관리자): ‘자산번호 없음’ 카드 추가. 자산번호가 비었거나 EQ 번호만 들어간 장비만 모아 봄"] },
   { v: "v0.080", date: "2026-11-03", items: ["일반 화면에서 내부 ID(EQ-0000)를 숨김: 현황·일정·장비 목록·데모 신청·내 신청·배송·출납 대장·반납·통계·상세 창. 라벨(예: SM3G, RA1)만 보이고, 라벨이 없으면 장비 이름만", "내부 ID가 그대로 보이는 곳: 장비 등록·수정 창, 장비 상세(관리자만), QR 라벨 인쇄, CSV, 물류사 요청 메일 문안. 검색은 EQ 번호로도 계속 됨"] },
@@ -1028,18 +1031,20 @@ $("#updX").addEventListener("click", () => { verDismissed = $("#upd").dataset.v 
 
 /* ---------- 탭 ---------- */
 // 윗줄: 모든 사용자 · 아랫줄: 장비 관리자만
+// 윗줄 순서: 자주 하는 일(신청·내 신청)을 앞에, 둘러보기(일정·장비·배송)를 뒤에
 const TABS = () => [
-  ["home","현황"], ["cal","일정"], ["equip","장비"], ["request","데모 신청"], ["mine","내 신청"],
+  ["home","현황"], ["request","데모 신청"], ["mine","내 신청"], ["cal","일정"], ["equip","장비"],
   ["ship","배송", shipments.filter(s => s.status === "pending").length],
 ];
+// 관리자 줄: 할 일 | 기록 | 설정 ("|"는 구분선)
 const ADMIN_TABS = () => [
-  ["ledger","출납 대장", loans.filter(isOverdue).length],
-  ["stats","통계"],
+  ["check","확인", checkCount(), "tab-do"], "|",
+  ["ledger","출납 대장", loans.filter(isOverdue).length], ["stats","통계"], "|",
   ["users","사용자", people.filter(p => p.status === "pending").length],
 ];
-const ADMIN_VIEWS = ["ledger", "stats", "users"];
+const ADMIN_VIEWS = ["check", "ledger", "stats", "users"];
 function renderTabs() {
-  const btn = ([k, t, n]) => `<button role="tab" aria-selected="${view === k}" data-tab="${k}">${t}${n ? `<span class="count">${n}</span>` : ""}</button>`;
+  const btn = x => x === "|" ? `<span class="tab-sep" aria-hidden="true"></span>` : (([k, t, n, c]) => `<button role="tab" aria-selected="${view === k}" data-tab="${k}"${c ? ` class="${c}"` : ""}>${t}${n ? `<span class="count">${n}</span>` : ""}</button>`)(x);
   $("#tabs").innerHTML = `<div class="tab-row">${TABS().map(btn).join("")}</div>`
     + (me.isAdmin ? `<div class="tab-row admin"><span class="tab-label">관리자</span>${ADMIN_TABS().map(btn).join("")}</div>` : "");
 }
@@ -1049,12 +1054,51 @@ function go(v) { if (v !== "request" && draft.edit) draft = newDraft(); if (v !=
 /* ---------- 화면 ---------- */
 function render() {
   renderTabs();
-  const views = { home: vHome, cal: vCal, stats: vStats, equip: vEquip, request: vRequest, mine: vMine, ship: vShip, ledger: vLedger, users: vUsers };
+  const views = { check: vCheck, home: vHome, cal: vCal, stats: vStats, equip: vEquip, request: vRequest, mine: vMine, ship: vShip, ledger: vLedger, users: vUsers };
   if (!views[view] || (ADMIN_VIEWS.includes(view) && !me.isAdmin)) view = "home";
   $("#main").innerHTML = `<section data-view="${view}">${views[view]()}</section>`;
   if (view === "request") applyPickFilter();
 }
 
+/* ---------- 확인 (관리자) ---------- */
+const groupByNo = list => [...list.reduce((m, l) => (m.has(l.loan_no) ? m.get(l.loan_no).push(l) : m.set(l.loan_no, [l]), m), new Map()).values()].map(g => g.sort(loanEqCmp));
+const checkoutDue = () => loans.filter(l => l.status === "reserved" && l.start_date <= addDays(todayStr(), 1));
+const returnDue = () => loans.filter(l => l.status === "checking");
+const checkCount = () => groupByNo(checkoutDue()).length + groupByNo(returnDue()).length;
+// 반납 확인 대기: 신청번호별 묶음. 머리에 [반납 확인 N대] (여러 대면 한 번에 확인하는 창이 열림)
+function returnCheckGroups(list) {
+  return groupByNo(list).sort((a, b) => (a[0].returned_at || "").localeCompare(b[0].returned_at || "")).map(g => { const l = g[0], ri = reqInfo(l);
+    return `<div class="hg">
+      <div class="hg-h"><div class="main"><b class="mono">${esc(l.loan_no)}</b> <span class="grp-n">장비 ${g.length}대</span>
+        <div class="meta">${esc(l.customer || l.purpose)} · ${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""} · ${esc(retLabel(l) || "")}${l.returned_at ? ` · 반납 ${fmtT(l.returned_at)}` : ""}</div></div>
+        <button class="btn sm pri" data-act="inspect" data-id="${l.id}">반납 확인${g.length > 1 ? ` ${g.length}대` : ""}</button></div>
+      <div class="hg-items">${g.map(x => { const e = eqById(x.equipment_id) || {};
+        return `<div class="hg-item" data-act="loanView" data-id="${x.id}"><span class="main">${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}</span>${x.return_self_check ? `<span class="pill ${CHECK_PILL[x.return_self_check] || ""}">자가점검 ${esc(CONDS[x.return_self_check])}</span>` : ""}</div>`; }).join("")}</div></div>`; }).join("");
+}
+function vCheck() {
+  const co = checkoutDue(), rt = returnDue(), n = checkCount();
+  return `
+  <div class="head"><div class="grow"><h2>확인</h2><p class="sub">장비 관리자가 처리할 출고와 반납 확인을 모았어요. 출고는 오늘·내일 시작하는 예약과 시작일이 지났는데 아직 출고하지 않은 예약이에요.</p></div>
+    <button class="btn" data-act="refresh">새로 고침</button></div>
+  ${n ? "" : `<div class="panel"><div class="empty">지금 확인할 건이 없어요.</div></div>`}
+  <div class="grid2">
+    <div class="panel"><h3>출고 대기 <span class="grp-n">${groupByNo(co).length}건</span></h3><div class="list">${co.length ? homeCheckoutGroups(co) : `<div class="empty">출고할 예약이 없어요.</div>`}</div></div>
+    <div class="panel"><h3>반납 확인 대기 <span class="grp-n">${groupByNo(rt).length}건</span></h3><div class="list">${rt.length ? returnCheckGroups(rt) : `<div class="empty">확인을 기다리는 반납이 없어요.</div>`}</div></div>
+  </div>`;
+}
+// 출고 창: 장비·구성품을 보여 주고, 필요하면 출고 메모를 남긴다. held는 앞 신청 때문에 이번에 빼는 장비
+function checkoutForm(rows, held = []) {
+  const l = rows[0];
+  modal(`<h2>출고 처리</h2><p class="meta"><span class="mono">${esc(l.loan_no)}</span> · ${esc(nameOf(l.requester_id))} · 장비 ${rows.length}대를 출고해요. 구성품을 확인했는지 봐 주세요.</p>
+    <div class="list">${rows.map(x => { const e = eqById(x.equipment_id) || {}; return `<div class="row"><div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span>${compLine(e) ? `<div class="meta">구성품 ${esc(compLine(e))}</div>` : ""}</div></div>`; }).join("")}</div>
+    ${held.length ? `<div class="notice">앞 신청이 끝나지 않은 ${held.length}대는 이번에 빼요: ${esc(held.map(x => eqNo(eqById(x.equipment_id)) || eqById(x.equipment_id)?.name || "").join(", "))}</div>` : ""}
+    <div class="fields"><label class="f wide"><span>출고 메모 (선택)</span><textarea id="coNote" rows="2" placeholder="예: 충전기 빠짐, 외관 흠집 사진 찍어 둠"></textarea></label></div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="coOk">${rows.length > 1 ? `${rows.length}대 출고` : "출고"}</button></div>`,
+    m => { const b = $("#coOk", m); b.addEventListener("click", () => busy(b, async () => {
+      const note = $("#coNote", m).value.trim();
+      await must(sb.from("loans").update(note ? { status: "out", checkout_note: note } : { status: "out" }).in("id", rows.map(x => x.id)));
+      toast(rows.length > 1 ? `장비 ${rows.length}대를 출고 처리했어요.` : "출고 처리했어요."); closeModal(); await refresh(); })); });
+}
 // 같은 장비의 앞 신청이 아직 끝나지 않았는지(출고 중 또는 반납 확인 중)
 const busyBefore = l => loans.find(x => x.equipment_id === l.equipment_id && x.id !== l.id && (x.status === "out" || x.status === "checking"));
 // 같은 모델이고 그 기간에 쓸 수 있는 다른 장비
@@ -1097,9 +1141,7 @@ function checkoutAll(no) {
   const rows = all.filter(x => !busyBefore(x)), held = all.filter(x => busyBefore(x));
   if (!all.length) return;
   if (!rows.length) return checkoutBlocked(held);
-  const heldNote = held.length ? `<br><br><b style="color:var(--bad)">앞 신청이 끝나지 않은 ${held.length}대는 이번에 빼요:</b> ${held.map(x => esc(eqNo(eqById(x.equipment_id)) || eqById(x.equipment_id)?.name || "")).join(", ")}` : "";
-  confirmBox("출고 처리", `<span class="mono">${esc(no)}</span> · ${esc(nameOf(rows[0].requester_id))} · 장비 ${rows.length}대를 한 번에 출고해요. 구성품을 확인했는지 봐 주세요.<br><br>${rows.map(x => { const e = eqById(x.equipment_id) || {}; return `<b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span>${compLine(e) ? `<br><span class="meta">구성품 ${esc(compLine(e))}</span>` : ""}`; }).join("<br>")}${heldNote}`, `${rows.length}대 출고`,
-    async () => { await must(sb.from("loans").update({ status: "out" }).in("id", rows.map(x => x.id))); toast(`장비 ${rows.length}대를 출고 처리했어요.`); });
+  checkoutForm(rows, held);
 }
 function vHome() {
   const t = todayStr();
@@ -1110,7 +1152,7 @@ function vHome() {
   const cnt = k => equipment.filter(e => e.status === k).length;
   return `
   <div class="head"><div class="grow"><h2>오늘 현황</h2><p class="sub">${t.replace(/-/g, ".")} 기준. 연체는 반납 예정일이 지났는데 아직 출고 상태인 건이에요.</p></div>
-    <button class="btn" data-act="refresh">새로 고침</button><button class="btn" data-act="scanQR">QR 찍기</button><button class="btn pri" data-go="request">데모 신청</button></div>
+    <button class="btn" data-act="refresh">새로 고침</button><button class="btn" data-act="scanQR">QR 찍기</button>${me.isAdmin && checkCount() ? `<button class="btn pri" data-go="check">확인하기 ${checkCount()}건</button>` : ""}<button class="btn pri" data-go="request">데모 신청</button></div>
   <div class="stats">
     <div class="stat"><b>${cnt("available")}</b><span>사용 가능 장비</span></div>
     <div class="stat"><b>${cnt("onloan")}</b><span>대여 중</span></div>
@@ -1257,6 +1299,7 @@ function loanView(id) {
     </div></div>
     <div class="lv-sec"><h3>출고·배송</h3><div class="fields">
       ${f("출고", l.checkout_at ? `<span class="mono">${fmtT(l.checkout_at)}</span>` : "아직 출고 전")}
+      ${l.checkout_note ? f("출고 메모", pre(l.checkout_note), true) : ""}
       ${f("배송", !l.delivery ? "직접 수령" : o ? shipTxt(o, OUT_STATUS) : "배송 (배송 정보는 신청한 본인과 장비 관리자만 볼 수 있어요)", true)}
     </div></div>
     ${l.return_method || l.returned_at ? `<div class="lv-sec"><h3>반납</h3><div class="fields">
@@ -2663,10 +2706,10 @@ function shipEdit(sid) {
 }
 
 function exportCsv() {
-  const head = ["신청번호","장비 ID","라벨","자산번호","제품명","보관 위치","신청자","내부 요청자","외부 요청자","목적","고객사","시작일","반납 예정일","배송","상태","연체일","출고","반납","반납 방법","자가점검","자가점검 메모","점검 결과","점검 메모","연장 횟수"];
+  const head = ["신청번호","장비 ID","라벨","자산번호","제품명","보관 위치","신청자","내부 요청자","외부 요청자","목적","고객사","시작일","반납 예정일","배송","상태","연체일","출고","반납","반납 방법","자가점검","자가점검 메모","점검 결과","점검 메모","연장 횟수","출고 메모"];
   const t = todayStr();
   const rows = [...loans].sort((a, b) => a.loan_no.localeCompare(b.loan_no) || loanEqCmp(a, b)).map(l => { const e = eqById(l.equipment_id) || {}; return [l.loan_no, e.internal_id || "", e.label || "", assetNo(e), e.name, e.location, nameOf(l.requester_id), l.internal_requester, l.external_requester, l.purpose, l.customer, l.start_date, l.due_date,
-    l.delivery ? "Y" : "N", LOAN_STATUS[l.status]?.[0] || l.status, isOverdue(l) ? daysBetween(l.due_date, t) : "", fmtT(l.checkout_at), fmtT(l.returned_at), retLabel(l), CONDS[l.return_self_check] || "", l.return_self_note || "", CONDS[l.return_condition] || "", l.return_note || "", l.extension_count || 0]; });
+    l.delivery ? "Y" : "N", LOAN_STATUS[l.status]?.[0] || l.status, isOverdue(l) ? daysBetween(l.due_date, t) : "", fmtT(l.checkout_at), fmtT(l.returned_at), retLabel(l), CONDS[l.return_self_check] || "", l.return_self_note || "", CONDS[l.return_condition] || "", l.return_note || "", l.extension_count || 0, l.checkout_note || ""]; });
   const csv = "﻿" + [head, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -2721,8 +2764,7 @@ document.addEventListener("click", e => {
       render(); break;
     }
     case "checkout": if (l && busyBefore(l)) { checkoutBlocked([l]); break; }
-      l && confirmBox("출고 처리", `${eqName}를 ${esc(nameOf(l.requester_id))}에게 출고해요. 구성품을 확인했는지 봐 주세요.<br><br>${esc(eqById(l.equipment_id)?.components || "")}`, "출고",
-      async () => { await must(sb.from("loans").update({ status: "out" }).eq("id", l.id)); toast("출고 처리했어요."); }); break;
+      l && checkoutForm([l]); break;
     case "return": l && returnForm(l); break;
     case "inspect": l && inspect(l); break;
     case "extend": l && extend(l); break;
