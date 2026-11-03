@@ -471,6 +471,11 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.079", date: "2026-11-03", db: "022_purpose_v2.sql", items: [
+    "신청 목적 정리: 영업 데모 · 고객 교육·지원 · 학회·전시 · 장기 대여 · 내부 사용 · 기타. 목적을 고르면 아래에 정의가 한 줄로 보임",
+    "목적이 ‘기타’면 ‘기타 내용’ 칸이 나타나고, 적어야 신청·수정할 수 있음. 상세와 출납 대장에 ‘기타 · 내용’으로 보임",
+    "기존 기록 옮김: 고객 데모→영업 데모, 교육·워크숍→고객 교육·지원, 학회·전시회→학회·전시, 내부 교육→내부 사용. 기타 중 메모로 용도가 분명한 3건(국시원 장비평가→영업 데모, 을지대 대체품·연세의료원 PALS→고객 교육·지원)도 옮김",
+  ] },
   { v: "v0.078", date: "2026-11-03", items: ["[일정] 분류 버튼 추가 (전체·시뮬레이터·BLS·MBL·Skill T.·기타). 고르면 그 분류 장비의 일정만 보임. 버튼 숫자는 이번 달 일정의 장비 수. 달력·장비별 보기 둘 다 적용"] },
   { v: "v0.077", date: "2026-11-03", items: ["[일정] 달력 칸을 늘려 한 주에 일정 막대를 7줄까지 보여 줌 (전에는 3줄). 넘칠 때만 ‘+N건 더’ 표시. 일정이 적은 주는 칸 높이가 그만큼만 늘어남"] },
   { v: "v0.076", date: "2026-11-03", items: ["[통계] 예약 건도 포함: 장비별 막대에서 사용(반납 완료·진행 중)은 진한 초록, 예약(예정)은 연한 초록으로 이어 붙여 표시. 대여 횟수·일수 옆에 ‘+ 예약 n’ 표시, 정렬은 사용+예약 합계 순", "요약에 ‘예약 일수 (예정)’ 추가. 신청 건수와 목적·고객사·신청자별 순위에 앞으로 시작할 예약도 포함하고, 순위 막대도 사용(진한 초록)·예약(연한 초록)으로 나눔", "예약만 있는 장비는 ‘예약만’으로 표시하고 미사용 장비 수에서 뺌. 마지막 사용 칸에 다음 예약일 표시. 가동률은 실제 사용 일수 기준 그대로"] },
@@ -774,7 +779,22 @@ const catRank = c => { const i = CATS.indexOf(c); return i < 0 ? CATS.length : i
 const eqCmp = (a, b) => catRank(a && a.category) - catRank(b && b.category) || ((a && a.internal_id) || "").localeCompare((b && b.internal_id) || "", "en", { numeric: true });
 const loanEqCmp = (a, b) => eqCmp(eqById(a.equipment_id), eqById(b.equipment_id));
 const LOCS = ["의왕","문정"];
-const PURPOSES = ["고객 데모","전시회","교육·워크숍","학회","내부 교육","기타"];
+// 신청 목적 (2026-11-03 정리). 기타는 메모에 이유를 적어야 한다.
+const PURPOSES = ["영업 데모","고객 교육·지원","학회·전시","장기 대여","내부 사용","기타"];
+const PURPOSE_DESC = {
+  "영업 데모": "구매를 검토하는 고객에게 시연해요. (예: 병원·학교 시연, 장비 평가)",
+  "고객 교육·지원": "이미 산 고객의 교육, 설치 후 지원, 수리 중 대체품, 워크숍이에요.",
+  "학회·전시": "학회 부스, 전시회에 가져가요.",
+  "장기 대여": "2주 넘게 고객에게 빌려줘요.",
+  "내부 사용": "사내 교육, 촬영, 점검에 써요.",
+  "기타": "위에 없는 경우예요. 아래 ‘기타 내용’에 어떤 용도인지 적어 주세요.",
+};
+const purposeDesc = p => PURPOSE_DESC[p] || "";
+// 기타 내용은 메모 첫 줄에 '[기타] 내용'으로 함께 저장하고, 화면에서는 따로 보여 준다
+const ETC_PFX = "[기타] ";
+const splitNote = note => { const n = note || ""; if (!n.startsWith(ETC_PFX)) return { etc: "", memo: n }; const i = n.indexOf("\n"); return i < 0 ? { etc: n.slice(ETC_PFX.length).trim(), memo: "" } : { etc: n.slice(ETC_PFX.length, i).trim(), memo: n.slice(i + 1) }; };
+const joinNote = (purpose, etc, memo) => { const m = (memo || "").trim(), e = (etc || "").trim(); return purpose === "기타" && e ? ETC_PFX + e + (m ? "\n" + m : "") : m; };
+const purposeText = l => { const e = l.purpose === "기타" ? splitNote(l.note).etc : ""; return l.purpose + (e ? ` · ${e}` : ""); };
 const CONDS = { ok:"정상", minor:"경미한 손상", broken:"파손 또는 수리 필요", missing:"구성품 누락" };
 const ACTIVE = s => s === "reserved" || s === "out";
 const CHECK_PILL = { ok:"p-ok", minor:"p-warn", broken:"p-bad", missing:"p-bad" };
@@ -1199,10 +1219,10 @@ function loanView(id) {
       ${f("기간", `<span class="mono">${fmtD(l.start_date)} ~ ${fmtD(l.due_date)}</span> (${daysBetween(l.start_date, l.due_date) + 1}일)${l.extension_count ? ` · 연장 ${l.extension_count}회` : ""}`)}
       ${f("신청자", esc(nameOf(l.requester_id)) + (() => { const by = loans.find(x => x.loan_no === l.loan_no && x.created_by)?.created_by; return by && by !== l.requester_id ? ` <span class="meta">(등록: ${esc(nameOf(by))})</span>` : ""; })())}
       ${f("요청자", esc(ri || "–"))}
-      ${f("목적", esc(l.purpose))}
+      ${f("목적", esc(purposeText(l)))}
       ${f("고객사·기관", esc(l.customer || "–"))}
       ${f("신청일", l.created_at ? `<span class="mono">${fmtT(l.created_at)}</span>` : "–")}
-      ${l.note ? f("메모", pre(l.note), true) : ""}
+      ${splitNote(l.note).memo ? f("메모", pre(splitNote(l.note).memo), true) : ""}
       ${group.length ? f("함께 신청한 장비", group.map(x => `${esc(eqById(x.equipment_id)?.name)} (<span class="mono">${esc(eqNo(eqById(x.equipment_id)))}</span>)`).join(", "), true) : ""}
     </div></div>
     <div class="lv-sec"><h3>출고·배송</h3><div class="fields">
@@ -1453,7 +1473,7 @@ function editReservation(l) {
   draft = { start: l.start_date, due: l.due_date, dueSet: true, picks: new Set(rows.map(x => x.equipment_id)), edit: l.loan_no, owner: l.requester_id,
     own: new Set(rows.map(x => x.equipment_id)), shipLocked: !!out && out.status !== "pending" };
   closeModal(); go("request");
-  restoreReqFields({ rPurpose: l.purpose, rCustomer: l.customer || "", rInternal: l.internal_requester || "", rExternal: l.external_requester || "", rNote: l.note || "",
+  restoreReqFields({ rPurpose: l.purpose, rEtc: splitNote(l.note).etc, rCustomer: l.customer || "", rInternal: l.internal_requester || "", rExternal: l.external_requester || "", rNote: splitNote(l.note).memo,
     rDelivery: !!out, sName: out?.recipient || "", sPhone: out?.phone || "", sAddr: out?.address || "", sDate: out?.requested_date || l.start_date,
     sPick: pk && pk.status === "scheduled" ? pk.requested_date : "", sMemo: out?.memo || "" });
   lockShipFields();
@@ -1572,7 +1592,8 @@ function vRequest() {
           : `<label class="f wide"><span>신청자</span><input id="rApplicant" value="${esc(ownerName)}" readonly></label>`}
         <label class="f"><span>내부 요청자</span><input id="rInternal" placeholder="요청한 사내 담당자 (없으면 비움)"></label>
         <label class="f"><span>외부 요청자</span><input id="rExternal" placeholder="고객사 담당자 이름·직함"></label>
-        <label class="f req"><span>목적</span><select id="rPurpose">${PURPOSES.map(p => `<option>${p}</option>`).join("")}</select></label>
+        <label class="f req"><span>목적</span><select id="rPurpose">${PURPOSES.map(p => `<option>${p}</option>`).join("")}</select><span class="meta" id="rPurposeDesc">${esc(purposeDesc(PURPOSES[0]))}</span></label>
+        <label class="f req" id="rEtcWrap" hidden><span>기타 내용</span><input id="rEtc" maxlength="60" placeholder="어떤 용도인지 적어 주세요 (예: 사내 행사 지원)"></label>
         <label class="f"><span>고객사·기관</span><input id="rCustomer" placeholder="예: OO대학교 간호학과"></label>
         <label class="f wide"><span>메모</span><textarea id="rNote" placeholder="데모 장소, 함께 가져갈 소모품 등"></textarea></label>
       </div>
@@ -1733,7 +1754,7 @@ function vLedger() {
       <div class="lg-h1"><span class="grp-arrow" aria-hidden="true">▸</span><b class="mono">${esc(l.loan_no)}</b><span>${esc(nameOf(l.requester_id))}${ri ? ` <span class="meta">(${esc(ri)})</span>` : ""}</span><span class="grp-n">장비 ${all.length || g.length}대</span>
         <span class="lg-st">${late ? `<span class="pill p-bad">연체 ${late}</span>` : ""}${counts.map(([k, n]) => `<span class="pill ${LOAN_STATUS[k][1]}">${esc(LOAN_STATUS[k][0])} ${n}</span>`).join("")}</span>
         ${me.isAdmin && checking.length > 1 ? `<button class="btn sm pri" data-act="inspect" data-id="${checking[0].id}">반납 확인 ${checking.length}대</button>` : ""}</div>
-      <div class="r2-l2 lg-h2"><span>${esc(l.purpose)}${l.customer ? ` · ${esc(l.customer)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div></div>`; };
+      <div class="r2-l2 lg-h2"><span>${esc(purposeText(l))}${l.customer ? ` · ${esc(l.customer)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div></div>`; };
   return `
   <div class="head"><div class="grow"><h2>출납 대장</h2><p class="sub">대여번호(신청번호)별로 묶어서 보여 줘요. 번호 줄을 누르면 장비 목록이 펼쳐지고, 장비 줄을 누르면 자세히 볼 수 있어요.${me.isAdmin ? "" : " 출고·점검은 장비 관리자만 할 수 있어요."}</p></div>
     <button class="btn" data-act="csv">CSV 내보내기</button></div>
@@ -2081,6 +2102,8 @@ async function submitRequest() {
   if (!outReg && !draft.edit && due < todayStr()) return show("반납 예정일이 이미 지났어요. 장비를 이미 가져갔다면 ‘출고됨으로 등록’을 켜 주세요.");
   const picks = [...draft.picks];
   if (!picks.length) return show("빌릴 장비를 1대 이상 골라 주세요.");
+  if ($("#rPurpose").value === "기타" && !$("#rEtc").value.trim()) { $("#rEtc").focus(); return show("목적이 ‘기타’면 ‘기타 내용’을 적어 주세요."); }
+  const noteVal = joinNote($("#rPurpose").value, $("#rEtc").value, $("#rNote").value);
   let shipment = null;
   if ($("#rDelivery").checked) {
     shipment = { recipient: $("#sName").value.trim(), phone: $("#sPhone").value.trim(), address: $("#sAddr").value.trim(), date: $("#sDate").value, memo: $("#sMemo").value.trim() };
@@ -2094,7 +2117,7 @@ async function submitRequest() {
       await must(sb.rpc("update_reservation", {
         p_loan_no: no, p_equipment_ids: picks, p_start: start, p_due: due, p_purpose: $("#rPurpose").value,
         p_customer: $("#rCustomer").value, p_internal: $("#rInternal").value, p_external: $("#rExternal").value,
-        p_note: $("#rNote").value, p_shipment: shipment,
+        p_note: noteVal, p_shipment: shipment,
       }));
       draft = newDraft(); await refresh(true); go("mine");
       toast(`${no} 예약을 고쳤어요.`);
@@ -2105,7 +2128,7 @@ async function submitRequest() {
     const args = {
       p_equipment_ids: picks, p_start: start, p_due: due, p_purpose: $("#rPurpose").value,
       p_customer: $("#rCustomer").value, p_internal: $("#rInternal").value, p_external: $("#rExternal").value,
-      p_note: $("#rNote").value, p_shipment: shipment,
+      p_note: noteVal, p_shipment: shipment,
     };
     if (owner) args.p_requester = owner;          // 새 값은 쓸 때만 보낸다
     if (outReg) args.p_checked_out = true;
@@ -2462,25 +2485,28 @@ function loanInfoEdit(l) {
     <p class="meta">이 신청의 장비 ${rows.length}대에 똑같이 적용해요. 장비는 [장비 추가]·[등록 취소]로, 실제 반납일은 [반납] 칸에서 고쳐 주세요. 저장하면 Teams로 바뀐 내용을 알려요.</p>
     <div class="fields">
       <label class="f req"><span>신청자</span><select id="ieOwner">${owners.map(p => `<option value="${p.id}" ${p.id === l.requester_id ? "selected" : ""}>${esc(p.display_name || "(이름 없음)")}</option>`).join("")}</select></label>
-      <label class="f req"><span>목적</span><select id="iePurpose">${PURPOSES.map(p => `<option ${p === l.purpose ? "selected" : ""}>${p}</option>`).join("")}</select></label>
+      <label class="f req"><span>목적</span><select id="iePurpose">${PURPOSES.map(p => `<option ${p === l.purpose ? "selected" : ""}>${p}</option>`).join("")}</select><span class="meta" id="iePurposeDesc">${esc(purposeDesc(l.purpose))}</span></label>
+      <label class="f req" id="ieEtcWrap" ${l.purpose === "기타" ? "" : "hidden"}><span>기타 내용</span><input id="ieEtc" maxlength="60" value="${esc(splitNote(l.note).etc)}" placeholder="어떤 용도인지 적어 주세요"></label>
       <label class="f req"><span>사용 시작일</span><input type="date" id="ieStart" value="${esc(l.start_date)}" ${started ? `max="${todayStr()}"` : ""}></label>
       <label class="f req"><span>반납 예정일</span><input type="date" id="ieDue" value="${esc(l.due_date)}"></label>
       <label class="f"><span>고객사·기관</span><input id="ieCustomer" value="${esc(l.customer || "")}"></label>
       <label class="f"><span>내부 요청자</span><input id="ieInternal" value="${esc(l.internal_requester || "")}"></label>
       <label class="f"><span>외부 요청자</span><input id="ieExternal" value="${esc(l.external_requester || "")}"></label>
-      <label class="f wide"><span>메모</span><textarea id="ieNote">${esc(l.note || "")}</textarea></label>
+      <label class="f wide"><span>메모</span><textarea id="ieNote">${esc(splitNote(l.note).memo)}</textarea></label>
     </div>
     <div class="notice bad" id="ieErr" hidden></div>
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="ieOk">저장</button></div>`, m => {
     const ok = $("#ieOk", m), err = $("#ieErr", m), show = t => { err.textContent = t; err.hidden = false; };
+    $("#iePurpose", m).addEventListener("change", ev => { $("#iePurposeDesc", m).textContent = purposeDesc(ev.target.value); $("#ieEtcWrap", m).hidden = ev.target.value !== "기타"; });
     ok.addEventListener("click", async () => {
       err.hidden = true;
       const v = id => $(id, m).value, start = v("#ieStart"), due = v("#ieDue");
       if (!start || !due) return show("사용 시작일과 반납 예정일을 골라 주세요.");
       if (due < start) return show("반납 예정일은 사용 시작일과 같거나 그 뒤여야 해요.");
+      if (v("#iePurpose") === "기타" && !v("#ieEtc").trim()) return show("목적이 ‘기타’면 ‘기타 내용’을 적어 주세요.");
       ok.disabled = true;
       const { data, error } = await sb.rpc("update_loan_info", { p_loan_no: l.loan_no, p_requester: v("#ieOwner"), p_start: start, p_due: due,
-        p_purpose: v("#iePurpose"), p_customer: v("#ieCustomer"), p_internal: v("#ieInternal"), p_external: v("#ieExternal"), p_note: v("#ieNote") });
+        p_purpose: v("#iePurpose"), p_customer: v("#ieCustomer"), p_internal: v("#ieInternal"), p_external: v("#ieExternal"), p_note: joinNote(v("#iePurpose"), v("#ieEtc"), v("#ieNote")) });
       ok.disabled = false;
       if (error) return show(errText(error));
       closeModal(); toast(data ? `${l.loan_no} 신청 정보를 고쳤어요. (장비 ${data}대)` : "바뀐 내용이 없어요."); await refresh();
@@ -2709,13 +2735,15 @@ document.addEventListener("change", e => {
   else if (e.target.dataset.pick) { e.target.checked ? draft.picks.add(e.target.dataset.pick) : draft.picks.delete(e.target.dataset.pick); updatePickCount(); paintPickGroups(); }
   else if (id === "rLoc" || id === "rAvail") { pickF[{ rLoc: "loc", rAvail: "avail" }[id]] = id === "rAvail" ? e.target.checked : e.target.value; applyPickFilter(); }
   else if (id === "rDelivery") { $("#shipBox").hidden = !e.target.checked; }
+  else if (id === "rPurpose") { paintPurpose(); if (e.target.value === "기타") $("#rEtc")?.focus(); }
   else if (id === "rOwner") { draft.owner = e.target.value; }
   else if (id === "rOut") { draft.out = e.target.checked; const keep = collectReqFields(); render(); restoreReqFields(keep); }
 });
 document.addEventListener("submit", e => { if (e.target.id === "reqForm") { e.preventDefault(); submitRequest(); } });
-const REQ_IDS = ["rPurpose","rCustomer","rInternal","rExternal","rNote","rDelivery","sName","sPhone","sAddr","sDate","sPick","sMemo"];
+const REQ_IDS = ["rPurpose","rEtc","rCustomer","rInternal","rExternal","rNote","rDelivery","sName","sPhone","sAddr","sDate","sPick","sMemo"];
 function collectReqFields() { const o = {}; for (const id of REQ_IDS) { const n = $("#" + id); if (n) o[id] = n.type === "checkbox" ? n.checked : n.value; } return o; }
-function restoreReqFields(o) { for (const [id, v] of Object.entries(o)) { if (!o.rDelivery && (id === "sDate" || id === "sPick")) continue; const n = $("#" + id); if (!n) continue; if (n.type === "checkbox") n.checked = v; else n.value = v; } const d = $("#rDelivery"); if (d) $("#shipBox").hidden = !d.checked; lockShipFields(); }
+function restoreReqFields(o) { for (const [id, v] of Object.entries(o)) { if (!o.rDelivery && (id === "sDate" || id === "sPick")) continue; const n = $("#" + id); if (!n) continue; if (n.type === "checkbox") n.checked = v; else n.value = v; } const d = $("#rDelivery"); if (d) $("#shipBox").hidden = !d.checked; lockShipFields();  paintPurpose(); }
+function paintPurpose() { const sel = $("#rPurpose"); if (!sel) return; const pd = $("#rPurposeDesc"); if (pd) pd.textContent = purposeDesc(sel.value); const w = $("#rEtcWrap"); if (w) w.hidden = sel.value !== "기타"; }
 function softRender() {
   if ($("#app").hidden || $("#modalRoot").innerHTML) { renderTabs(); return; }
   if (view === "request" && $("#reqForm")) { const keep = collectReqFields(); render(); restoreReqFields(keep); return; }

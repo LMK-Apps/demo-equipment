@@ -213,6 +213,15 @@ const EX = {
   "이미 출고된 신청이라 사용 시작일을 오늘 뒤로 정할 수 없어요.": "This request is already checked out, so the start date can't be after today.",
   "바꾼 기간에 같은 장비의 다른 예약이 있어요. 기간을 바꾸거나 그 예약을 먼저 정리해 주세요.": "Another booking uses the same equipment in the new dates. Change the dates or sort out that booking first.",
   "사용 일수 (장비·일)": "Days used (item-days)", "예약 일수 (예정, 장비·일)": "Days booked (planned, item-days)", "예약만": "Booked only", "사용 (반납 완료·진행 중)": "Used (returned or out)", "예약 (예정)": "Booked (planned)",
+  // 신청 목적 v2 (v0.079)
+  "영업 데모": "Sales demo", "고객 교육·지원": "Customer training / support", "학회·전시": "Conference / exhibition", "장기 대여": "Long-term loan", "내부 사용": "Internal use",
+  "구매를 검토하는 고객에게 시연해요. (예: 병원·학교 시연, 장비 평가)": "Demo for a customer considering a purchase (e.g. hospital/school demo, equipment evaluation).",
+  "이미 산 고객의 교육, 설치 후 지원, 수리 중 대체품, 워크숍이에요.": "Training or support for existing customers: post-install support, loaners during repair, workshops.",
+  "학회 부스, 전시회에 가져가요.": "For a conference booth or exhibition.", "2주 넘게 고객에게 빌려줘요.": "Lent to a customer for more than two weeks.",
+  "사내 교육, 촬영, 점검에 써요.": "Internal training, filming, or checks.",
+  "위에 없는 경우예요. 아래 ‘기타 내용’에 어떤 용도인지 적어 주세요.": "None of the above. Describe the use in ‘Other details’ below.",
+  "기타 내용": "Other details", "어떤 용도인지 적어 주세요 (예: 사내 행사 지원)": "Describe the use (e.g. company event support)", "어떤 용도인지 적어 주세요": "Describe the use",
+  "목적이 ‘기타’면 ‘기타 내용’을 적어 주세요.": "If the purpose is ‘Other’, please fill in ‘Other details’.",
   // 서버 오류 메시지
   "같은 기간에 이미 예약된 장비가 있어요. 장비나 기간을 바꿔 주세요.": "Some equipment is already booked for those dates. Change the equipment or dates.",
   "같은 신청번호의 장비만 함께 반납할 수 있어요.": "Only items with the same request number can be returned together.",
