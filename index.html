@@ -122,6 +122,7 @@ h3{font-size:14px;margin:0;font-weight:600}
 .hg-item{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:13.5px;cursor:pointer}
 .hg-item .main{flex:1;min-width:0}
 .hg-item:hover b{text-decoration:underline}
+.why{font-size:12px;color:var(--bad);margin-top:2px}
 .lg-grp{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
 .lg-h{padding:11px 14px;background:var(--surface);display:flex;flex-direction:column;gap:4px;cursor:pointer}
 .lg-h:hover{background:var(--sunk)}
@@ -471,6 +472,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.081", date: "2026-11-03", items: ["데모 신청: 예약이 겹쳐 막힌 장비에 겹치는 예약 기간과 ‘같은 기간 길이로 언제부터 쓸 수 있는지’를 글자로 표시(예: 11/1–11/5 예약돼 있어요. 11/6부터 쓸 수 있어요.)", "장비 탭(관리자): ‘관리자 점검 없음’ 카드 추가. 관리자 점검이나 반납 확인 기록이 한 번도 없는 장비만 모아 봄(실사용). 위치 카드와 함께 쓸 수 있음", "장비 탭(관리자): ‘자산번호 없음’ 카드 추가. 자산번호가 비었거나 EQ 번호만 들어간 장비만 모아 봄"] },
   { v: "v0.080", date: "2026-11-03", items: ["일반 화면에서 내부 ID(EQ-0000)를 숨김: 현황·일정·장비 목록·데모 신청·내 신청·배송·출납 대장·반납·통계·상세 창. 라벨(예: SM3G, RA1)만 보이고, 라벨이 없으면 장비 이름만", "내부 ID가 그대로 보이는 곳: 장비 등록·수정 창, 장비 상세(관리자만), QR 라벨 인쇄, CSV, 물류사 요청 메일 문안. 검색은 EQ 번호로도 계속 됨"] },
   { v: "v0.079", date: "2026-11-03", db: "022_purpose_v2.sql", items: [
     "신청 목적 정리: 영업 데모 · 고객 교육·지원 · 학회·전시 · 장기 대여 · 내부 사용 · 기타. 목적을 고르면 아래에 정의가 한 줄로 보임",
@@ -889,7 +891,7 @@ function groupByModel(list) {
   return [...m.entries()].map(([k, items]) => ({ k, items }));
 }
 let eqSel = null;   // 장비 여러 대 선택 모드 (관리자). null이면 꺼짐
-let filters = { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", ledgerQ: "", ledgerSt: "open" };
+let filters = { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", eqX: "", ledgerQ: "", ledgerSt: "open" };
 // 기본 사용 기간: 3일 (시작일 포함, 시작일 + 2일). 반납 예정일을 직접 고르면 그 값을 유지한다
 const DEFAULT_DAYS = 3;
 const defaultDue = start => addDays(start, DEFAULT_DAYS - 1);
@@ -1369,18 +1371,24 @@ function eqRow(e, t, child, showName) {
 }
 function vEquip() {
   const q = filters.eqQ.trim().toLowerCase();
-  const list = equipment.filter(e => (!filters.eqSt || e.status === filters.eqSt) && (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.model || ""} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q))).sort(eqCmp);
+  // 실사·정리용 필터(관리자): 관리자 점검 기록 없음, 자산번호 없음. 폐기 장비는 뺀다
+  const X_TEST = { nocheck: e => e.status !== "retired" && e.last_check_source !== "admin", noasset: e => e.status !== "retired" && !assetNo(e) };
+  const xTest = me.isAdmin && X_TEST[filters.eqX];
+  const list = equipment.filter(e => (!xTest || xTest(e)) && (!filters.eqSt || e.status === filters.eqSt) && (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.model || ""} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q))).sort(eqCmp);
   const t = todayStr();
   const byLoc = [...LOCS, "기타"].map(k => [k, equipment.filter(e => locGroup(e.location) === k && e.status !== "retired").length]);
   const needRepair = equipment.filter(e => e.status === "repair").length;
-  const anyF = !!(filters.eqQ.trim() || filters.eqCat || filters.eqLoc || filters.eqSt);
+  const anyF = !!(filters.eqQ.trim() || filters.eqCat || filters.eqLoc || filters.eqSt || xTest);
+  const xCard = (k, label) => { const n = equipment.filter(X_TEST[k]).length;
+    return `<button class="stat stat-btn ${filters.eqX === k ? "on" : ""}" data-act="eqCard" data-k="x:${k}" aria-pressed="${filters.eqX === k}"><b>${n}</b><span>${label}</span></button>`; };
   return `
   <div class="head"><div class="grow"><h2>장비</h2><p class="sub">장비 ${equipment.length}대. 보관 위치와 최근 점검 결과는 반납 신청과 관리자 점검 때 자동으로 바뀌어요. 행을 누르면 자세히 볼 수 있어요.</p></div>
     </div>
   <div class="stats">
     <button class="stat stat-btn ${anyF ? "" : "on"}" data-act="eqCard" data-k="all" aria-pressed="${!anyF}"><b>${equipment.filter(e => e.status !== "retired").length}</b><span>전체 보기</span></button>
     ${byLoc.map(([k, n]) => `<button class="stat stat-btn ${filters.eqLoc === k ? "on" : ""}" data-act="eqCard" data-k="loc:${k}" aria-pressed="${filters.eqLoc === k}"><b>${n}</b><span>${k} 보관</span></button>`).join("")}
-    <button class="stat stat-btn ${needRepair ? "alert" : ""} ${filters.eqSt === "repair" ? "on" : ""}" data-act="eqCard" data-k="st:repair" aria-pressed="${filters.eqSt === "repair"}"><b>${needRepair}</b><span>수리 필요</span></button></div>
+    <button class="stat stat-btn ${needRepair ? "alert" : ""} ${filters.eqSt === "repair" ? "on" : ""}" data-act="eqCard" data-k="st:repair" aria-pressed="${filters.eqSt === "repair"}"><b>${needRepair}</b><span>수리 필요</span></button>
+    ${me.isAdmin ? xCard("nocheck", "관리자 점검 없음") + xCard("noasset", "자산번호 없음") : ""}</div>
   <div class="toolbar">
     <input id="eqQ" type="search" placeholder="제품명·자산번호·위치 검색" value="${esc(filters.eqQ)}" style="flex:1;min-width:200px">
     <select id="eqLoc"><option value="">전체 위치</option>${[...LOCS, "기타"].map(c => `<option ${filters.eqLoc === c ? "selected" : ""}>${c}</option>`).join("")}</select>
@@ -1388,7 +1396,7 @@ function vEquip() {
   </div>
   <div class="chip-bar">${catChips("eq", filters.eqCat)}
     <div class="toolbar chip-acts"><button class="btn" data-act="scanQR">QR 찍기</button>${me.isAdmin ? `<button class="btn" data-act="eqSelMode">${eqSel ? "선택 끝내기" : "여러 대 선택"}</button><button class="btn pri" data-act="eqNew">장비 등록</button>` : ""}</div></div>
-  ${anyF ? `<p class="meta" style="margin:-4px 0 0">${list.length}대 표시 중${filters.eqSt === "repair" ? " · 수리 필요만" : ""}</p>` : ""}
+  ${anyF ? `<p class="meta" style="margin:-4px 0 0">${list.length}대 표시 중${filters.eqSt === "repair" ? " · 수리 필요만" : ""}${xTest ? (filters.eqX === "nocheck" ? " · 관리자 점검 없음만" : " · 자산번호 없음만") : ""}</p>` : ""}
   ${equipment.length === 0 ? `<div class="panel"><div class="empty">아직 등록된 장비가 없어요. ${me.isAdmin ? "‘장비 등록’으로 첫 장비를 추가해 주세요." : "장비 관리자가 장비를 등록하면 여기에 나타나요."}</div></div>` : `
   <div class="list2">${groupByModel(list).map(g => {
       if (g.items.length === 1) return eqRow(g.items[0], t, false, false);
@@ -1459,6 +1467,16 @@ function eqBulk() {
   });
 }
 
+// 같은 길이로 쓸 수 있는 가장 빠른 시작일 (겹치는 예약 뒤로 밀어 가며 찾음)
+function nextFreeStart(eqId, start, due) {
+  const len = daysBetween(start, due); let d = start;
+  for (let i = 0; i < 50; i++) {
+    const cs = conflictsFor(eqId, d, addDays(d, len));
+    if (!cs.length) return d;
+    d = addDays(cs.map(x => x.due_date).sort().pop(), 1);
+  }
+  return "";
+}
 function conflictsFor(eqId, start, due, ignoreId) {
   return loans.filter(l => l.equipment_id === eqId && l.id !== ignoreId && ACTIVE(l.status) && l.start_date <= due && start <= l.due_date
     && !(draft.edit && l.loan_no === draft.edit));
@@ -1548,9 +1566,11 @@ function vRequest() {
     if (blocked) draft.picks.delete(e.id);
     const why = e.status === "repair" ? "수리 중" : e.status === "inspect" ? "점검 중" : c.length ? "예약 겹침" : busyNow ? "대여 중" : "";
     const title = c.length ? `${c[0].loan_no} (${fmtD(c[0].start_date)}–${fmtD(c[0].due_date)})` : why;
+    const detail = c.length ? (() => { const nf = nextFreeStart(e.id, start, due);
+      return `${c.map(x => `${fmtD(x.start_date)}–${fmtD(x.due_date)}`).slice(0, 2).join(", ")}${c.length > 2 ? ` 외 ${c.length - 2}건` : ""} 예약돼 있어요.${nf ? ` ${fmtD(nf)}부터 쓸 수 있어요.` : ""}`; })() : "";
     const hay = `${e.name} ${e.model || ""} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.item_no} ${e.serial_no} ${e.location} ${e.category}`.toLowerCase();
     return `<label class="${blocked ? "off" : ""}" data-hay="${esc(hay)}" data-cat="${esc(e.category)}" data-loc="${esc(locGroup(e.location))}" data-ok="${blocked ? "0" : "1"}"><input type="checkbox" data-pick="${e.id}" ${draft.picks.has(e.id) ? "checked" : ""} ${blocked ? "disabled" : ""}>
-      <div class="main">${child ? `${frontTag(e)}${showName ? ` <b class="sub">${esc(e.name)}</b>` : ""} ${backId(e)}` : `${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}`}<div class="meta">${child ? "" : `${esc(e.category)} · `}${esc(e.location)}</div>${compLine(e) ? `<div class="r2-comp" title="${esc(e.components)}"><span>구성품</span> ${esc(compLine(e))}</div>` : ""}</div>
+      <div class="main">${child ? `${frontTag(e)}${showName ? ` <b class="sub">${esc(e.name)}</b>` : ""} ${backId(e)}` : `${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}`}<div class="meta">${child ? "" : `${esc(e.category)} · `}${esc(e.location)}</div>${blocked && detail ? `<div class="why">${esc(detail)}</div>` : ""}${compLine(e) ? `<div class="r2-comp" title="${esc(e.components)}"><span>구성품</span> ${esc(compLine(e))}</div>` : ""}</div>
       ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
   };
   // 같은 모델이 2대 이상이면 모델 줄 하나로 묶고, 펼치면 실제 장비를 고른다
@@ -2667,12 +2687,13 @@ document.addEventListener("click", e => {
       a.parentElement.querySelectorAll(".cat-chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
       applyPickFilter(); break;
     }
-    case "eqReset": Object.assign(filters, { eqQ: "", eqCat: "", eqLoc: "", eqSt: "" }); render(); break;
+    case "eqReset": Object.assign(filters, { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", eqX: "" }); render(); break;
     case "eqCard": {
       const [t, v] = a.dataset.k.split(":");
-      if (t === "all") Object.assign(filters, { eqQ: "", eqCat: "", eqLoc: "", eqSt: "" });
+      if (t === "all") Object.assign(filters, { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", eqX: "" });
       else if (t === "loc") { filters.eqLoc = filters.eqLoc === v ? "" : v; filters.eqSt = ""; }
-      else if (t === "st") { filters.eqSt = filters.eqSt === v ? "" : v; filters.eqLoc = ""; }
+      else if (t === "st") { filters.eqSt = filters.eqSt === v ? "" : v; filters.eqLoc = ""; filters.eqX = ""; }
+      else if (t === "x") { filters.eqX = filters.eqX === v ? "" : v; filters.eqSt = ""; }
       render(); break;
     }
     case "checkout": l && confirmBox("출고 처리", `${eqName}를 ${esc(nameOf(l.requester_id))}에게 출고해요. 구성품을 확인했는지 봐 주세요.<br><br>${esc(eqById(l.equipment_id)?.components || "")}`, "출고",

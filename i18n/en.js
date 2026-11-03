@@ -52,6 +52,7 @@ const EX = {
 
   // 장비
   "전체 보기": "All", "의왕 보관": "In Uiwang", "문정 보관": "In Munjeong", "기타 보관": "Elsewhere", "수리 필요": "Needs repair",
+  "관리자 점검 없음": "No admin check", "자산번호 없음": "No asset no.",
   "제품명·자산번호·위치 검색": "Search name, asset no., location", "전체 위치": "All locations", "전체 분류": "All categories", "필터 초기화": "Reset filters",
   "조건에 맞는 장비가 없어요.": "No equipment matches.", "여러 대 선택": "Select multiple", "선택 끝내기": "Done selecting", "선택 해제": "Clear selection",
   "QR 라벨 출력": "Print QR labels", "QR 라벨": "QR label", "위치·상태 일괄 변경": "Change location / status", "장비 등록": "Add equipment",
@@ -289,7 +290,7 @@ const EX = {
 // 숫자가 들어간 틀 (#는 숫자 자리)
 const TPL = {
   "#. 기간과 장비": "#. Dates and equipment", "#. 사용 정보": "#. Usage details", "#건": "#", "#대": "#", "(#대)": "(#)", "(#일)": "(# days)", "#일": "# days", "#일 지남": "# days late",
-  "연체 #일": "# days overdue", "#대 반납하기": "Return # items", "#대 선택": "# selected", "#대 표시 중": "Showing #", "#대 표시 중 · 수리 필요만": "Showing # · needs repair only",
+  "연체 #일": "# days overdue", "#대 반납하기": "Return # items", "#대 선택": "# selected", "#대 표시 중": "Showing #", "#대 표시 중 · 수리 필요만": "Showing # · needs repair only", "#대 표시 중 · 관리자 점검 없음만": "Showing # · no admin check only", "#대 표시 중 · 자산번호 없음만": "Showing # · no asset no. only",
   "선택 #대": "# selected", "#건 (예약 #)": "# (# booked)", "+ 예약 #": "+ # booked", "+ 예약 #일": "+ # days booked", "이 신청의 장비 #대에 똑같이 적용해요. 장비는 [장비 추가]·[등록 취소]로, 실제 반납일은 [반납] 칸에서 고쳐 주세요. 저장하면 Teams로 바뀐 내용을 알려요.": "Applies to all # items in this request. Change equipment with [Add equipment]/[Void entry] and the actual return date in the Return section. Saving posts the changes to Teams.", "출고 처리 #대": "Check out #", "#대 출고": "Check out #", "장비 #대를 출고 처리했어요.": "Checked out # items.", "#건 · 장비 #대": "# requests · # items", "반납 확인 #대": "Confirm # returns", "연체 #": "Overdue #", "예약 #": "Reserved #", "출고 #": "Out #", "반납 확인 중 #": "Checking #", "반납 완료 #": "Returned #", "취소 #": "Cancelled #", "연장 #회 ·": "Extended # ·", "반납 예정일보다 #일 늦어요. 연체 반납으로 남아요.": "# days after the due date. Recorded as a late return.", "같은 신청번호의 반납 장비 #대에도 똑같이 적용": "Apply to the other # returned items in this request", "연체 #일": "# days late", "가능 #대": "# available", "#대 선택": "# selected", "사용 가능 #": "Available #", "대여 중 #": "On loan #", "점검 중 #": "Inspecting #", "수리 중 #": "In repair #", "선택한 #대 자가점검대로 확인": "Confirm # as self-checked", "#대 반납을 확인했어요. 다시 빌릴 수 있어요.": "Confirmed # returns. They can be booked again.", "#대 반납을 확인했어요. #대는 수리 필요로 표시했어요.": "Confirmed # returns. # marked as needing repair.", "#대 이상 있음 · 다음": "# with problems · Next", "자가점검 #/# · 장비 #대": "Self-check #/# · # items", "구성품:": "Components:", "장비 #대를 더했어요.": "Added # item(s).", "표시된 #대 모두 선택": "Select all # shown", "전체 #대 중 #대 표시": "Showing # of #", "+#건 더": "+# more", "진행 중 #건": "In progress (#)", "진행 중": "In progress",
   "아니오 #개": "No × #", "다른 로그인 #개를 끊음": "Ended # other login(s)", "최근 #개월": "Last # months", "이번 달 #건, 장비 #대": "# this month, # items",
   "장비 #대": "# items", "장비 #대. 보관 위치와 최근 점검 결과는 반납 신청과 관리자 점검 때 자동으로 바뀌어요. 행을 누르면 자세히 볼 수 있어요.": "# items. Location and last check update automatically from returns and admin checks. Tap a row for details.",
@@ -312,6 +313,7 @@ const TPL = {
 };
 
 const RULES = [
+  [/^(.+?) 예약돼 있어요\.(?: (.+)부터 쓸 수 있어요\.)?$/, m => `Booked ${m[1].replace(" 외 ", " + ").replace(/건$/, " more")}.${m[2] ? ` Free from ${m[2]}.` : ""}`],
   [/^(\d+)년 (\d+)월$/, m => `${MON[+m[2] - 1]} ${m[1]}`],
   [/^(.+?) 기준\. 연체는 반납 예정일이 지났는데 아직 출고 상태인 건이에요\.$/, m => `As of ${m[1]}. Overdue means past the return date and still checked out.`],
   [/^(.+?) ~ (.+?) \((\d+)일\)\. 대여 일수는 실제 출고부터 반납까지, 진행 중이면 오늘까지 세요\. 취소된 신청은 빼요\.$/, m => `${m[1]} ~ ${m[2]} (${m[3]} days). Loan days count from checkout to return (or today if ongoing). Cancelled requests are excluded.`],
