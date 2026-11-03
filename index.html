@@ -452,6 +452,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.071", date: "2026-11-03", items: ["장비 순서 규칙을 하나로 통일: 분류 순서(시뮬레이터 → BLS → MBL → Skill T. → 기타), 같은 분류 안에서는 내부 ID 순. [내 신청]·[출납 대장]·신청 상세·반납 신청·반납 확인·[장비] 목록·[데모 신청]·일정(장비별)·물류사 메일·CSV에 모두 적용", "[내 신청]: 최근 신청이 위로, 같은 신청번호의 장비는 위 규칙대로 붙어서 보임"] },
   { v: "v0.070", date: "2026-11-03", items: ["[출납 대장] 상태 버튼 순서: [전체]를 맨 앞으로. 처음 열 때는 그대로 [대여 중]이 선택됨"] },
   { v: "v0.069", date: "2026-11-03", items: ["[출납 대장] 대여번호 줄을 토글로: 처음엔 번호 줄만 보이고, 누르면 장비 목록이 들여쓴 하위 줄로 펼쳐짐. 검색 중이거나 상세에서 ‘출납 대장에서 보기’로 오면 펼친 채로 보임"] },
   { v: "v0.068", date: "2026-11-03", items: ["[출납 대장] 대여번호(신청번호)별로 카드 하나로 묶음. 카드 머리에 신청자·목적·고객사·기간·출고 시각과 상태별 대수, 아래에 장비 줄", "상태 고르기를 드롭다운 대신 버튼으로: 대여 중(예전 ‘진행 중’) · 연체 · 반납 확인 중 · 반납 완료 · 취소 · 전체. 버튼마다 신청 건수 표시, 연체가 있으면 빨간 버튼", "반납 확인을 기다리는 장비가 2대 이상이면 카드 머리에 [반납 확인 N대] 버튼"] },
@@ -742,6 +743,10 @@ const placeOf = l => l.return_place || ({ drop_uiwang: "의왕", drop_munjeong: 
 const retLabel = l => !l.return_method ? "" : l.return_method === "pickup" ? `물류사 회수 → ${placeOf(l) || "장소 미정"}` : `직접 반납 – ${placeOf(l)}`;
 const USER_STATUS = { pending:["승인 대기","p-warn"], active:["사용 중","p-ok"], disabled:["사용 중지",""] };
 const CATS = ["시뮬레이터","BLS","MBL","Skill T.","기타"];
+// 장비 순서 규칙 (모든 장비 목록 공통): 분류 순서(시뮬레이터 → BLS → MBL → Skill T. → 기타) → 내부 ID 순
+const catRank = c => { const i = CATS.indexOf(c); return i < 0 ? CATS.length : i; };
+const eqCmp = (a, b) => catRank(a && a.category) - catRank(b && b.category) || ((a && a.internal_id) || "").localeCompare((b && b.internal_id) || "", "en", { numeric: true });
+const loanEqCmp = (a, b) => eqCmp(eqById(a.equipment_id), eqById(b.equipment_id));
 const LOCS = ["의왕","문정"];
 const PURPOSES = ["고객 데모","전시회","교육·워크숍","학회","내부 교육","기타"];
 const CONDS = { ok:"정상", minor:"경미한 손상", broken:"파손 또는 수리 필요", missing:"구성품 누락" };
@@ -1033,7 +1038,7 @@ function calLoans() {
   return loans.filter(l => l.status !== "cancelled"
     && (!cal.mine || l.requester_id === me.id)
     && (!cal.loc || locGroup(eqById(l.equipment_id)?.location) === cal.loc))
-    .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.loan_no.localeCompare(b.loan_no) || (eqById(a.equipment_id)?.internal_id || "").localeCompare(eqById(b.equipment_id)?.internal_id || ""));
+    .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.loan_no.localeCompare(b.loan_no) || loanEqCmp(a, b));
 }
 const onDay = (list, d) => list.filter(l => l.start_date <= d && d <= loanEnd(l));
 const chipLabel = l => `${eqById(l.equipment_id)?.name || "?"} · ${nameOf(l.requester_id)}`;
@@ -1058,7 +1063,7 @@ function vCal() {
     const days = []; for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) days.push(new Date(d));
     const eqs = equipment.filter(e => e.status !== "retired" && (!cal.loc || locGroup(e.location) === cal.loc))
       .filter(e => !cal.mine || monthLoans.some(l => l.equipment_id === e.id))
-      .sort((a, b) => a.category.localeCompare(b.category) || (a.internal_id || "").localeCompare(b.internal_id || ""));
+      .sort(eqCmp);
     const rows = eqs.map(e => {
       const mine = monthLoans.filter(l => l.equipment_id === e.id);
       return `<tr><td class="eqc"><b>${esc(e.name)}</b><div class="meta mono">${esc(eqNo(e))} · ${esc(e.location)}</div></td>${days.map(d => {
@@ -1124,7 +1129,7 @@ function calDay(key) {
 }
 function loanView(id) {
   const l = loans.find(x => x.id === id); if (!l) return;
-  const e = eqById(l.equipment_id) || {}, group = loans.filter(x => x.loan_no === l.loan_no && x.id !== l.id && x.status !== "cancelled");
+  const e = eqById(l.equipment_id) || {}, group = loans.filter(x => x.loan_no === l.loan_no && x.id !== l.id && x.status !== "cancelled").sort(loanEqCmp);
   const o = shipOf(l.loan_no, "outbound"), p = shipOf(l.loan_no, "pickup"), ri = reqInfo(l);
   const mine = l.requester_id === me.id, adm = me.isAdmin;
   const btn = (act, t, cls = "") => `<button class="btn ${cls}" data-act="${act}" data-id="${l.id}">${t}</button>`;
@@ -1276,7 +1281,7 @@ function eqRow(e, t, child, showName) {
 }
 function vEquip() {
   const q = filters.eqQ.trim().toLowerCase();
-  const list = equipment.filter(e => (!filters.eqSt || e.status === filters.eqSt) && (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.model || ""} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q)));
+  const list = equipment.filter(e => (!filters.eqSt || e.status === filters.eqSt) && (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.model || ""} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q))).sort(eqCmp);
   const t = todayStr();
   const byLoc = [...LOCS, "기타"].map(k => [k, equipment.filter(e => locGroup(e.location) === k && e.status !== "retired").length]);
   const needRepair = equipment.filter(e => e.status === "repair").length;
@@ -1403,7 +1408,7 @@ function addOutItems(l) {
   const inNo = new Set(loans.filter(x => x.loan_no === l.loan_no && x.status !== "cancelled").map(x => x.equipment_id));
   const rows = equipment.filter(e => e.status === "available" && !inNo.has(e.id))
     .filter(e => !loans.some(x => x.equipment_id === e.id && ACTIVE(x.status) && x.start_date <= l.due_date && l.start_date <= x.due_date))
-    .sort((a, b) => a.category.localeCompare(b.category) || (a.internal_id || "").localeCompare(b.internal_id || ""));
+    .sort(eqCmp);
   modal(`<h2>출고 장비 추가 <span class="mono" style="font-size:.7em">${esc(l.loan_no)}</span></h2>
     <p class="sub">같이 가져간 장비를 이 신청에 더해요. 같은 기간(<span class="mono">${fmtD(l.start_date)} ~ ${fmtD(l.due_date)}</span>)으로 바로 출고 상태가 돼요.</p>
     ${rows.length ? `<input id="aoQ" type="search" placeholder="장비 이름이나 번호로 찾기" style="margin-bottom:8px">
@@ -1445,7 +1450,7 @@ function vRequest() {
   const { start, due } = draft;
   const proxy = me.isAdmin && !draft.edit, outReg = proxy && draft.out;
   const badRange = !start || !due || due < start || start > maxStart() || start < minStart() || overMonth(start, due);
-  const rows = equipment.filter(e => e.status !== "retired").sort((a, b) => a.category.localeCompare(b.category) || (a.internal_id || "").localeCompare(b.internal_id || ""));
+  const rows = equipment.filter(e => e.status !== "retired").sort(eqCmp);
   const pickRow = (e, child, showName) => {
     const c = badRange ? [] : conflictsFor(e.id, start, due);
     const own = draft.edit && draft.own.has(e.id);
@@ -1564,7 +1569,10 @@ function updatePickCount(shown, total) {
 }
 
 function vMine() {
-  const mine = loans.filter(l => l.requester_id === me.id).sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+  const mineAll = loans.filter(l => l.requester_id === me.id);
+  const noAt = new Map(); mineAll.forEach(l => { const c = l.created_at || ""; if (!noAt.has(l.loan_no) || c < noAt.get(l.loan_no)) noAt.set(l.loan_no, c); });
+  // 최근 신청이 위로, 같은 신청 안에서는 장비 순서 규칙대로
+  const mine = mineAll.sort((a, b) => noAt.get(b.loan_no).localeCompare(noAt.get(a.loan_no)) || b.loan_no.localeCompare(a.loan_no) || loanEqCmp(a, b));
   const open = mine.filter(l => l.status !== "done" && l.status !== "cancelled");
   const past = mine.filter(l => !open.includes(l)).slice(0, 30);
   const actions = l => {
@@ -1632,7 +1640,7 @@ function vLedger() {
   const list = searched.filter(stDef[2]);
   // 대여번호(신청번호)별로 묶는다. 최근 시작한 신청이 위로.
   const groups = [...list.reduce((m, l) => (m.has(l.loan_no) ? m.get(l.loan_no).push(l) : m.set(l.loan_no, [l]), m), new Map()).values()]
-    .map(g => g.sort((a, b) => (eqById(a.equipment_id)?.label || eqById(a.equipment_id)?.internal_id || "").localeCompare(eqById(b.equipment_id)?.label || eqById(b.equipment_id)?.internal_id || "")))
+    .map(g => g.sort(loanEqCmp))
     .sort((a, b) => b[0].start_date.localeCompare(a[0].start_date) || b[0].loan_no.localeCompare(a[0].loan_no));
   const act = l => {
     if (!me.isAdmin) return "";
@@ -2056,7 +2064,7 @@ function extend(l) {
 function returnForm(l) {
   // 같은 신청번호에서 지금 반납할 수 있는(출고 상태) 장비. 처음엔 모두 고른 상태로 시작한다.
   const cands = loans.filter(x => x.loan_no === l.loan_no && x.status === "out" && (x.requester_id === me.id || me.isAdmin))
-    .sort((a, b) => (a.id === l.id ? -1 : b.id === l.id ? 1 : (eqNo(eqById(a.equipment_id) || {}) > eqNo(eqById(b.equipment_id) || {}) ? 1 : -1)));
+    .sort(loanEqCmp);
   const pick = shipOf(l.loan_no, "pickup"), out = shipOf(l.loan_no, "outbound");
   const src = pick || out || {};
   const pickDefault = (pick && pick.requested_date) || addDays(todayStr(), 1);
@@ -2395,7 +2403,7 @@ function retDateEdit(l) {
   });
 }
 function inspectBulk(l, group) {
-  const rows = [...group].sort((a, b) => (a.id === l.id ? -1 : b.id === l.id ? 1 : eqNo(eqById(a.equipment_id) || {}).localeCompare(eqNo(eqById(b.equipment_id) || {}))));
+  const rows = [...group].sort(loanEqCmp);
   const plan = x => { const e = eqById(x.equipment_id) || {}; return { e, self: x.return_self_check, repair: x.return_self_check === "broken" || x.return_self_check === "missing", loc: placeOf(x) || e.location }; };
   const sel = new Set(rows.filter(x => x.return_self_check).map(x => x.id));
   modal(`<h2>반납 확인 <span class="mono" style="font-size:.7em">${esc(l.loan_no)}</span></h2>
@@ -2432,7 +2440,7 @@ function inspectBulk(l, group) {
 }
 
 function mailText(no, dir) {
-  const g = loans.filter(l => l.loan_no === no), l = g[0], s = shipOf(no, dir) || {};
+  const g = loans.filter(l => l.loan_no === no).sort(loanEqCmp), l = g[0], s = shipOf(no, dir) || {};
   const items = g.map((x, i) => `  ${i + 1}. ${eqById(x.equipment_id)?.name} / ${[eqById(x.equipment_id)?.internal_id, eqById(x.equipment_id)?.label, assetNo(eqById(x.equipment_id)) && `자산번호 ${assetNo(eqById(x.equipment_id))}`].filter(Boolean).join(" / ")} / 1대`).join("\n");
   const locs = [...new Set(g.map(x => eqById(x.equipment_id)?.location).filter(Boolean))].join(", ") || "확인 필요";
   const dest = [...new Set(g.map(x => x.return_method === "pickup" ? x.return_place : "").filter(Boolean))].join(", ") || locs;
@@ -2470,7 +2478,7 @@ function shipEdit(sid) {
 function exportCsv() {
   const head = ["신청번호","장비 ID","라벨","자산번호","제품명","보관 위치","신청자","내부 요청자","외부 요청자","목적","고객사","시작일","반납 예정일","배송","상태","연체일","출고","반납","반납 방법","자가점검","자가점검 메모","점검 결과","점검 메모","연장 횟수"];
   const t = todayStr();
-  const rows = [...loans].sort((a, b) => a.loan_no.localeCompare(b.loan_no)).map(l => { const e = eqById(l.equipment_id) || {}; return [l.loan_no, e.internal_id || "", e.label || "", assetNo(e), e.name, e.location, nameOf(l.requester_id), l.internal_requester, l.external_requester, l.purpose, l.customer, l.start_date, l.due_date,
+  const rows = [...loans].sort((a, b) => a.loan_no.localeCompare(b.loan_no) || loanEqCmp(a, b)).map(l => { const e = eqById(l.equipment_id) || {}; return [l.loan_no, e.internal_id || "", e.label || "", assetNo(e), e.name, e.location, nameOf(l.requester_id), l.internal_requester, l.external_requester, l.purpose, l.customer, l.start_date, l.due_date,
     l.delivery ? "Y" : "N", LOAN_STATUS[l.status]?.[0] || l.status, isOverdue(l) ? daysBetween(l.due_date, t) : "", fmtT(l.checkout_at), fmtT(l.returned_at), retLabel(l), CONDS[l.return_self_check] || "", l.return_self_note || "", CONDS[l.return_condition] || "", l.return_note || "", l.extension_count || 0]; });
   const csv = "﻿" + [head, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const a = document.createElement("a");
