@@ -345,14 +345,14 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
 .cal{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
 .cal-h,.cal .wk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .cal .dow{font-size:11.5px;font-weight:600;color:var(--muted);text-align:center;padding:6px 0;background:var(--sunk);border-bottom:1px solid var(--line)}
-.cal .wk{grid-template-rows:24px repeat(3,19px) 19px 1fr;row-gap:2px;min-height:104px;border-bottom:1px solid var(--line)}
+.cal .wk{grid-template-rows:24px repeat(7,auto) auto 1fr;row-gap:2px;min-height:104px;border-bottom:1px solid var(--line)}
 .cal .wk:last-child{border-bottom:0}
 .cal .day{grid-row:1/-1;border-right:1px solid var(--line);padding:4px;min-width:0;cursor:pointer}
 .cal .day:nth-child(7){border-right:0}
 .cal .wk .chip{position:relative;z-index:1;align-self:stretch;width:auto;margin:0 4px}
 .cal .wk .chip.l-cut{margin-left:0;border-top-left-radius:0;border-bottom-left-radius:0}
 .cal .wk .chip.r-cut{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0}
-.cal .wk .more{position:relative;z-index:1;grid-row:5;align-self:center;pointer-events:none}
+.cal .wk .more{position:relative;z-index:1;grid-row:9;align-self:center;pointer-events:none}
 .cal .day.out{background:var(--bg)}
 .cal .day.out .dn{opacity:.45}
 .cal .dn{font-size:12px;font-family:var(--mono);color:var(--muted);display:flex;justify-content:space-between;align-items:center}
@@ -364,7 +364,7 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
 .more{font-size:11px;color:var(--muted);padding-left:4px}
 .cnt{display:none;font-size:11px;font-weight:600;color:var(--accent);font-family:var(--mono)}
 @media (max-width:640px){
-  .cal .wk{grid-template-rows:20px repeat(3,15px) 13px 1fr;row-gap:2px;min-height:96px}
+  .cal .wk{grid-template-rows:20px repeat(7,auto) auto 1fr;row-gap:2px;min-height:96px}
   .cal .day{padding:2px 3px}
   .cal .dn{font-size:11px}
   .cal .wk .chip{font-size:9.5px;line-height:15px;padding:0 3px;margin:0 2px;border-radius:3px}
@@ -471,6 +471,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.077", date: "2026-11-03", items: ["[일정] 달력 칸을 늘려 한 주에 일정 막대를 7줄까지 보여 줌 (전에는 3줄). 넘칠 때만 ‘+N건 더’ 표시. 일정이 적은 주는 칸 높이가 그만큼만 늘어남"] },
   { v: "v0.076", date: "2026-11-03", items: ["[통계] 예약 건도 포함: 장비별 막대에서 사용(반납 완료·진행 중)은 진한 초록, 예약(예정)은 연한 초록으로 이어 붙여 표시. 대여 횟수·일수 옆에 ‘+ 예약 n’ 표시, 정렬은 사용+예약 합계 순", "요약에 ‘예약 일수 (예정)’ 추가. 신청 건수와 목적·고객사·신청자별 순위에 앞으로 시작할 예약도 포함하고, 순위 막대도 사용(진한 초록)·예약(연한 초록)으로 나눔", "예약만 있는 장비는 ‘예약만’으로 표시하고 미사용 장비 수에서 뺌. 마지막 사용 칸에 다음 예약일 표시. 가동률은 실제 사용 일수 기준 그대로"] },
   { v: "v0.075", date: "2026-11-03", db: "021_loan_info_edit.sql", items: ["장비 관리자: 출고·반납 확인 중·반납 완료인 신청도 상세의 [신청 정보 수정]으로 신청자·사용 기간·목적·고객사·내부/외부 요청자·메모를 고칠 수 있음. 같은 신청번호의 장비 전체에 적용되고, 바뀐 내용은 Teams로 알림", "출고된 신청은 사용 시작일을 오늘 뒤로 옮길 수 없음. 바꾼 기간이 다른 예약과 겹치면 저장되지 않음"] },
   { v: "v0.074", date: "2026-11-03", items: ["[현황] 출고 예정: 대여번호별로 묶음. 묶음 머리에 고객사·신청자·기간·배송 여부와 [출고 처리 N대], 아래에 장비 줄(분류 순서)을 들여써서 보여 줌. 장비별 [출고]도 그대로 있음", "장비 관리자: 같은 대여번호의 예약 장비를 한 번에 출고 처리 (확인 창에 장비와 구성품 목록)"] },
@@ -1124,7 +1125,7 @@ function vCal() {
   }
 
   // 주(週) 줄마다 일정을 막대로 그린다. 여러 날 일정은 막대 하나로 이어진다.
-  const LANES = 3, start = new Date(first); start.setDate(1 - first.getDay());
+  const LANES = 7, start = new Date(first);   // 한 주에 막대 7줄까지, 넘치면 +N건 더 start.setDate(1 - first.getDay());
   const order = new Map(monthLoans.map((l, i) => [l.id, i]));
   const weeks = [];
   for (let w = new Date(start); w <= last; w.setDate(w.getDate() + 7)) {
