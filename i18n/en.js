@@ -91,6 +91,10 @@ const EX = {
   "다른 사람 이름으로 신청하거나 출고됨으로 등록하는 건 장비 관리자만 할 수 있어요.": "Only equipment admins can request on behalf of someone else or register as checked out.",
   "신청자는 사용 중인 사용자 중에서 골라 주세요.": "Please choose the requester from active users.",
   "이미 출고 중인 장비가 들어 있어요. 그 장비의 반납을 먼저 처리해 주세요.": "Some equipment is already checked out. Please process its return first.",
+  "출고할 수 없어요": "Can't check out", "앞 건 반납 전": "Earlier loan not returned", "앞 신청 보기": "View earlier loan", "연체 중": "Overdue", "↳ 뒤 예약": "↳ Next booking", "출고 중": "Checked out", "반납 확인 대기": "Awaiting return check",
+  "같은 장비의 앞 신청이 아직 반납 확인 전이에요. 앞 신청의 반납을 먼저 처리해 주세요. 다른 장비로 바꾸려면 예약 수정을 쓰세요.": "The earlier loan of this item has not been return-checked yet. Process its return first. To switch to another item, use Edit booking.",
+  "앞 신청이 아직 반납 확인 전이에요. 그 신청의 반납을 먼저 처리해 주세요.": "The earlier loan has not been return-checked yet. Please process its return first.",
+  "이 장비는 연체 중이라 아직 신청할 수 없어요. 같은 모델의 다른 장비를 골라 주세요.": "This item is overdue and can't be requested yet. Please pick another item of the same model.",
   "승인 없이 저장하는 즉시 예약이 확정돼요. 같은 기간에 이미 예약된 장비는 고를 수 없어요.": "Your booking is confirmed as soon as you save — no approval needed. Equipment already booked for those dates can't be chosen.",
   "사용 시작일": "Start date", "반납 예정일": "Return date", "기간:": "Period:", "제품명·자산번호 검색": "Search name, asset no.", "가능한 장비만": "Available only",
   "가능": "Available", "예약 겹침": "Booked", "조건에 맞는 장비가 없어요. 검색어나 필터를 바꿔 주세요.": "No equipment matches. Try another search or filter.",
@@ -313,6 +317,7 @@ const TPL = {
 };
 
 const RULES = [
+  [/^반납 예정일\((.+)\)이 지났는데 아직 돌아오지 않았어요\.$/, m => `Its return date (${m[1]}) has passed and it is not back yet.`],
   [/^(.+?) 예약돼 있어요\.(?: (.+)부터 쓸 수 있어요\.)?$/, m => `Booked ${m[1].replace(" 외 ", " + ").replace(/건$/, " more")}.${m[2] ? ` Free from ${m[2]}.` : ""}`],
   [/^(\d+)년 (\d+)월$/, m => `${MON[+m[2] - 1]} ${m[1]}`],
   [/^(.+?) 기준\. 연체는 반납 예정일이 지났는데 아직 출고 상태인 건이에요\.$/, m => `As of ${m[1]}. Overdue means past the return date and still checked out.`],
