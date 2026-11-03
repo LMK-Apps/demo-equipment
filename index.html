@@ -65,6 +65,15 @@ nav.tabs .wrap{display:flex;flex-direction:column;padding-block:6px}
 .tab-label{flex:none;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--muted);opacity:.75;padding:0 6px 0 12px}
 nav.tabs button{font:inherit;font-weight:500;border:0;background:none;color:var(--muted);padding:7px 12px;border-radius:6px;cursor:pointer;white-space:nowrap;display:flex;gap:6px;align-items:center}
 nav.tabs button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
+/* 폰: 메뉴 두 줄이 옆으로 밀지 않아도 한 화면에 들어오게 */
+@media (max-width:640px){
+  .tab-row{gap:2px;overflow-x:visible}
+  nav.tabs button{flex:1 1 auto;justify-content:center;min-width:0;padding:7px 3px;font-size:14px;gap:3px;letter-spacing:-.02em}
+  .tab-row.admin button{font-size:12.5px;padding:5px 3px}
+  .tab-label{padding:0 2px 0 0;font-size:10.5px}
+  .tab-sep{margin:0 1px}
+  nav.tabs .count{font-size:10px;padding:0 4px;line-height:15px}
+}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .count{font-family:var(--mono);font-size:11px;background:var(--bad);color:#fff;border-radius:99px;padding:0 6px;line-height:17px}
 main{padding-block:20px 48px}
@@ -479,6 +488,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.085", date: "2026-11-04", items: ["메뉴 이름 변경: 배송 → 물류", "캘린더 장비별 막대: 신청자 이름 대신 머리표(예: [SH])와 고객사를 보여 줌. 머리표가 없으면 이름", "폰에서 메뉴 두 줄이 옆으로 밀지 않아도 한 화면에 다 들어오게 글자 크기와 간격을 줄임"] },
   { v: "v0.084", date: "2026-11-04", items: ["메뉴 이름 변경: 확인 → 출입고 확인, 일정 → 캘린더, 장비 → 자산. 현황의 버튼도 [출입고 확인 N건]", "캘린더 장비별 보기: 대여 기간을 칸마다 끊지 않고 막대 하나로 이어서 그림. 막대 안에 신청자 이름과 고객사를 보여 주고, 칸이 좁으면 말줄임. 날짜 칸을 조금 넓힘"] },
   { v: "v0.083", date: "2026-11-03", db: "024_checkout_note.sql", items: ["관리자 [확인] 탭 추가: 출고 대기(오늘·내일 시작)와 반납 확인 대기를 한 화면에서 처리. 탭에 처리할 건수 배지", "[현황] 맨 위에 [확인하기 N건] 버튼(장비 관리자, 처리할 건이 있을 때만)", "메뉴 정리: 윗줄은 현황 → 데모 신청 → 내 신청 → 일정 → 장비 → 배송 순. 관리자 줄은 할 일(확인) | 기록(출납 대장·통계) | 설정(사용자)으로 나눔", "출고 창에 ‘출고 메모(선택)’ 칸 추가. 묶음 출고도 같은 창. 메모는 신청 상세와 CSV(출고 메모 열)에 보임"] },
   { v: "v0.082", date: "2026-11-03", db: "023_overdue_guard.sql", items: ["연체 장비 처리: 같은 장비의 앞 신청이 아직 출고·반납 확인 중이면 뒤 예약을 출고할 수 없음(화면·DB 모두 막음). 홈 출고 예정에 ‘앞 건 반납 전’ 표시", "홈 연체 목록: 그 장비를 기다리는 뒤 예약과, 같은 모델의 대체 가능 장비 수를 함께 보여줌", "데모 신청: 연체 중인 장비는 고를 수 없음(DB도 막음). 막힌 이유와 반납 예정일을 글자로 표시"] },
@@ -1039,7 +1049,7 @@ $("#updX").addEventListener("click", () => { verDismissed = $("#upd").dataset.v 
 // 윗줄 순서: 자주 하는 일(신청·내 신청)을 앞에, 둘러보기(일정·장비·배송)를 뒤에
 const TABS = () => [
   ["home","현황"], ["request","데모 신청"], ["mine","내 신청"], ["cal","캘린더"], ["equip","자산"],
-  ["ship","배송", shipments.filter(s => s.status === "pending").length],
+  ["ship","물류", shipments.filter(s => s.status === "pending").length],
 ];
 // 관리자 줄: 할 일 | 기록 | 설정 ("|"는 구분선)
 const ADMIN_TABS = () => [
@@ -1214,7 +1224,7 @@ function vCal() {
       .filter(e => !cal.mine || monthLoans.some(l => l.equipment_id === e.id))
       .sort(eqCmp);
     // 대여 기간은 칸을 합쳐(colspan) 막대 하나로 그린다. 막대 안에 신청자·고객사를 넣고, 좁으면 말줄임
-    const shortName = id => (nameOf(id) || "").replace(/^\[[^\]]*\]\s*/, "");
+    const shortName = id => { const n = nameOf(id) || ""; return n.match(/^\[[^\]]+\]/)?.[0] || n; };
     const rows = eqs.map(e => {
       const mine = monthLoans.filter(l => l.equipment_id === e.id);
       const cells = [];
@@ -1804,7 +1814,7 @@ function vShip() {
     </div>`;
   };
   return `
-  <div class="head"><div class="grow"><h2>배송 요청</h2><p class="sub">${me.isAdmin ? "" : "내가 신청한 건만 보여요. 배송 정보(이름·연락처·주소)는 장비 관리자와 신청한 본인만 볼 수 있어요. "}‘요청 메일’로 물류사에 보낼 문안을 복사하고, 보낸 뒤 [요청 완료]를 눌러 주세요. 진행 단계 버튼을 누르면 그 단계까지 색이 채워져요. 회수는 반납 신청에서 ‘물류사 회수 요청’을 고르면 ‘회수 요청 전’이 돼요.</p></div></div>
+  <div class="head"><div class="grow"><h2>물류</h2><p class="sub">${me.isAdmin ? "" : "내가 신청한 건만 보여요. 배송 정보(이름·연락처·주소)는 장비 관리자와 신청한 본인만 볼 수 있어요. "}‘요청 메일’로 물류사에 보낼 문안을 복사하고, 보낸 뒤 [요청 완료]를 눌러 주세요. 진행 단계 버튼을 누르면 그 단계까지 색이 채워져요. 회수는 반납 신청에서 ‘물류사 회수 요청’을 고르면 ‘회수 요청 전’이 돼요.</p></div></div>
   ${openG.length ? openG.map(card).join("") : `<div class="panel"><div class="empty">처리할 배송 요청이 없어요. 데모 신청에서 ‘배송 필요’를 체크하면 여기에 나타나요.</div></div>`}`;
 }
 

@@ -35,7 +35,7 @@ const EX = {
 
   // 메뉴
   "현황": "Today", "일정": "Schedule", "장비": "Equipment", "데모 신청": "Request demo", "내 신청": "My requests", "배송": "Delivery",
-  "관리자": "Admin", "출입고 확인": "Check-out/in", "캘린더": "Calendar", "자산": "Assets", "막대 안에 신청자와 고객사가 보여요. 글자가 잘리면 막대를 눌러 자세히 봐 주세요.": "Each bar shows the requester and customer. Tap a bar if the text is cut off.", "장비 관리자가 처리할 출고와 반납(입고) 확인을 모았어요. 출고는 오늘·내일 시작하는 예약과 시작일이 지났는데 아직 출고하지 않은 예약이에요.": "Checkouts and return checks for equipment admins. Checkouts are bookings starting today or tomorrow, plus past-start bookings not yet checked out.",
+  "관리자": "Admin", "물류": "Logistics", "출입고 확인": "Check-out/in", "캘린더": "Calendar", "자산": "Assets", "막대 안에 신청자와 고객사가 보여요. 글자가 잘리면 막대를 눌러 자세히 봐 주세요.": "Each bar shows the requester and customer. Tap a bar if the text is cut off.", "장비 관리자가 처리할 출고와 반납(입고) 확인을 모았어요. 출고는 오늘·내일 시작하는 예약과 시작일이 지났는데 아직 출고하지 않은 예약이에요.": "Checkouts and return checks for equipment admins. Checkouts are bookings starting today or tomorrow, plus past-start bookings not yet checked out.",
   "확인": "Check", "출고 대기": "To check out", "출고 메모": "Checkout note", "출고 메모 (선택)": "Checkout note (optional)", "예: 충전기 빠짐, 외관 흠집 사진 찍어 둠": "e.g. Charger missing, photo taken of a scratch", "지금 확인할 건이 없어요.": "Nothing to check right now.", "출고할 예약이 없어요.": "No bookings to check out.", 
   "장비 관리자가 처리할 출고와 반납 확인을 모았어요. 출고는 오늘·내일 시작하는 예약과 시작일이 지났는데 아직 출고하지 않은 예약이에요.": "Checkouts and return checks for equipment admins. Checkouts are bookings starting today or tomorrow, plus past-start bookings not yet checked out.",
   "출납 대장": "Ledger", "통계": "Stats", "사용자": "Users", "화면": "Screens",
