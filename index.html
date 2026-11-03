@@ -488,6 +488,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.086", date: "2026-11-04", items: ["데이터 사용량 줄이기: 1분마다 하는 자동 새로 고침은 장비·신청·배송 중 바뀐 것만 받아 옴(전에는 전체를 다시 받음). 15분마다, 그리고 [새로 고침]을 누르면 전체를 다시 받음", "로그인 기록(관리자)은 전체를 다시 받을 때만 불러옴"] },
   { v: "v0.085", date: "2026-11-04", items: ["메뉴 이름 변경: 배송 → 물류", "캘린더 장비별 막대: 신청자 이름 대신 머리표(예: [SH])와 고객사를 보여 줌. 머리표가 없으면 이름", "폰에서 메뉴 두 줄이 옆으로 밀지 않아도 한 화면에 다 들어오게 글자 크기와 간격을 줄임"] },
   { v: "v0.084", date: "2026-11-04", items: ["메뉴 이름 변경: 확인 → 출입고 확인, 일정 → 캘린더, 장비 → 자산. 현황의 버튼도 [출입고 확인 N건]", "캘린더 장비별 보기: 대여 기간을 칸마다 끊지 않고 막대 하나로 이어서 그림. 막대 안에 신청자 이름과 고객사를 보여 주고, 칸이 좁으면 말줄임. 날짜 칸을 조금 넓힘"] },
   { v: "v0.083", date: "2026-11-03", db: "024_checkout_note.sql", items: ["관리자 [확인] 탭 추가: 출고 대기(오늘·내일 시작)와 반납 확인 대기를 한 화면에서 처리. 탭에 처리할 건수 배지", "[현황] 맨 위에 [확인하기 N건] 버튼(장비 관리자, 처리할 건이 있을 때만)", "메뉴 정리: 윗줄은 현황 → 데모 신청 → 내 신청 → 일정 → 장비 → 배송 순. 관리자 줄은 할 일(확인) | 기록(출납 대장·통계) | 설정(사용자)으로 나눔", "출고 창에 ‘출고 메모(선택)’ 칸 추가. 묶음 출고도 같은 창. 메모는 신청 상세와 CSV(출고 메모 열)에 보임"] },
@@ -968,7 +969,27 @@ function langSwitch() {
 $("#langSw").innerHTML = langSwitch();   // 버전을 붙여 예전 매뉴얼이 보이지 않게
 
 /* ---------- 데이터 ---------- */
-async function loadAll() {
+// 자동 새로 고침은 바뀐 행(updated_at)만 받는다. 15분마다, 그리고 [새로 고침]을 누르면 전체를 다시 받는다
+// (전체 받기 때 지워진 행이 정리됨). 늦게 커밋된 변경을 놓치지 않게 마지막 시각보다 2분 앞부터 다시 받는다.
+const FULL_EVERY = 15 * 60 * 1000;
+let fullAt = 0, syncAt = { equipment: "", loans: "", shipments: "" };
+const maxUpd = (rows, prev = "") => rows.reduce((m, r) => (r.updated_at || "") > m ? r.updated_at : m, prev);
+const since = ts => ts ? new Date(new Date(ts).getTime() - 120000).toISOString() : "1970-01-01T00:00:00Z";
+const mergeRows = (cur, rows) => { if (!rows.length) return cur; const m = new Map(cur.map(r => [r.id, r])); rows.forEach(r => m.set(r.id, r)); return [...m.values()]; };
+async function loadChanged() {
+  const [e, l, s, p] = await Promise.all([
+    must(sb.from("equipment").select("*").gte("updated_at", since(syncAt.equipment))),
+    must(sb.from("loans").select("*").gte("updated_at", since(syncAt.loans))),
+    must(sb.from("shipments").select("*").gte("updated_at", since(syncAt.shipments))),
+    must(sb.from("profiles").select("id,display_name,kakao_name,role,status,created_at").order("created_at")),
+  ]);
+  equipment = mergeRows(equipment, e).sort((a, b) => (a.internal_id || "").localeCompare(b.internal_id || ""));
+  loans = mergeRows(loans, l).sort((a, b) => b.start_date.localeCompare(a.start_date));
+  shipments = mergeRows(shipments, s); people = p;
+  syncAt = { equipment: maxUpd(e, syncAt.equipment), loans: maxUpd(l, syncAt.loans), shipments: maxUpd(s, syncAt.shipments) };
+}
+async function loadAll(full) {
+  if (!full && fullAt && Date.now() - fullAt < FULL_EVERY) return loadChanged();
   const [e, l, s, p] = await Promise.all([
     must(sb.from("equipment").select("*").order("internal_id")),
     must(sb.from("loans").select("*").order("start_date", { ascending: false }).limit(3000)),
@@ -976,6 +997,7 @@ async function loadAll() {
     must(sb.from("profiles").select("id,display_name,kakao_name,role,status,created_at").order("created_at")),
   ]);
   equipment = e; loans = l; shipments = s; people = p;
+  syncAt = { equipment: maxUpd(e), loans: maxUpd(l), shipments: maxUpd(s) }; fullAt = Date.now();
   if (me.isAdmin) {   // 로그인 기록은 관리자만. 표가 없거나 실패해도 앱은 계속 쓴다
     try { const r = await sb.from("login_log").select("user_id,at,user_agent,kicked").order("at", { ascending: false }).limit(1000); logins = r.error ? [] : r.data || []; }
     catch { logins = []; }
@@ -1016,10 +1038,10 @@ async function roleGuard() {
   } catch {}
   return false;
 }
-async function refresh(quiet) {
+async function refresh(quiet, full) {
   if (await sessionGuard(false)) return;
   if (await roleGuard()) return;
-  try { await loadAll(); softRender(); }
+  try { await loadAll(full); softRender(); }
   catch (e) { if (!quiet) fail(e); }
   checkVersion();
 }
@@ -2744,7 +2766,7 @@ document.addEventListener("click", e => {
   const l = loans.find(x => x.id === a.dataset.id);
   const eqName = l ? `${esc(eqById(l.equipment_id)?.name)} ${eqParen(eqById(l.equipment_id))}` : "";
   switch (a.dataset.act) {
-    case "refresh": busy(a, () => refresh()); break;
+    case "refresh": busy(a, () => refresh(false, true)); break;
     case "changelog": showChangelog(); break;
     case "exitEdit": exitEdit(); break;
     case "statP": statP = a.dataset.v; render(); break;
