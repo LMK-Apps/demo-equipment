@@ -452,6 +452,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.070", date: "2026-11-03", items: ["[출납 대장] 상태 버튼 순서: [전체]를 맨 앞으로. 처음 열 때는 그대로 [대여 중]이 선택됨"] },
   { v: "v0.069", date: "2026-11-03", items: ["[출납 대장] 대여번호 줄을 토글로: 처음엔 번호 줄만 보이고, 누르면 장비 목록이 들여쓴 하위 줄로 펼쳐짐. 검색 중이거나 상세에서 ‘출납 대장에서 보기’로 오면 펼친 채로 보임"] },
   { v: "v0.068", date: "2026-11-03", items: ["[출납 대장] 대여번호(신청번호)별로 카드 하나로 묶음. 카드 머리에 신청자·목적·고객사·기간·출고 시각과 상태별 대수, 아래에 장비 줄", "상태 고르기를 드롭다운 대신 버튼으로: 대여 중(예전 ‘진행 중’) · 연체 · 반납 확인 중 · 반납 완료 · 취소 · 전체. 버튼마다 신청 건수 표시, 연체가 있으면 빨간 버튼", "반납 확인을 기다리는 장비가 2대 이상이면 카드 머리에 [반납 확인 N대] 버튼"] },
   { v: "v0.067", date: "2026-11-03", db: "020_return_date_edit.sql", items: ["장비 관리자: 신청 상세의 [반납] 칸에서 ‘실제 반납일’을 고칠 수 있음. 같은 신청번호의 반납 장비에 한 번에 적용 가능. 연체 반납 여부와 통계의 연체 비율은 실제 반납일로 셈", "반납 신청을 앱에 기록한 시각은 ‘앱에 기록한 시각’으로 따로 남고 바뀌지 않음 (실제 반납일과 다를 때만 보임)", "상세의 반납 칸: 실제 반납일이 반납 예정일보다 늦으면 ‘연체 N일’ 표시"] },
@@ -1612,18 +1613,18 @@ function vShip() {
   ${openG.length ? openG.map(card).join("") : `<div class="panel"><div class="empty">처리할 배송 요청이 없어요. 데모 신청에서 ‘배송 필요’를 체크하면 여기에 나타나요.</div></div>`}`;
 }
 
-// 출납 대장 상태 버튼: 대여 중(예약·출고·반납 확인 중), 연체, 반납 확인 중, 반납 완료, 취소, 전체
+// 출납 대장 상태 버튼: 전체, 대여 중(예약·출고·반납 확인 중, 기본값), 연체, 반납 확인 중, 반납 완료, 취소
 const LEDGER_ST = [
+  ["all", "전체", () => true],
   ["open", "대여 중", l => ACTIVE(l.status) || l.status === "checking"],
   ["overdue", "연체", l => isOverdue(l)],
   ["checking", "반납 확인 중", l => l.status === "checking"],
   ["done", "반납 완료", l => l.status === "done"],
   ["cancelled", "취소", l => l.status === "cancelled"],
-  ["all", "전체", () => true],
 ];
 function vLedger() {
   const q = filters.ledgerQ.trim().toLowerCase(), st = filters.ledgerSt;
-  const stDef = LEDGER_ST.find(x => x[0] === st) || LEDGER_ST[0];
+  const stDef = LEDGER_ST.find(x => x[0] === st) || LEDGER_ST.find(x => x[0] === "open");   // 기본은 대여 중
   const matchQ = l => { const e = eqById(l.equipment_id) || {};
     return !q || `${l.loan_no} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.model || ""} ${l.customer} ${nameOf(l.requester_id)} ${reqInfo(l)}`.toLowerCase().includes(q); };
   const searched = loans.filter(matchQ);
