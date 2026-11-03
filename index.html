@@ -306,7 +306,13 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
 .c-checking{background:var(--warn-soft);color:var(--warn)} .c-overdue{background:var(--bad-soft);color:var(--bad)} .c-done{background:var(--sunk);color:var(--muted)}
 .more{font-size:11px;color:var(--muted);padding-left:4px}
 .cnt{display:none;font-size:11px;font-weight:600;color:var(--accent);font-family:var(--mono)}
-@media (max-width:640px){.cal .wk{grid-template-rows:auto;min-height:56px}.cal .chip,.cal .more{display:none!important}.cnt{display:block}}
+@media (max-width:640px){
+  .cal .wk{grid-template-rows:20px repeat(3,15px) 13px 1fr;row-gap:2px;min-height:96px}
+  .cal .day{padding:2px 3px}
+  .cal .dn{font-size:11px}
+  .cal .wk .chip{font-size:9.5px;line-height:15px;padding:0 3px;margin:0 2px;border-radius:3px}
+  .cal .wk .more{font-size:9.5px;padding-left:2px;white-space:nowrap;overflow:hidden}
+}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .tl td.d{padding:0;width:26px;min-width:26px;height:30px;border-left:1px solid var(--line);text-align:center;font-size:10.5px;font-weight:600;cursor:default}
@@ -403,6 +409,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.056", date: "2026-11-03", items: ["[일정] 휴대폰 달력에도 일정 막대를 보여 줌 (전에는 날짜별 건수만 보였음). 글자를 작게 줄여 한 주에 3줄까지 보여 주고, 넘으면 ‘+N건 더’로 표시"] },
   { v: "v0.055", date: "2026-11-03", items: ["[일정] 달력: 여러 날 일정을 날짜마다 따로 쓰지 않고 막대 하나로 이어서 보여 줌. 주가 바뀌면 다음 줄에서 이어지고, 잘린 쪽 끝은 평평하게 표시. 겹치는 일정은 줄을 나눠 쌓고, 한 주에 3줄이 넘으면 날짜마다 ‘+N건 더’로 표시"] },
   { v: "v0.054", date: "2026-11-02", db: "017_proxy_request.sql", items: [
     "장비 관리자는 [데모 신청]에서 신청자를 골라 다른 사람 이름으로 신청할 수 있음 (사용 중인 사용자만). 신청은 그 사람의 [내 신청]에 들어가고, 등록한 관리자는 상세에 ‘등록: 이름’으로 남음",
