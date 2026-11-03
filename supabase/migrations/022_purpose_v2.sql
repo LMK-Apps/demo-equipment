@@ -4,7 +4,7 @@
 --   기존 값 옮기기:
 --     고객 데모 → 영업 데모        교육·워크숍 → 고객 교육·지원
 --     학회, 전시회 → 학회·전시     내부 교육 → 내부 사용
---     기타 → 메모를 보고 신청번호별로 옮김 (아래 3. 참고, 나머지는 기타 그대로)
+--     기타 → 신청번호별로 옮김 (아래 3. 참고, 2026-11-03 사용자 확인)
 --   예약 수정(update_reservation)·신청 정보 수정(update_loan_info) 함수의
 --   목적 목록도 새 목록으로 바꾼다. (함수 본문은 그대로 두고 목록만 바꾼다)
 -- 실행 위치: Supabase SQL Editor (021 실행 후 1회)
@@ -21,10 +21,12 @@ update public.loans set purpose = '고객 교육·지원'  where purpose = '교�
 update public.loans set purpose = '학회·전시'       where purpose in ('학회', '전시회');
 update public.loans set purpose = '내부 사용'       where purpose = '내부 교육';
 
--- 3. '기타' 건 중 메모로 용도가 분명한 건
+-- 3. '기타' 5건 (사용자 확인)
 update public.loans set purpose = '영업 데모'      where loan_no = 'D-LMK-2611-006' and purpose = '기타';  -- 국시원 장비평가
-update public.loans set purpose = '고객 교육·지원' where loan_no = 'D-LMK-2611-008' and purpose = '기타';  -- 을지대 수리 지연 대체품
+update public.loans set purpose = '장기 대여'      where loan_no = 'D-LMK-2611-008' and purpose = '기타';  -- 을지대 수리 지연 대체품 (58일)
 update public.loans set purpose = '고객 교육·지원' where loan_no = 'D-LMK-2611-011' and purpose = '기타';  -- 연세의료원 PALS 과정
+update public.loans set purpose = '고객 교육·지원' where loan_no = 'D-LMK-2611-014' and purpose = '기타';  -- 서울아산병원
+update public.loans set purpose = '영업 데모'      where loan_no = 'D-LMK-2611-016' and purpose = '기타';  -- 전북대학교
 
 -- 4. 새 제약
 alter table public.loans add constraint loans_purpose_check
