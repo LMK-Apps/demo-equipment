@@ -124,7 +124,7 @@ label.f.req>span::after{content:" *";color:var(--bad)}
 @media (min-width:640px){.overlay.full{padding:32px;align-items:center;background:rgba(10,14,12,.45)}.modal.full{min-height:0;height:min(760px,calc(100vh - 64px));border-radius:20px;border:1px solid var(--line);overflow-y:auto;padding-bottom:0}
   /* PC 창은 높이가 정해져 있다: 내용이 길면 창 안에서 스크롤하고, 진행 막대와 아래 버튼은 늘 보이게 둔다 */
   .modal.full .flow-top{position:sticky;top:0;z-index:2;background:var(--surface)}
-  .modal.full .flow-foot,.modal.full .flow-yn{position:sticky;bottom:0;z-index:2;background:var(--surface);padding-bottom:20px;box-shadow:0 -10px 12px -10px rgba(0,0,0,.18)}}
+  .modal.full .flow-foot,.modal.full .flow-yn{position:sticky;bottom:0;z-index:2;background:var(--surface);padding-bottom:20px}}
 .flow{display:flex;flex-direction:column;flex:1;min-height:0}
 .flow-top{display:flex;align-items:center;gap:10px;height:52px}
 .icon-btn{border:0;background:none;color:var(--fg);font:inherit;font-size:22px;width:40px;height:40px;border-radius:10px;cursor:pointer;flex:none}
@@ -134,6 +134,7 @@ label.f.req>span::after{content:" *";color:var(--bad)}
 .flow-eq{margin-top:2px}
 .flow section{display:flex;flex-direction:column;flex:1;gap:14px;padding-top:32px;animation:flowIn .22s ease}
 .flow section[hidden]{display:none}
+#qSecs{display:contents}  /* 자가점검 화면도 다른 단계처럼 창 높이를 채워 버튼이 아래에 붙게 한다 */
 @keyframes flowIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.flow section{animation:none}.flow-bar i{transition:none}}
 .flow-k{margin:0;color:var(--accent);font-weight:700;font-size:15px}
@@ -155,6 +156,10 @@ label.f.req>span::after{content:" *";color:var(--bad)}
 .opt[data-sel]::after{content:"";position:absolute;right:18px;top:50%;width:24px;height:24px;margin-top:-12px;border-radius:50%;border:2px solid var(--line);box-sizing:border-box;font-size:14px;line-height:20px;text-align:center}
 .opt[data-sel][aria-pressed="true"]::after{content:"✓";background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .opt[data-sel][aria-pressed="false"]{opacity:.75}
+.opt[data-qx]{position:relative;padding:14px 52px 14px 18px;font-size:16px}
+.opt[data-qx]::after{content:"";position:absolute;right:18px;top:50%;width:24px;height:24px;margin-top:-12px;border-radius:6px;border:2px solid var(--line);box-sizing:border-box;font-size:14px;line-height:20px;text-align:center}
+.opt[data-qx][aria-pressed="true"]{border-color:var(--bad);background:var(--bad-soft)}
+.opt[data-qx][aria-pressed="true"]::after{content:"!";font-weight:800;background:var(--bad);border-color:var(--bad);color:#fff}
 .memo-pick{display:flex;flex-direction:column;gap:14px}.memo-pick:empty{display:none}
 .m-grp{display:flex;flex-direction:column;gap:8px}.m-grp b{font-size:14px;font-weight:600}
 .m-eq{font-weight:700;font-size:15px;padding-top:6px;border-top:1px solid var(--line)}.m-grp:first-child .m-eq{border-top:0;padding-top:0}
@@ -417,6 +422,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.060", date: "2026-11-03", items: ["반납 신청: 2대 이상 함께 반납하면 자가점검 질문을 장비마다 반복하지 않고 한 번만 물음. ‘예’면 모두 이상 없음, ‘아니오’면 이상 있는 장비만 골라 표시 (1대 반납은 그대로)", "단계형 창: 자가점검 화면에서도 예·아니오·다음 버튼을 화면 아래에 고정 (전에는 질문 바로 밑에 떠 있었음). PC 버튼 위 그림자 선 없앰"] },
   { v: "v0.059", date: "2026-11-03", items: ["PC 화면: 반납 신청처럼 단계로 넘어가는 창에서 장비가 많으면 내용이 창 밖으로 넘치던 문제 고침. 목록은 창 안에서 스크롤되고, 위 진행 막대와 아래 버튼은 늘 보임 (휴대폰은 그대로)"] },
   { v: "v0.058", date: "2026-11-03", db: "018_checkout_add_void.sql", items: [
     "장비 관리자: 출고된 신청의 상세에 [장비 추가] 버튼. 같이 가져간 장비를 같은 신청번호·같은 기간으로 바로 출고 상태로 더함 (대신 신청·출고됨으로 등록한 건도 고칠 수 있음)",
@@ -1951,7 +1957,23 @@ function returnForm(l) {
   const missingMemo = () => items().find(x => resultOf(x) !== "ok" && !hasMemoFor(x));
   const methodOf = () => st.how === "pickup" ? "pickup" : st.place === "문정" ? "drop_munjeong" : "drop_uiwang";
   const steps = () => [...(multi ? ["items"] : []), "place", "method", ...(st.how === "pickup" ? ["pickup"] : []),
-    ...items().flatMap(x => checksOf(x).map(q => `q:${x.id}:${q.k}`)), "memo", "sum"];
+    ...(grouped() ? qKeys().map(q => `qq:${q.k}`) : items().flatMap(x => checksOf(x).map(q => `q:${x.id}:${q.k}`))), "memo", "sum"];
+  // 2대 이상이면 질문마다 한 화면에 장비를 모두 놓고 장비별로 예/아니오를 고른다 (처음엔 모두 ‘예’)
+  const grouped = () => items().length > 1;
+  const qKeys = () => { const seen = new Map(); items().forEach(x => checksOf(x).forEach(q => { if (!seen.has(q.k)) seen.set(q.k, q); })); return [...seen.values()]; };
+  const qqSec = (q, i, n) => {
+    const its = items().filter(x => checksOf(x).some(c => c.k === q.k));
+    return `<section data-step="qq:${q.k}" hidden>
+      <p class="flow-k">자가점검 ${i + 1}/${n} · 장비 ${its.length}대</p><h2 class="flow-q">${esc(q.q)}</h2>
+      ${(() => { const subs = new Set(its.map(x => checksOf(x).find(c => c.k === q.k)?.sub || "")); return subs.size === 1 && q.sub ? `<p class="meta">${esc(q.sub)}</p>` : ""; })()}
+      <div class="qq-pick" hidden>
+        <p class="meta">이상이 있는 장비를 모두 골라 주세요.</p>
+        <div class="flow-opts">${its.map(x => `<button class="opt" data-qx="${x.id}" aria-pressed="false">${esc(eqOf(x).name)}<span class="opt-sub">${esc(eqNo(eqOf(x)))}${q.k === "parts" && eqOf(x).components ? ` · 구성품: ${esc(eqOf(x).components.replace(/\s*\n\s*/g, ", "))}` : ""}</span></button>`).join("")}</div>
+      </div>
+      <div class="flow-yn"><button class="big yn-n" data-yn="n" aria-pressed="false">아니오</button><button class="big yn-y" data-yn="y" aria-pressed="false">예</button></div>
+      <div class="flow-foot qq-foot" hidden><div class="notice bad" hidden></div><button class="btn pri big" data-qq-next>다음</button></div>
+    </section>`;
+  };
   const qSec = (x, q, i, n, k, kn) => `<section data-step="q:${x.id}:${q.k}" data-lid="${x.id}" hidden>
       <p class="flow-k">자가점검 ${i + 1}/${n}${kn > 1 ? ` · 장비 ${k + 1}/${kn}` : ""}</p><h2 class="flow-q">${esc(q.q)}</h2>
       ${q.sub ? `<p class="meta">${esc(q.sub)}</p>` : ""}
@@ -2014,6 +2036,34 @@ function returnForm(l) {
     // 자가점검 화면은 고른 장비에 맞춰 다시 그린다 (이미 고른 답은 그대로 둔다)
     const paintChecks = () => {
       const its = items();
+      if (grouped()) {
+        const ks = qKeys();
+        $("#qSecs", m).innerHTML = ks.map((q, i) => qqSec(q, i, ks.length)).join("");
+        $("#qSecs", m).querySelectorAll("section[data-step^='qq:']").forEach(sec => {
+          const k = sec.dataset.step.slice(3), its = items().filter(x => checksOf(x).some(c => c.k === k));
+          const bad = () => its.filter(x => ansOf(x)[k] === "n");
+          const paint = () => {
+            const open = sec.dataset.mode === "n";
+            sec.querySelector(".qq-pick").hidden = !open; sec.querySelector(".qq-foot").hidden = !open;
+            sec.querySelector(".flow-yn").hidden = open;
+            sec.querySelectorAll("[data-qx]").forEach(b => b.setAttribute("aria-pressed", String(ansOf(cands.find(c => c.id === b.dataset.qx))[k] === "n")));
+            const n = bad().length; sec.querySelector("[data-qq-next]").textContent = n ? `${n}대 이상 있음 · 다음` : "다음";
+          };
+          // 예: 모두 이상 없음. 아니오: 이상 있는 장비를 고른다.
+          sec.querySelector(".yn-y").addEventListener("click", () => { its.forEach(x => ansOf(x)[k] = "y"); sec.dataset.mode = "y"; paint(); setTimeout(next, 150); });
+          sec.querySelector(".yn-n").addEventListener("click", () => { sec.dataset.mode = "n"; paint(); });
+          sec.querySelectorAll("[data-qx]").forEach(b => b.addEventListener("click", () => {
+            const x = cands.find(c => c.id === b.dataset.qx); ansOf(x)[k] = ansOf(x)[k] === "n" ? "y" : "n"; sec.querySelector(".notice").hidden = true; paint();
+          }));
+          sec.querySelector("[data-qq-next]").addEventListener("click", () => {
+            if (!bad().length) { const e = sec.querySelector(".notice"); e.textContent = "이상이 있는 장비를 골라 주세요. 모두 괜찮으면 뒤로 가서 ‘예’를 눌러 주세요."; e.hidden = false; return; }
+            its.forEach(x => { if (ansOf(x)[k] !== "n") ansOf(x)[k] = "y"; }); next();
+          });
+          if (bad().length) sec.dataset.mode = "n";
+          paint();
+        });
+        return;
+      }
       $("#qSecs", m).innerHTML = its.map((x, k) => checksOf(x).map((q, i, all) => qSec(x, q, i, all.length, k, its.length)).join("")).join("");
       $("#qSecs", m).querySelectorAll("section[data-step^='q:']").forEach(sec => {
         const x = cands.find(c => c.id === sec.dataset.lid), k = sec.dataset.step.split(":")[2];
@@ -2106,7 +2156,8 @@ function returnForm(l) {
     $("#memoNext", m).addEventListener("click", () => { $("#mErr", m).hidden = true; keepNotes(); if (!memoMiss()) next(); });
     const paintSum = () => {
       const its = items(), gm = general();
-      const firstQ = x => `q:${x.id}:${checksOf(x)[0].k}`;
+      const firstQ = x => grouped() ? `qq:${checksOf(x)[0].k}` : `q:${x.id}:${checksOf(x)[0].k}`;
+      const qStep = (x, k) => grouped() ? `qq:${k}` : `q:${x.id}:${k}`;
       $("#sumBox", m).innerHTML = `
         ${multi ? `<button class="sum-row" data-goto="items"><span>반납할 장비</span><b>${its.length}대</b></button>` : ""}
         <button class="sum-row" data-goto="place"><span>반납 장소</span><b>${esc(st.place)}</b></button>
@@ -2116,7 +2167,7 @@ function returnForm(l) {
           const nos = nosOf(x), r = resultOf(x), memo = [...picksOf(x), noteOf(x)].filter(Boolean).join(", ");
           return its.length === 1
             ? checksOf(x).map((q, i) => `<button class="sum-row" data-goto="q:${x.id}:${q.k}"><span>${i + 1}. ${esc(q.q)}</span><b class="${ansOf(x)[q.k] === "n" ? "t-bad" : ""}">${ansOf(x)[q.k] === "n" ? "아니오" : "예"}</b></button>`).join("")
-            : `<button class="sum-row" data-goto="${nos.length ? `q:${x.id}:${nos[0].k}` : firstQ(x)}"><span>${esc(eqOf(x).name)} <span class="mono">${esc(eqNo(eqOf(x)))}</span>${memo ? `<br><span class="t-bad">${esc(memo)}</span>` : ""}</span><b><span class="pill ${CHECK_PILL[r]}">${esc(CONDS[r])}</span>${nos.length ? `\n아니오 ${nos.length}개` : ""}</b></button>`;
+            : `<button class="sum-row" data-goto="${nos.length ? qStep(x, nos[0].k) : firstQ(x)}"><span>${esc(eqOf(x).name)} <span class="mono">${esc(eqNo(eqOf(x)))}</span>${memo ? `<br><span class="t-bad">${esc(memo)}</span>` : ""}</span><b><span class="pill ${CHECK_PILL[r]}">${esc(CONDS[r])}</span>${nos.length ? `\n아니오 ${nos.length}개` : ""}</b></button>`;
         }).join("")}
         <button class="sum-row" data-goto="memo"><span>메모</span><b>${its.length === 1 ? esc([...picksOf(its[0]), gm].filter(Boolean).join("\n") || "없음") : esc(gm || "없음")}</b></button>
         ${its.length === 1 ? `<div class="sum-res">자가점검 결과 <span class="pill ${CHECK_PILL[resultOf(its[0])]}">${esc(CONDS[resultOf(its[0])])}</span></div>` : ""}

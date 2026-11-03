@@ -188,6 +188,9 @@ const EX = {
   "등록 취소 사유를 적어 주세요.": "Please enter a reason for voiding.",
   "대상을 찾지 못했어요.": "Couldn't find the item.",
   "출고 상태인 장비만 등록 취소할 수 있어요. 출고 전이면 예약 수정이나 예약 취소를 이용해 주세요.": "Only checked-out equipment can be voided. Before checkout, use Edit booking or Cancel booking.",
+  // 여러 대 반납 자가점검 (v0.060)
+  "이상이 있는 장비를 모두 골라 주세요.": "Select every item with a problem.",
+  "이상이 있는 장비를 골라 주세요. 모두 괜찮으면 뒤로 가서 ‘예’를 눌러 주세요.": "Select the items with a problem. If all are fine, go back and tap ‘Yes’.",
   // 서버 오류 메시지
   "같은 기간에 이미 예약된 장비가 있어요. 장비나 기간을 바꿔 주세요.": "Some equipment is already booked for those dates. Change the equipment or dates.",
   "같은 신청번호의 장비만 함께 반납할 수 있어요.": "Only items with the same request number can be returned together.",
@@ -256,7 +259,7 @@ const EX = {
 const TPL = {
   "#. 기간과 장비": "#. Dates and equipment", "#. 사용 정보": "#. Usage details", "#건": "#", "#대": "#", "(#대)": "(#)", "(#일)": "(# days)", "#일": "# days", "#일 지남": "# days late",
   "연체 #일": "# days overdue", "#대 반납하기": "Return # items", "#대 선택": "# selected", "#대 표시 중": "Showing #", "#대 표시 중 · 수리 필요만": "Showing # · needs repair only",
-  "선택 #대": "# selected", "장비 #대를 더했어요.": "Added # item(s).", "표시된 #대 모두 선택": "Select all # shown", "전체 #대 중 #대 표시": "Showing # of #", "+#건 더": "+# more", "진행 중 #건": "In progress (#)", "진행 중": "In progress",
+  "선택 #대": "# selected", "#대 이상 있음 · 다음": "# with problems · Next", "자가점검 #/# · 장비 #대": "Self-check #/# · # items", "구성품:": "Components:", "장비 #대를 더했어요.": "Added # item(s).", "표시된 #대 모두 선택": "Select all # shown", "전체 #대 중 #대 표시": "Showing # of #", "+#건 더": "+# more", "진행 중 #건": "In progress (#)", "진행 중": "In progress",
   "아니오 #개": "No × #", "다른 로그인 #개를 끊음": "Ended # other login(s)", "최근 #개월": "Last # months", "이번 달 #건, 장비 #대": "# this month, # items",
   "장비 #대": "# items", "장비 #대. 보관 위치와 최근 점검 결과는 반납 신청과 관리자 점검 때 자동으로 바뀌어요. 행을 누르면 자세히 볼 수 있어요.": "# items. Location and last check update automatically from returns and admin checks. Tap a row for details.",
   "자가점검 #/# · 장비 #/#": "Self-check #/# · item #/#", "자가점검 #/#": "Self-check #/#", "자가점검 #개 모두 ‘예’": "All # self-check answers were ‘Yes’",
