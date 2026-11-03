@@ -107,6 +107,15 @@ h3{font-size:14px;margin:0;font-weight:600}
 .cat-chip{font:inherit;font-size:13.5px;font-weight:500;border:0;border-radius:99px;padding:5px 12px;background:var(--accent-soft);color:var(--accent);cursor:pointer;display:inline-flex;gap:5px;align-items:center}
 .cat-chip:hover{filter:brightness(.96)}
 .cat-chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.cat-chip.bad{background:var(--bad-soft);color:var(--bad)}
+.cat-chip.bad[aria-pressed="true"]{background:var(--bad);color:#fff}
+.lg-list{display:flex;flex-direction:column;gap:12px}
+.lg-grp{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+.lg-h{padding:11px 14px;background:var(--sunk);border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.lg-h.late{box-shadow:inset 3px 0 0 var(--bad)}
+.lg-h1{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:14px}
+.lg-h1 .lg-st{display:inline-flex;flex-wrap:wrap;gap:4px;margin-left:auto}
+.lg-item{padding-left:22px}
 .cat-chip .n{font-family:var(--mono);font-size:11.5px;opacity:.75}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 input,select,textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;min-width:0;font-size:16px}
@@ -437,6 +446,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.068", date: "2026-11-03", items: ["[출납 대장] 대여번호(신청번호)별로 카드 하나로 묶음. 카드 머리에 신청자·목적·고객사·기간·출고 시각과 상태별 대수, 아래에 장비 줄", "상태 고르기를 드롭다운 대신 버튼으로: 대여 중(예전 ‘진행 중’) · 연체 · 반납 확인 중 · 반납 완료 · 취소 · 전체. 버튼마다 신청 건수 표시, 연체가 있으면 빨간 버튼", "반납 확인을 기다리는 장비가 2대 이상이면 카드 머리에 [반납 확인 N대] 버튼"] },
   { v: "v0.067", date: "2026-11-03", db: "020_return_date_edit.sql", items: ["장비 관리자: 신청 상세의 [반납] 칸에서 ‘실제 반납일’을 고칠 수 있음. 같은 신청번호의 반납 장비에 한 번에 적용 가능. 연체 반납 여부와 통계의 연체 비율은 실제 반납일로 셈", "반납 신청을 앱에 기록한 시각은 ‘앱에 기록한 시각’으로 따로 남고 바뀌지 않음 (실제 반납일과 다를 때만 보임)", "상세의 반납 칸: 실제 반납일이 반납 예정일보다 늦으면 ‘연체 N일’ 표시"] },
   { v: "v0.066", date: "2026-11-03", db: "019_equipment_model.sql", items: ["장비에 ‘모델 (묶음 이름)’ 칸 추가. 비워 두면 지금처럼 제품명으로 묶고, 값을 넣으면 제품명이 달라도 같은 모델로 묶음. [장비 수정]에서 기존 모델 이름을 골라 넣을 수 있음", "RA1~RA4를 ‘Resusci Anne QCPR’ 한 묶음으로. 묶음 안에서 제품명이 서로 다르면 펼친 줄마다 제품명도 같이 보여 줌 (Torso·AED 구분)", "검색에 모델 이름도 포함"] },
   { v: "v0.065", date: "2026-11-03", items: ["[장비] 목록의 개별 장비 줄과 [데모 신청] 장비 고르기에 구성품을 한 줄로 표시. 길면 줄임표(…)로 자르고, 마우스를 올리면 전체가 보임"] },
@@ -1595,16 +1605,27 @@ function vShip() {
   ${openG.length ? openG.map(card).join("") : `<div class="panel"><div class="empty">처리할 배송 요청이 없어요. 데모 신청에서 ‘배송 필요’를 체크하면 여기에 나타나요.</div></div>`}`;
 }
 
+// 출납 대장 상태 버튼: 대여 중(예약·출고·반납 확인 중), 연체, 반납 확인 중, 반납 완료, 취소, 전체
+const LEDGER_ST = [
+  ["open", "대여 중", l => ACTIVE(l.status) || l.status === "checking"],
+  ["overdue", "연체", l => isOverdue(l)],
+  ["checking", "반납 확인 중", l => l.status === "checking"],
+  ["done", "반납 완료", l => l.status === "done"],
+  ["cancelled", "취소", l => l.status === "cancelled"],
+  ["all", "전체", () => true],
+];
 function vLedger() {
   const q = filters.ledgerQ.trim().toLowerCase(), st = filters.ledgerSt;
-  const list = loans.filter(l => {
-    if (st === "open" && !(ACTIVE(l.status) || l.status === "checking")) return false;
-    if (st === "overdue" && !isOverdue(l)) return false;
-    if (st === "done" && l.status !== "done") return false;
-    if (st === "cancelled" && l.status !== "cancelled") return false;
-    const e = eqById(l.equipment_id) || {};
-    return !q || `${l.loan_no} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${l.customer} ${nameOf(l.requester_id)} ${reqInfo(l)}`.toLowerCase().includes(q);
-  }).sort((a, b) => b.start_date.localeCompare(a.start_date) || a.loan_no.localeCompare(b.loan_no));
+  const stDef = LEDGER_ST.find(x => x[0] === st) || LEDGER_ST[0];
+  const matchQ = l => { const e = eqById(l.equipment_id) || {};
+    return !q || `${l.loan_no} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.model || ""} ${l.customer} ${nameOf(l.requester_id)} ${reqInfo(l)}`.toLowerCase().includes(q); };
+  const searched = loans.filter(matchQ);
+  const nGroups = test => new Set(searched.filter(test).map(l => l.loan_no)).size;
+  const list = searched.filter(stDef[2]);
+  // 대여번호(신청번호)별로 묶는다. 최근 시작한 신청이 위로.
+  const groups = [...list.reduce((m, l) => (m.has(l.loan_no) ? m.get(l.loan_no).push(l) : m.set(l.loan_no, [l]), m), new Map()).values()]
+    .map(g => g.sort((a, b) => (eqById(a.equipment_id)?.label || eqById(a.equipment_id)?.internal_id || "").localeCompare(eqById(b.equipment_id)?.label || eqById(b.equipment_id)?.internal_id || "")))
+    .sort((a, b) => b[0].start_date.localeCompare(a[0].start_date) || b[0].loan_no.localeCompare(a[0].loan_no));
   const act = l => {
     if (!me.isAdmin) return "";
     if (l.status === "reserved") return `<button class="btn sm pri" data-act="checkout" data-id="${l.id}">출고</button>`;
@@ -1612,23 +1633,35 @@ function vLedger() {
     if (l.status === "checking") return `<button class="btn sm pri" data-act="inspect" data-id="${l.id}">반납 확인</button>`;
     return "";
   };
+  const item = l => { const e = eqById(l.equipment_id) || {};
+    const ret = l.return_method ? `${esc(l.return_method === "pickup" ? retLabel(l) : placeOf(l))}${l.returned_at ? ` <span class="mono">${fmtT(l.returned_at)}</span>` : ""} · 자가점검 ${condText(l.return_self_check)}${l.return_condition ? ` → 확인 ${condText(l.return_condition)}` : ""}` : "";
+    const note = [l.return_self_note, l.return_note].filter(Boolean).join(" / ");
+    return `<div class="r2 lg-item ${isOverdue(l) ? "overdue" : ""}" data-act="loanView" data-id="${l.id}">
+      <div class="r2-main">
+        <div class="r2-l1">${frontTag(e)}<b class="r2-title">${esc(e.name)}</b>${backId(e)}</div>
+        ${ret || note || l.extension_count ? `<div class="r2-l2">${l.extension_count ? `<span>연장 ${l.extension_count}회 · <span class="mono">~${fmtD(l.due_date)}</span></span>` : ""}${ret ? `<span>반납 ${ret}</span>` : ""}${note ? `<span class="r2-note" title="${esc(note)}">메모 ${esc(note)}</span>` : ""}</div>` : ""}
+      </div>
+      <div class="r2-side">${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}${act(l)}</div></div>`; };
+  const head = g => { const l = g[0], ri = reqInfo(l), o = shipOf(l.loan_no, "outbound");
+    const all = loans.filter(x => x.loan_no === l.loan_no && x.status !== "cancelled");
+    const counts = Object.keys(LOAN_STATUS).map(k => [k, all.filter(x => x.status === k).length]).filter(([, n]) => n);
+    const late = all.filter(isOverdue).length, co = all.map(x => x.checkout_at).filter(Boolean).sort()[0];
+    const end = all.reduce((m, x) => x.due_date > m ? x.due_date : m, l.due_date);
+    const checking = all.filter(x => x.status === "checking");
+    return `<div class="lg-h${late ? " late" : ""}">
+      <div class="lg-h1"><b class="mono">${esc(l.loan_no)}</b><span>${esc(nameOf(l.requester_id))}${ri ? ` <span class="meta">(${esc(ri)})</span>` : ""}</span><span class="grp-n">장비 ${all.length || g.length}대</span>
+        <span class="lg-st">${late ? `<span class="pill p-bad">연체 ${late}</span>` : ""}${counts.map(([k, n]) => `<span class="pill ${LOAN_STATUS[k][1]}">${esc(LOAN_STATUS[k][0])} ${n}</span>`).join("")}</span>
+        ${me.isAdmin && checking.length > 1 ? `<button class="btn sm pri" data-act="inspect" data-id="${checking[0].id}">반납 확인 ${checking.length}대</button>` : ""}</div>
+      <div class="r2-l2"><span>${esc(l.purpose)}${l.customer ? ` · ${esc(l.customer)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div></div>`; };
   return `
-  <div class="head"><div class="grow"><h2>출납 대장</h2><p class="sub">장비 1대가 한 항목이에요. 함께 신청한 장비는 같은 신청번호를 써요.${me.isAdmin ? "" : " 출고·점검은 장비 관리자만 할 수 있어요."}</p></div>
+  <div class="head"><div class="grow"><h2>출납 대장</h2><p class="sub">대여번호(신청번호)별로 묶어서 보여 줘요. 장비 줄을 누르면 자세히 볼 수 있어요.${me.isAdmin ? "" : " 출고·점검은 장비 관리자만 할 수 있어요."}</p></div>
     <button class="btn" data-act="csv">CSV 내보내기</button></div>
   <div class="toolbar">
     <input id="lgQ" type="search" placeholder="신청번호·장비·고객사·신청자 검색" value="${esc(filters.ledgerQ)}" style="flex:1;min-width:200px">
-    <select id="lgSt">${[["open","진행 중"],["overdue","연체"],["done","반납 완료"],["cancelled","취소"],["all","전체"]].map(([k, t]) => `<option value="${k}" ${st === k ? "selected" : ""}>${t}</option>`).join("")}</select>
   </div>
-  <div class="list2">${list.map(l => { const e = eqById(l.equipment_id) || {}, ri = reqInfo(l), o = shipOf(l.loan_no, "outbound");
-      const ret = l.return_method ? `${esc(l.return_method === "pickup" ? retLabel(l) : placeOf(l))}${l.returned_at ? ` ${fmtT(l.returned_at)}` : ""} · 자가점검 ${condText(l.return_self_check)}${l.return_condition ? ` → 확인 ${condText(l.return_condition)}` : ""}` : "";
-      const note = [l.return_self_note, l.return_note].filter(Boolean).join(" / ");
-      return `<div class="r2 ${isOverdue(l) ? "overdue" : ""}" data-act="loanView" data-id="${l.id}">
-        <div class="r2-main">
-          <div class="r2-l1">${frontTag(e)}<b class="r2-title">${esc(e.name)}</b>${backId(e)}</div>
-          <div class="r2-l2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""}</span><span>${esc(l.purpose)}${l.customer ? ` · ${esc(l.customer)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.extension_count ? ` 연장 ${l.extension_count}회` : ""}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : ""}${l.checkout_at ? `<span>출고 <span class="mono">${fmtT(l.checkout_at)}</span></span>` : ""}${ret ? `<span>반납 ${ret}</span>` : ""}${note ? `<span class="r2-note" title="${esc(note)}">메모 ${esc(note)}</span>` : ""}</div>
-        </div>
-        <div class="r2-side">${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}${act(l)}</div></div>`; }).join("") || `<div class="empty">조건에 맞는 기록이 없어요.</div>`}
-  </div>`;
+  <div class="cat-chips" role="group" aria-label="상태">${LEDGER_ST.map(([k, t, f]) => `<button type="button" class="cat-chip${k === "overdue" && nGroups(f) ? " bad" : ""}" data-act="lgSt" data-v="${k}" aria-pressed="${stDef[0] === k}">${t}<span class="n">${nGroups(f)}</span></button>`).join("")}</div>
+  <p class="meta" style="margin:-4px 0 0">${groups.length}건 · 장비 ${list.length}대</p>
+  <div class="lg-list">${groups.map(g => `<div class="lg-grp">${head(g)}${g.map(item).join("")}</div>`).join("") || `<div class="list2"><div class="empty">조건에 맞는 기록이 없어요.</div></div>`}</div>`;
 }
 
 function nameForm(p, approve) {
@@ -2464,6 +2497,7 @@ document.addEventListener("click", e => {
     case "eqBulk": if (eqSel && eqSel.size) eqBulk(); break;
     case "eqLabels": if (eqSel && eqSel.size) labelForm([...eqSel]); break;
     case "scanQR": scanQR(); break;
+    case "lgSt": filters.ledgerSt = a.dataset.v; render(); break;
     case "catChip": {
       const v = a.dataset.v;
       if (a.dataset.scope === "eq") { filters.eqCat = v; render(); break; }
@@ -2532,7 +2566,6 @@ document.addEventListener("change", e => {
   else if (id === "eqLoc") { filters.eqLoc = e.target.value; render(); }
   else if (id === "calLoc") { cal.loc = e.target.value; render(); }
   else if (id === "calMine") { cal.mine = e.target.checked; render(); }
-  else if (id === "lgSt") { filters.ledgerSt = e.target.value; render(); }
   else if (id === "rStart" || id === "rDue") {
     draft[id === "rStart" ? "start" : "due"] = e.target.value;
     if (id === "rDue") draft.dueSet = !!draft.due;
