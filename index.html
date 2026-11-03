@@ -202,6 +202,7 @@ tr.overdue td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .r2.overdue{box-shadow:inset 3px 0 0 var(--bad)}
 .r2-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .r2-l1{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;min-width:0}
+.r2-l1 .id-tag{font-size:12px}
 .r2-title{font-size:14px;font-weight:600;min-width:0;overflow-wrap:anywhere}
 .r2-l1 .meta{flex:none}
 .lbl-tag{flex:none;display:inline-block;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--fg);background:var(--sunk);border-radius:4px;padding:1px 6px;vertical-align:1px}
@@ -424,6 +425,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.063", date: "2026-11-03", items: ["[장비] 목록·[출납 대장]: 줄 맨 앞에 라벨 배지(예: SM3G)를 두고, 라벨이 없으면 내부 ID 배지를 둠. 이름 뒤에는 내부 ID·자산번호·품목번호를 한 번씩만 회색으로 표시 (전에는 내부 ID와 라벨이 배지와 글자로 두 번 나왔고, 자산번호 자리에 내부 ID가 나왔음)", "[장비 수정] 창의 자산번호 칸이 내부 ID·라벨로 미리 채워지던 버그 고침. 저장하면 그 값이 자산번호로 들어가던 문제였음. 이미 이렇게 들어간 값(EQ-로 시작)은 화면·물류사 메일·CSV에서 ‘자산번호 없음’으로 봄"] },
   { v: "v0.062", date: "2026-11-03", items: ["신청 상세·장비 상세: 라벨(예: LAAS1)을 초록 배지로 강조하고, 내부 ID(EQ-0000)는 회색 글자로 표시. 라벨이 없는 장비는 내부 ID를 그대로 강조"] },
   { v: "v0.061", date: "2026-11-03", items: ["장비 관리자 [반납 확인]: 같은 신청번호에 반납 확인 중인 장비가 2대 이상이면 일괄 확인 창이 열림. 장비별 자가점검 결과와 확인 후 처리(사용 가능·수리 필요, 보관 위치)를 보고, 고른 장비를 한 번에 ‘자가점검대로 확인’. 고칠 장비는 [개별 확인]으로 기존 창을 엶"] },
   { v: "v0.060", date: "2026-11-03", items: ["반납 신청: 2대 이상 함께 반납하면 자가점검 질문을 장비마다 반복하지 않고 한 번만 물음. ‘예’면 모두 이상 없음, ‘아니오’면 이상 있는 장비만 골라 표시 (1대 반납은 그대로)", "단계형 창: 자가점검 화면에서도 예·아니오·다음 버튼을 화면 아래에 고정 (전에는 질문 바로 밑에 떠 있었음). PC 버튼 위 그림자 선 없앰"] },
@@ -761,6 +763,11 @@ const idTag = e => e && e.internal_id ? `<span class="id-tag" title="내부 ID (
 const keyTag = e => !e ? "" : e.label
   ? `<span class="id-tag" title="라벨">${esc(e.label)}</span>${e.internal_id ? ` <span class="mono meta" title="내부 ID (바뀌지 않음)">${esc(e.internal_id)}</span>` : ""}`
   : idTag(e);
+// 목록 줄: 맨 앞에 라벨 배지(없으면 내부 ID 배지), 이름 뒤에는 라벨이 있을 때만 내부 ID를 회색으로
+const frontTag = e => !e ? "" : e.label ? `<span class="id-tag" title="라벨">${esc(e.label)}</span>` : idTag(e);
+// 자산번호: 예전 버그로 내부 ID·라벨이 들어간 값(EQ-0001 SM3G 등)은 자산번호가 아니므로 비어 있는 것으로 본다
+const assetNo = e => { const a = (e && e.asset_no || "").trim(); return !a || /^EQ-\d{4}\b/.test(a) ? "" : a; };
+const backId = e => e && e.label && e.internal_id ? `<span class="mono meta" title="내부 ID (바뀌지 않음)">${esc(e.internal_id)}</span>` : "";
 const pill = (map, k) => { const [t, c] = map[k] || [k || "–", ""]; return `<span class="pill ${c}">${esc(t)}</span>`; };
 
 if (!window.supabase || SUPABASE_KEY.includes("REPLACE_ME")) {
@@ -1234,7 +1241,7 @@ function vEquip() {
       return `<div class="r2 ${on ? "sel" : ""}" data-act="${eqSel ? "eqPick" : "eqView"}" data-id="${e.id}" ${eqSel ? `role="checkbox" aria-checked="${!!on}"` : ""}>
         ${eqSel ? `<span class="r2-chk" aria-hidden="true">${on ? "✓" : ""}</span>` : ""}
         <div class="r2-main">
-          <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b>${idTag(e)}${e.label ? `<span class="lbl-tag">${esc(e.label)}</span>` : ""}${e.asset_no ? `<span class="mono meta">${esc(eqNo(e))}</span>` : ""}${e.item_no ? `<span class="mono meta">${esc(e.item_no)}</span>` : ""}</div>
+          <div class="r2-l1">${frontTag(e)}<b class="r2-title">${esc(e.name)}</b>${backId(e)}${assetNo(e) ? `<span class="mono meta" title="자산번호">${esc(assetNo(e))}</span>` : ""}${e.item_no ? `<span class="mono meta" title="품목번호">${esc(e.item_no)}</span>` : ""}</div>
           <div class="r2-l2"><span>${esc(e.category)}</span><span>보관 ${esc(e.location)}</span>${cur ? `<span>지금 ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</span>` : ""}<span>점검 ${condText(e.last_check)}${e.last_check_at ? ` ${fmtD(e.last_check_at.slice(0, 10))}` : ""}</span><span>다음 예약 ${next ? `<span class="mono">${fmtD(next.start_date)}–${fmtD(next.due_date)}</span>` : "없음"}</span></div>
         </div>
         <div class="r2-side">${pill(EQ_STATUS, e.status)}</div></div>`;
@@ -1554,7 +1561,7 @@ function vLedger() {
       const note = [l.return_self_note, l.return_note].filter(Boolean).join(" / ");
       return `<div class="r2 ${isOverdue(l) ? "overdue" : ""}" data-act="loanView" data-id="${l.id}">
         <div class="r2-main">
-          <div class="r2-l1"><b class="r2-title">${esc(e.name)}</b><span class="mono meta">${esc(eqNo(e))}</span></div>
+          <div class="r2-l1">${frontTag(e)}<b class="r2-title">${esc(e.name)}</b>${backId(e)}</div>
           <div class="r2-l2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""}</span><span>${esc(l.purpose)}${l.customer ? ` · ${esc(l.customer)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.extension_count ? ` 연장 ${l.extension_count}회` : ""}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : ""}${l.checkout_at ? `<span>출고 <span class="mono">${fmtT(l.checkout_at)}</span></span>` : ""}${ret ? `<span>반납 ${ret}</span>` : ""}${note ? `<span class="r2-note" title="${esc(note)}">메모 ${esc(note)}</span>` : ""}</div>
         </div>
         <div class="r2-side">${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}${act(l)}</div></div>`; }).join("") || `<div class="empty">조건에 맞는 기록이 없어요.</div>`}
@@ -1778,7 +1785,7 @@ function eqForm(e) {
   modal(`<h2>${e.id ? "장비 수정" : "장비 등록"}</h2>
     ${e.internal_id ? `<p class="meta">내부 ID ${idTag(e)} · 다른 정보를 바꿔도 내부 ID는 바뀌지 않아요.</p>` : `<p class="meta">내부 ID(EQ-0000)는 저장할 때 자동으로 붙어요. 한 번 붙으면 바뀌지 않아요.</p>`}
     <form id="eqForm" class="fields">
-      <label class="f"><span>자산번호 (없으면 비워 두기)</span><input id="eAsset" value="${esc(eqNo(e))}"></label>
+      <label class="f"><span>자산번호 (없으면 비워 두기)</span><input id="eAsset" value="${esc(assetNo(e))}"></label>
       <label class="f"><span>라벨 (예: RA1, SM3G)</span><input id="eLabel" value="${esc(e.label || "")}"></label>
       <label class="f req"><span>제품명</span><input id="eName" value="${esc(e.name)}" required></label>
       <label class="f"><span>품목번호</span><input id="eItem" value="${esc(e.item_no)}"></label>
@@ -1854,7 +1861,7 @@ function eqView(id) {
   const sched = loans.filter(l => l.equipment_id === id && ACTIVE(l.status)).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const myOut = loans.find(l => l.equipment_id === id && l.status === "out" && l.requester_id === me.id);
   const hist = loans.filter(l => l.equipment_id === id && l.status === "done").sort((a, b) => (b.returned_at || "").localeCompare(a.returned_at || "")).slice(0, 5);
-  modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta">${keyTag(e)} · <span class="mono">${esc(e.asset_no || "자산번호 없음")}</span> · ${esc(e.item_no || "품목번호 없음")} · S/N ${esc(e.serial_no || "–")} · ${esc(e.location)}</div></div>${pill(EQ_STATUS, e.status)}</div>
+  modal(`<div class="head"><div class="grow"><h2>${esc(e.name)}</h2><div class="meta">${keyTag(e)} · <span class="mono">${esc(assetNo(e) || "자산번호 없음")}</span> · ${esc(e.item_no || "품목번호 없음")} · S/N ${esc(e.serial_no || "–")} · ${esc(e.location)}</div></div>${pill(EQ_STATUS, e.status)}</div>
     <div><h3>최근 점검</h3><div style="margin-top:4px">${checkCell(e)}</div></div>
     <div><h3>구성품</h3><div class="meta" style="white-space:pre-wrap">${esc(e.components || "등록된 구성품이 없어요.")}</div></div>
     <div><h3>예약 일정</h3><div class="list">${sched.map(l => `<div class="row"><div class="main"><span class="mono">${fmtD(l.start_date)}–${fmtD(l.due_date)}</span> · ${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)}</div>${l.status === "out" && l.due_date < t ? `<span class="pill p-bad">연체</span>` : pill(LOAN_STATUS, l.status)}</div>`).join("") || `<div class="empty">잡힌 예약이 없어요.</div>`}</div></div>
@@ -2293,7 +2300,7 @@ function inspectBulk(l, group) {
 
 function mailText(no, dir) {
   const g = loans.filter(l => l.loan_no === no), l = g[0], s = shipOf(no, dir) || {};
-  const items = g.map((x, i) => `  ${i + 1}. ${eqById(x.equipment_id)?.name} / ${[eqById(x.equipment_id)?.internal_id, eqById(x.equipment_id)?.label, eqById(x.equipment_id)?.asset_no && `자산번호 ${eqById(x.equipment_id).asset_no}`].filter(Boolean).join(" / ")} / 1대`).join("\n");
+  const items = g.map((x, i) => `  ${i + 1}. ${eqById(x.equipment_id)?.name} / ${[eqById(x.equipment_id)?.internal_id, eqById(x.equipment_id)?.label, assetNo(eqById(x.equipment_id)) && `자산번호 ${assetNo(eqById(x.equipment_id))}`].filter(Boolean).join(" / ")} / 1대`).join("\n");
   const locs = [...new Set(g.map(x => eqById(x.equipment_id)?.location).filter(Boolean))].join(", ") || "확인 필요";
   const dest = [...new Set(g.map(x => x.return_method === "pickup" ? x.return_place : "").filter(Boolean))].join(", ") || locs;
   if (dir === "pickup") return `제목: [Laerdal Medical Korea] 데모장비 회수 요청 – ${no}\n\n안녕하세요. 아래 데모장비 회수를 요청드립니다.\n\n■ 신청번호: ${no}\n■ 장비\n${items}\n■ 회수지: ${s.address}\n■ 담당자: ${s.recipient} / ${s.phone}\n■ 회수 희망일: ${s.requested_date || "협의"}\n■ 입고지: ${dest}\n■ 메모: ${s.memo || "없음"}\n\n회수 일정과 운송장 번호를 회신 부탁드립니다.\n감사합니다.`;
@@ -2330,7 +2337,7 @@ function shipEdit(sid) {
 function exportCsv() {
   const head = ["신청번호","장비 ID","라벨","자산번호","제품명","보관 위치","신청자","내부 요청자","외부 요청자","목적","고객사","시작일","반납 예정일","배송","상태","연체일","출고","반납","반납 방법","자가점검","자가점검 메모","점검 결과","점검 메모","연장 횟수"];
   const t = todayStr();
-  const rows = [...loans].sort((a, b) => a.loan_no.localeCompare(b.loan_no)).map(l => { const e = eqById(l.equipment_id) || {}; return [l.loan_no, e.internal_id || "", e.label || "", e.asset_no, e.name, e.location, nameOf(l.requester_id), l.internal_requester, l.external_requester, l.purpose, l.customer, l.start_date, l.due_date,
+  const rows = [...loans].sort((a, b) => a.loan_no.localeCompare(b.loan_no)).map(l => { const e = eqById(l.equipment_id) || {}; return [l.loan_no, e.internal_id || "", e.label || "", assetNo(e), e.name, e.location, nameOf(l.requester_id), l.internal_requester, l.external_requester, l.purpose, l.customer, l.start_date, l.due_date,
     l.delivery ? "Y" : "N", LOAN_STATUS[l.status]?.[0] || l.status, isOverdue(l) ? daysBetween(l.due_date, t) : "", fmtT(l.checkout_at), fmtT(l.returned_at), retLabel(l), CONDS[l.return_self_check] || "", l.return_self_note || "", CONDS[l.return_condition] || "", l.return_note || "", l.extension_count || 0]; });
   const csv = "﻿" + [head, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const a = document.createElement("a");
