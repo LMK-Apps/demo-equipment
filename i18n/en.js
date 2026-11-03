@@ -191,6 +191,10 @@ const EX = {
   // 여러 대 반납 자가점검 (v0.060)
   "이상이 있는 장비를 모두 골라 주세요.": "Select every item with a problem.",
   "이상이 있는 장비를 골라 주세요. 모두 괜찮으면 뒤로 가서 ‘예’를 눌러 주세요.": "Select the items with a problem. If all are fine, go back and tap ‘Yes’.",
+  // 일괄 반납 확인 (v0.061)
+  "개별 확인": "Check individually", "자가점검 없음": "No self-check",
+  "직접 점검해야 해요. [개별 확인]을 눌러 주세요.": "This needs a manual check. Tap [Check individually].",
+  "확인하면 → 장비": "On confirm → equipment", "· 보관 위치": "· Storage",
   // 서버 오류 메시지
   "같은 기간에 이미 예약된 장비가 있어요. 장비나 기간을 바꿔 주세요.": "Some equipment is already booked for those dates. Change the equipment or dates.",
   "같은 신청번호의 장비만 함께 반납할 수 있어요.": "Only items with the same request number can be returned together.",
@@ -259,7 +263,7 @@ const EX = {
 const TPL = {
   "#. 기간과 장비": "#. Dates and equipment", "#. 사용 정보": "#. Usage details", "#건": "#", "#대": "#", "(#대)": "(#)", "(#일)": "(# days)", "#일": "# days", "#일 지남": "# days late",
   "연체 #일": "# days overdue", "#대 반납하기": "Return # items", "#대 선택": "# selected", "#대 표시 중": "Showing #", "#대 표시 중 · 수리 필요만": "Showing # · needs repair only",
-  "선택 #대": "# selected", "#대 이상 있음 · 다음": "# with problems · Next", "자가점검 #/# · 장비 #대": "Self-check #/# · # items", "구성품:": "Components:", "장비 #대를 더했어요.": "Added # item(s).", "표시된 #대 모두 선택": "Select all # shown", "전체 #대 중 #대 표시": "Showing # of #", "+#건 더": "+# more", "진행 중 #건": "In progress (#)", "진행 중": "In progress",
+  "선택 #대": "# selected", "선택한 #대 자가점검대로 확인": "Confirm # as self-checked", "#대 반납을 확인했어요. 다시 빌릴 수 있어요.": "Confirmed # returns. They can be booked again.", "#대 반납을 확인했어요. #대는 수리 필요로 표시했어요.": "Confirmed # returns. # marked as needing repair.", "#대 이상 있음 · 다음": "# with problems · Next", "자가점검 #/# · 장비 #대": "Self-check #/# · # items", "구성품:": "Components:", "장비 #대를 더했어요.": "Added # item(s).", "표시된 #대 모두 선택": "Select all # shown", "전체 #대 중 #대 표시": "Showing # of #", "+#건 더": "+# more", "진행 중 #건": "In progress (#)", "진행 중": "In progress",
   "아니오 #개": "No × #", "다른 로그인 #개를 끊음": "Ended # other login(s)", "최근 #개월": "Last # months", "이번 달 #건, 장비 #대": "# this month, # items",
   "장비 #대": "# items", "장비 #대. 보관 위치와 최근 점검 결과는 반납 신청과 관리자 점검 때 자동으로 바뀌어요. 행을 누르면 자세히 볼 수 있어요.": "# items. Location and last check update automatically from returns and admin checks. Tap a row for details.",
   "자가점검 #/# · 장비 #/#": "Self-check #/# · item #/#", "자가점검 #/#": "Self-check #/#", "자가점검 #개 모두 ‘예’": "All # self-check answers were ‘Yes’",
