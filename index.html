@@ -136,6 +136,7 @@ h3{font-size:14px;margin:0;font-weight:600}
 .lg-more[aria-expanded="true"] .grp-arrow{transform:rotate(90deg)}
 .lg-more+.lg-list{margin-top:12px}
 @media (max-width:640px){ .lg-st .pill:not(.when){display:none} .lg-h1 .hg-who{font-size:14.5px} }
+.when2{display:flex;gap:6px}.when2 input{flex:1.3;min-width:0}.when2 select{flex:1;min-width:0}
 .lg-chips{display:flex;flex-direction:column;gap:8px}
 .lg-chip-lb{font-size:11.5px;font-weight:600;color:var(--muted);min-width:58px;align-self:center}
 .lg-arrow{color:var(--muted);font-size:12px;align-self:center}
@@ -508,6 +509,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.099", date: "2026-11-04", items: ["배차 정보: 출발·도착을 글자 입력 대신 날짜 + 시간 선택(오전·오후·오전 8시~오후 7시)으로 고름. 기본 날짜는 도착(회수) 희망일. 시간을 안 고르면 메시지에 ‘(시간 입력 필요)’로 표시"] },
   { v: "v0.098", date: "2026-11-04", items: ["데모 신청 배송: 도착 희망일은 사용 시작일, 회수 희망일은 반납 예정일과 같게 기본값을 맞추고 대여 기간을 바꾸면 함께 바뀜 (전에는 처음 연 날짜에 머물렀고, 회수는 반납 다음 날이었음). 물류 날짜를 직접 바꾸면 그 값은 유지"] },
   { v: "v0.097", date: "2026-11-04", db: "026_shipment_info_later.sql", items: ["데모 신청: 외부 물류 배송을 고르고 ‘수령인·주소는 아직 몰라요. 나중에 입력할게요’를 켜면 수령인·연락처·주소·도착 희망일 없이 신청 가능. 아는 칸만 채워도 됨", "나중에 넣는 곳: 신청자는 [내 신청] 예약 수정(출고 전, 물류 요청 전), 장비 관리자는 [물류] 배차 정보 창(수령인·연락처·주소·희망일 칸 추가)", "정보가 빈 배송 건은 [물류]·[출납 대장]·[현황]·[출입고 확인]·신청 상세에 ‘정보 입력 전’ 표시. 출고 창에도 경고"] },
   { v: "v0.096", date: "2026-11-04", items: ["‘요청 메일’을 ‘물류 요청 메시지’(회수는 ‘회수 요청 메시지’)로, [문안 복사]를 [메시지 복사]로 이름 변경. 메시지 첫 줄의 ‘제목:’을 빼서 문자·메신저에도 그대로 붙여 넣을 수 있게 함", "물류 요청 메시지 버튼은 장비 관리자에게만 보임. 신청자 화면의 [물류] 안내도 ‘물류 요청과 배차 정보 입력은 장비 관리자가 해요’로 바꿈"] },
@@ -1874,12 +1876,17 @@ const steps = (x, order, map) => { const cur = order.indexOf(x.status);
 // 화물 배차 정보 (shipments.dispatch). 배송은 사무실 → 고객, 회수는 고객 → 사무실
 const DSP = s => (s && s.dispatch) || {};
 const lastDispatch = exceptId => shipments.filter(x => x.id !== exceptId && DSP(x).office).sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
+// 배차 시간: 날짜 + 시간대 (오전·오후·정각). 메시지에는 "2026.11.10 오전", "26.11.10 오후 4시"처럼 들어간다
+const SLOTS = ["오전", "오후", ...[8, 9, 10, 11].map(h => `오전 ${h}시`), "오후 12시", ...[1, 2, 3, 4, 5, 6, 7].map(h => `오후 ${h}시`)];
+const slotTxt = (date, slot, fmt) => date ? `${fmt(date)} ${slot || "(시간 입력 필요)"}` : "";
 const shortDate = d => d ? `${d.slice(2, 4)}.${+d.slice(5, 7)}.${+d.slice(8, 10)}` : "";
 const longDate = d => d ? `${d.slice(0, 4)}.${+d.slice(5, 7)}.${+d.slice(8, 10)}` : "";
 function dispatchDefaults(s) {
   const d = DSP(s), last = DSP(lastDispatch(s.id));
   const g = loans.filter(l => l.loan_no === s.loan_no), loc = eqById(g[0]?.equipment_id)?.location || "";
-  return { depart_time: d.depart_time ?? (s.direction === "outbound" ? longDate(s.requested_date) : ""), office: d.office ?? (last.office || (LOCS.includes(loc) ? `${loc}사무실` : loc)),
+  const day = s.requested_date || g[0]?.[s.direction === "pickup" ? "due_date" : "start_date"] || "";
+  return { depart_date: d.depart_date ?? day, depart_slot: d.depart_slot ?? "", arrive_date: d.arrive_date ?? day, arrive_slot: d.arrive_slot ?? "",
+    depart_time: d.depart_time ?? (s.direction === "outbound" ? longDate(s.requested_date) : ""), office: d.office ?? (last.office || (LOCS.includes(loc) ? `${loc}사무실` : loc)),
     office_name: d.office_name ?? (last.office_name || ""), office_phone: d.office_phone ?? (last.office_phone || ""),
     arrive_time: d.arrive_time ?? (s.direction === "outbound" ? shortDate(s.requested_date) : ""), extra_items: d.extra_items ?? "",
     vehicle: d.vehicle ?? "", handler: d.handler ?? (last.handler || "") };
@@ -2834,6 +2841,7 @@ function inspectBulk(l, group) {
 
 function mailText(no, dir) {
   const g = loans.filter(l => l.loan_no === no).sort(loanEqCmp), l = g[0], s = shipOf(no, dir) || {}, d = dispatchDefaults(s);
+  if (DSP(s).depart_date !== undefined) { d.depart_time = slotTxt(d.depart_date, d.depart_slot, longDate); d.arrive_time = slotTxt(d.arrive_date, d.arrive_slot, shortDate); }
   const need = v => (v || "").trim() || "(입력 필요)";
   const items = [...g.map(x => { const e = eqById(x.equipment_id) || {}; return [e.label && `[${e.label}]`, e.name].filter(Boolean).join(" "); }), ...(d.extra_items ? [d.extra_items] : [])].join(", ");
   const ext = l.external_requester && !(s.recipient || "").includes(l.external_requester) ? `(${l.external_requester})` : "";
@@ -2876,11 +2884,12 @@ function mail(no, dir) {
 function shipEdit(sid) {
   const s = shipments.find(x => x.id === sid); if (!s) return;
   const opts = s.direction === "pickup" ? PICK_STATUS : OUT_STATUS, d = dispatchDefaults(s), pk = s.direction === "pickup";
+  const when = (id, label, date, slot) => `<div class="f"><span>${label}</span><div class="when2"><input type="date" id="${id}D" value="${esc(date || "")}" aria-label="${label} 날짜"><select id="${id}S" aria-label="${label} 시간"><option value="">시간 미정</option>${SLOTS.map(x => `<option ${x === slot ? "selected" : ""}>${x}</option>`).join("")}</select></div></div>`;
   const fld = (id, label, v, wide, ph = "") => `<label class="f${wide ? " wide" : ""}"><span>${label}</span><input id="${id}" value="${esc(v || "")}" placeholder="${esc(ph)}" maxlength="120"></label>`;
   modal(`<h2>${pk ? "회수" : "배송"} 배차 정보</h2><p class="meta"><span class="mono">${esc(s.loan_no)}</span> · 지금 단계: ${esc(opts[s.status]?.[0] || s.status)} · ${pk ? "고객 → 사무실" : "사무실 → 고객"}. 물류 요청 메시지에 그대로 들어가요.</p>
     <div class="fields">
-      ${fld("dDep", "출발 시간", d.depart_time, false, "예: 2026.11.4 오전")}
-      ${fld("dArr", "최종 도착지 도착 시간", d.arrive_time, false, "예: 26.11.4 오후 4시")}
+      ${when("dDep", "출발 날짜·시간", d.depart_date, d.depart_slot)}
+      ${when("dArr", "최종 도착지 도착 날짜·시간", d.arrive_date, d.arrive_slot)}
       ${fld("dOff", pk ? "도착지(입고 사무실)" : "출발지(사무실)", d.office, false, "예: 의왕사무실")}
       ${fld("dOffN", pk ? "도착지 담당자" : "출발지 담당자", d.office_name)}
       ${fld("dOffP", pk ? "도착지 담당자 연락처" : "출발지 담당자 연락처", d.office_phone, false, "010-0000-0000")}
@@ -2897,7 +2906,9 @@ function shipEdit(sid) {
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="hOk">저장</button></div>`, m => {
     const b = $("#hOk", m), v = id => $("#" + id, m).value.trim();
     b.addEventListener("click", () => busy(b, async () => {
-      const dispatch = { depart_time: v("dDep"), arrive_time: v("dArr"), office: v("dOff"), office_name: v("dOffN"), office_phone: v("dOffP"), extra_items: v("dExtra"), vehicle: v("dVeh"), handler: v("dHand") };
+      const dd = $("#dDepD", m).value, ds = $("#dDepS", m).value, ad = $("#dArrD", m).value, as = $("#dArrS", m).value;
+      const dispatch = { depart_date: dd, depart_slot: ds, arrive_date: ad, arrive_slot: as,
+        depart_time: slotTxt(dd, ds, longDate), arrive_time: slotTxt(ad, as, shortDate), office: v("dOff"), office_name: v("dOffN"), office_phone: v("dOffP"), extra_items: v("dExtra"), vehicle: v("dVeh"), handler: v("dHand") };
       await must(sb.from("shipments").update({ carrier: v("hCar"), tracking_no: v("hTr"), dispatch, recipient: v("cRcp"), phone: v("cPhone"), address: v("cAddr"), requested_date: $("#cDate", m).value || null }).eq("id", sid));
       closeModal(); toast("배차 정보를 저장했어요."); await refresh();
     }));
