@@ -129,6 +129,7 @@ h3{font-size:14px;margin:0;font-weight:600}
 .list>.hg:first-child{border-top:0;padding-top:2px}
 .hg-h{display:flex;gap:10px;align-items:center}
 .hg-h .main{flex:1;min-width:0}
+.hg-who{font-size:15.5px;font-weight:700}
 .hg-items{margin:6px 0 0 6px;padding-left:14px;border-left:2px solid var(--line);display:flex;flex-direction:column}
 .hg-item{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:13.5px;cursor:pointer}
 .hg-item .main{flex:1;min-width:0}
@@ -153,7 +154,7 @@ input,select,textarea{font:inherit;color:var(--fg);background:var(--surface);bor
 @media (min-width:700px){input,select,textarea{font-size:14px}}
 textarea{resize:vertical;min-height:64px}
 input[readonly]{background:var(--sunk);color:var(--muted)}
-label.f{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);font-weight:500;min-width:0}
+label.f,div.f{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);font-weight:500;min-width:0}
 label.f.req>span::after{content:" *";color:var(--bad)}
 .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px}
 .fields .wide{grid-column:1/-1}
@@ -488,6 +489,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.087", date: "2026-11-04", items: ["[현황]·[출입고 확인] 신청 묶음 머리: 신청번호 대신 신청자와 고객사·기관을 크게 보여 줌. 신청번호는 아랫줄에 작게", "데모 신청·신청 정보 수정: 외부 요청자를 목록에서 고름(없음·성암메테크·남북의료기·써지칼코리아·기타). ‘기타’를 고르면 직접 입력 칸이 나옴"] },
   { v: "v0.086", date: "2026-11-04", items: ["데이터 사용량 줄이기: 1분마다 하는 자동 새로 고침은 장비·신청·배송 중 바뀐 것만 받아 옴(전에는 전체를 다시 받음). 15분마다, 그리고 [새로 고침]을 누르면 전체를 다시 받음", "로그인 기록(관리자)은 전체를 다시 받을 때만 불러옴"] },
   { v: "v0.085", date: "2026-11-04", items: ["메뉴 이름 변경: 배송 → 물류", "캘린더 장비별 막대: 신청자 이름 대신 머리표(예: [SH])와 고객사를 보여 줌. 머리표가 없으면 이름", "폰에서 메뉴 두 줄이 옆으로 밀지 않아도 한 화면에 다 들어오게 글자 크기와 간격을 줄임"] },
   { v: "v0.084", date: "2026-11-04", items: ["메뉴 이름 변경: 확인 → 출입고 확인, 일정 → 캘린더, 장비 → 자산. 현황의 버튼도 [출입고 확인 N건]", "캘린더 장비별 보기: 대여 기간을 칸마다 끊지 않고 막대 하나로 이어서 그림. 막대 안에 신청자 이름과 고객사를 보여 주고, 칸이 좁으면 말줄임. 날짜 칸을 조금 넓힘"] },
@@ -923,6 +925,15 @@ let cal = { ym: todayStr().slice(0, 7), mode: "month", mine: false, loc: "", cat
 const isOverdue = l => l.status === "out" && l.due_date < todayStr();
 const eqById = id => equipment.find(e => e.id === id);
 const nameOf = id => people.find(p => p.id === id)?.display_name || (id === me.id ? "나" : "알 수 없음");
+// 외부 요청자: 협력사 목록에서 고르고, ‘기타’면 직접 입력. 실제 값은 input(id)에 들어간다
+const EXT_ORGS = ["성암메테크", "남북의료기", "써지칼코리아"];
+const extKind = v => !v ? "" : EXT_ORGS.includes(v) ? v : "__etc";
+function extField(id, v = "") {
+  const k = extKind(v);
+  return `<div class="f"><span>외부 요청자</span><select data-ext="${id}" aria-label="외부 요청자"><option value="">없음</option>${EXT_ORGS.map(o => `<option ${k === o ? "selected" : ""}>${o}</option>`).join("")}<option value="__etc" ${k === "__etc" ? "selected" : ""}>기타 (직접 입력)</option></select>
+    <input id="${id}" value="${esc(v)}" maxlength="60" placeholder="회사·담당자 이름" aria-label="외부 요청자 직접 입력" ${k === "__etc" ? "" : "hidden"}></div>`;
+}
+function syncExt(id) { const n = $("#" + id), s = $(`[data-ext="${id}"]`); if (!n || !s) return; const k = extKind(n.value.trim()); s.value = k; n.hidden = k !== "__etc"; }
 const reqInfo = l => [l.internal_requester ? `내부 ${l.internal_requester}` : "", l.external_requester ? `외부 ${l.external_requester}` : ""].filter(Boolean).join(" · ");
 const shipOf = (no, dir) => shipments.find(s => s.loan_no === no && s.direction === dir);
 
@@ -1106,8 +1117,8 @@ const checkCount = () => groupByNo(checkoutDue()).length + groupByNo(returnDue()
 function returnCheckGroups(list) {
   return groupByNo(list).sort((a, b) => (a[0].returned_at || "").localeCompare(b[0].returned_at || "")).map(g => { const l = g[0], ri = reqInfo(l);
     return `<div class="hg">
-      <div class="hg-h"><div class="main"><b class="mono">${esc(l.loan_no)}</b> <span class="grp-n">장비 ${g.length}대</span>
-        <div class="meta">${esc(l.customer || l.purpose)} · ${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""} · ${esc(retLabel(l) || "")}${l.returned_at ? ` · 반납 ${fmtT(l.returned_at)}` : ""}</div></div>
+      <div class="hg-h"><div class="main"><b class="hg-who">${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)}</b> <span class="grp-n">장비 ${g.length}대</span>
+        <div class="meta"><span class="mono">${esc(l.loan_no)}</span>${ri ? ` · ${esc(ri)}` : ""} · ${esc(retLabel(l) || "")}${l.returned_at ? ` · 반납 ${fmtT(l.returned_at)}` : ""}</div></div>
         <button class="btn sm pri" data-act="inspect" data-id="${l.id}">반납 확인${g.length > 1 ? ` ${g.length}대` : ""}</button></div>
       <div class="hg-items">${g.map(x => { const e = eqById(x.equipment_id) || {};
         return `<div class="hg-item" data-act="loanView" data-id="${x.id}"><span class="main">${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}</span>${x.return_self_check ? `<span class="pill ${CHECK_PILL[x.return_self_check] || ""}">자가점검 ${esc(CONDS[x.return_self_check])}</span>` : ""}</div>`; }).join("")}</div></div>`; }).join("");
@@ -1166,8 +1177,8 @@ function homeCheckoutGroups(list) {
     .map(g => g.sort(loanEqCmp)).sort((a, b) => a[0].start_date.localeCompare(b[0].start_date) || a[0].loan_no.localeCompare(b[0].loan_no));
   return groups.map(g => { const l = g[0], ri = reqInfo(l);
     return `<div class="hg">
-      <div class="hg-h"><div class="main"><b class="mono">${esc(l.loan_no)}</b> <span class="grp-n">장비 ${g.length}대</span>
-        <div class="meta">${esc(l.customer || l.purpose)} · ${esc(nameOf(l.requester_id))}${ri ? ` (${esc(ri)})` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? " · 배송" : ""}</div></div>
+      <div class="hg-h"><div class="main"><b class="hg-who">${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)}</b> <span class="grp-n">장비 ${g.length}대</span>
+        <div class="meta"><span class="mono">${esc(l.loan_no)}</span>${l.customer ? ` · ${esc(l.purpose)}` : ""}${ri ? ` · ${esc(ri)}` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? " · 배송" : ""}</div></div>
         ${me.isAdmin ? (g.length > 1 ? `<button class="btn sm pri" data-act="checkoutAll" data-no="${esc(l.loan_no)}">출고 처리 ${g.length}대</button>` : `<button class="btn sm pri" data-act="checkout" data-id="${l.id}">출고 처리</button>`) : pill(LOAN_STATUS, l.status)}</div>
       <div class="hg-items">${g.map(x => { const e = eqById(x.equipment_id) || {};
         return `<div class="hg-item" data-act="loanView" data-id="${x.id}"><span class="main">${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}</span>${busyBefore(x) ? `<span class="pill p-bad">앞 건 반납 전</span>` : ""}${me.isAdmin && g.length > 1 ? `<button class="btn sm" data-act="checkout" data-id="${x.id}">출고</button>` : ""}</div>`; }).join("")}</div></div>`; }).join("");
@@ -1725,7 +1736,7 @@ function vRequest() {
         ${proxy ? `<label class="f wide"><span>신청자</span><select id="rOwner">${owners.map(p => `<option value="${p.id}" ${p.id === ownerSel ? "selected" : ""}>${esc(p.display_name || "(이름 없음)")}${p.id === me.id ? " (나)" : ""}</option>`).join("")}</select></label>`
           : `<label class="f wide"><span>신청자</span><input id="rApplicant" value="${esc(ownerName)}" readonly></label>`}
         <label class="f"><span>내부 요청자</span><input id="rInternal" placeholder="요청한 사내 담당자 (없으면 비움)"></label>
-        <label class="f"><span>외부 요청자</span><input id="rExternal" placeholder="고객사 담당자 이름·직함"></label>
+        ${extField("rExternal")}
         <label class="f req"><span>목적</span><select id="rPurpose">${PURPOSES.map(p => `<option>${p}</option>`).join("")}</select><span class="meta" id="rPurposeDesc">${esc(purposeDesc(PURPOSES[0]))}</span></label>
         <label class="f req" id="rEtcWrap" hidden><span>기타 내용</span><input id="rEtc" maxlength="60" placeholder="어떤 용도인지 적어 주세요 (예: 사내 행사 지원)"></label>
         <label class="f"><span>고객사·기관</span><input id="rCustomer" placeholder="예: OO대학교 간호학과"></label>
@@ -2625,7 +2636,7 @@ function loanInfoEdit(l) {
       <label class="f req"><span>반납 예정일</span><input type="date" id="ieDue" value="${esc(l.due_date)}"></label>
       <label class="f"><span>고객사·기관</span><input id="ieCustomer" value="${esc(l.customer || "")}"></label>
       <label class="f"><span>내부 요청자</span><input id="ieInternal" value="${esc(l.internal_requester || "")}"></label>
-      <label class="f"><span>외부 요청자</span><input id="ieExternal" value="${esc(l.external_requester || "")}"></label>
+      ${extField("ieExternal", l.external_requester || "")}
       <label class="f wide"><span>메모</span><textarea id="ieNote">${esc(splitNote(l.note).memo)}</textarea></label>
     </div>
     <div class="notice bad" id="ieErr" hidden></div>
@@ -2855,6 +2866,8 @@ document.addEventListener("input", e => {
   }
 });
 document.addEventListener("change", e => {
+  const ex = e.target.dataset?.ext;
+  if (ex) { const n = $("#" + ex); if (!n) return; if (e.target.value === "__etc") { if (EXT_ORGS.includes(n.value)) n.value = ""; n.hidden = false; n.focus(); } else { n.value = e.target.value; n.hidden = true; } return; }
   const id = e.target.id;
   if (id === "eqCat") { filters.eqCat = e.target.value; render(); }
   else if (id === "eqLoc") { filters.eqLoc = e.target.value; render(); }
@@ -2877,7 +2890,7 @@ document.addEventListener("change", e => {
 document.addEventListener("submit", e => { if (e.target.id === "reqForm") { e.preventDefault(); submitRequest(); } });
 const REQ_IDS = ["rPurpose","rEtc","rCustomer","rInternal","rExternal","rNote","rDelivery","sName","sPhone","sAddr","sDate","sPick","sMemo"];
 function collectReqFields() { const o = {}; for (const id of REQ_IDS) { const n = $("#" + id); if (n) o[id] = n.type === "checkbox" ? n.checked : n.value; } return o; }
-function restoreReqFields(o) { for (const [id, v] of Object.entries(o)) { if (!o.rDelivery && (id === "sDate" || id === "sPick")) continue; const n = $("#" + id); if (!n) continue; if (n.type === "checkbox") n.checked = v; else n.value = v; } const d = $("#rDelivery"); if (d) $("#shipBox").hidden = !d.checked; lockShipFields();  paintPurpose(); }
+function restoreReqFields(o) { for (const [id, v] of Object.entries(o)) { if (!o.rDelivery && (id === "sDate" || id === "sPick")) continue; const n = $("#" + id); if (!n) continue; if (n.type === "checkbox") n.checked = v; else n.value = v; } const d = $("#rDelivery"); if (d) $("#shipBox").hidden = !d.checked; lockShipFields();  paintPurpose(); syncExt("rExternal"); }
 function paintPurpose() { const sel = $("#rPurpose"); if (!sel) return; const pd = $("#rPurposeDesc"); if (pd) pd.textContent = purposeDesc(sel.value); const w = $("#rEtcWrap"); if (w) w.hidden = sel.value !== "기타"; }
 function softRender() {
   if ($("#app").hidden || $("#modalRoot").innerHTML) { renderTabs(); return; }
