@@ -505,6 +505,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.094", date: "2026-11-04", items: ["[출납 대장] 상태 버튼: ‘모아 보기’ 줄에서 전체를 맨 앞으로, ‘단계별’ 줄 맨 앞에도 전체 추가"] },
   { v: "v0.093", date: "2026-11-04", items: ["[출납 대장] 상태 버튼을 두 줄로 정리: ‘모아 보기’(진행 중·연체·전체)와 ‘단계별’(출고 예정 → 대여 중 → 반납 확인 대기 → 반납 완료, 취소). 숫자에 ‘건’ 표시, 고른 보기의 뜻을 아래 한 줄로 설명", "‘나가 있음’을 ‘대여 중’으로, ‘반납 확인 중’을 ‘반납 확인 대기’로 이름 통일", "‘배송 건만’을 ‘물류 건만’으로 바꾸고, 관리자 전용 화면이라 ‘내 신청만’은 뺌", "묶음 상태 배지: 단계 버튼과 같은 이름 사용. 상태가 섞이면 ‘대여 중 2대 · 출고 예정 1대’처럼 대수 표시, 한 상태면 이름만"] },
   { v: "v0.092", date: "2026-11-04", items: ["[출납 대장] 머리 줄을 ‘신청자 · 고객사’ 중심으로 바꾸고 신청번호는 아랫줄에 작게", "펼치지 않아도 장비가 보임: 1대면 이름, 여러 대면 라벨 4개까지와 ‘외 N’", "출고 예정은 7일 안만 펼치고, 그 이후는 ‘그 이후 N건 펼치기’로 접어 둠", "상태 배지는 상태가 섞인 묶음에만 표시(구역 제목과 중복 제거). 연체는 날짜 배지(빨강)로 표시", "장비 관리자: 머리 줄에 [출고 처리 N대]·[반납 확인 N대] 버튼. 펼치지 않고 바로 처리", "검색 옆에 ‘내 신청만’·‘배송 건만’ 체크 추가", "폰: 머리 줄에는 날짜 배지만 남기고 나머지 배지는 숨김"] },
   { v: "v0.091", date: "2026-11-04", items: ["[출납 대장] 기본 보기 ‘진행 중’을 세 구역으로 나눔: 지금 나가 있음(반납일 가까운 순) → 반납 확인 대기 → 출고 예정(출고일 가까운 순). 상태 버튼에 ‘나가 있음’·‘출고 예정’ 추가 (전에는 ‘대여 중’에 예약까지 섞여 있었음)", "신청 묶음 머리에 날짜 배지: 나가 있으면 ‘반납 D-3·내일 반납·반납일 2일 지남’, 예정이면 ‘출고 D-5·오늘 출고’. 가까울수록 주황·지나면 빨강"] },
@@ -1897,9 +1898,9 @@ function vShip() {
 // 출납 대장 상태 버튼: 전체, 대여 중(예약·출고·반납 확인 중, 기본값), 연체, 반납 확인 중, 반납 완료, 취소
 // 출납 대장 보기. 단계(flow)는 신청이 지나는 순서, 모아 보기(sum)는 여러 단계를 합친 것
 const LEDGER_ST = [
+  ["all", "전체", () => true, "sum", "취소를 포함한 모든 신청이에요. 최근 시작한 신청이 위에 있어요."],
   ["open", "진행 중", l => ACTIVE(l.status) || l.status === "checking", "sum", "아직 끝나지 않은 신청이에요. 대여 중 → 반납 확인 대기 → 출고 예정 순으로 나눠 보여 줘요."],
   ["overdue", "연체", l => isOverdue(l), "sum", "반납 예정일이 지났는데 아직 돌아오지 않은 신청이에요."],
-  ["all", "전체", () => true, "sum", "취소를 포함한 모든 신청이에요. 최근 시작한 신청이 위에 있어요."],
   ["reserved", "출고 예정", l => l.status === "reserved", "flow", "예약만 되어 있고 아직 나가지 않은 신청이에요. 출고일이 가까운 순이에요."],
   ["out", "대여 중", l => l.status === "out", "flow", "지금 장비가 밖에 나가 있는 신청이에요. 반납 예정일이 가까운 순이에요."],
   ["checking", "반납 확인 대기", l => l.status === "checking", "flow", "장비가 돌아왔고 장비 관리자의 확인을 기다리는 신청이에요."],
@@ -1980,7 +1981,7 @@ function vLedger() {
     const flow = LEDGER_ST.filter(x => x[3] === "flow"), main = flow.filter(x => x[0] !== "cancelled");
     return `<div class="lg-chips">
       <div class="cat-chips" role="group" aria-label="모아 보기"><span class="lg-chip-lb">모아 보기</span>${LEDGER_ST.filter(x => x[3] === "sum").map(chip).join("")}</div>
-      <div class="cat-chips" role="group" aria-label="단계별"><span class="lg-chip-lb">단계별</span>${main.map(chip).join(`<span class="lg-arrow" aria-hidden="true">→</span>`)}<span class="tab-sep" aria-hidden="true"></span>${chip(flow.find(x => x[0] === "cancelled"))}</div>
+      <div class="cat-chips" role="group" aria-label="단계별"><span class="lg-chip-lb">단계별</span>${chip(LEDGER_ST.find(x => x[0] === "all"))}<span class="tab-sep" aria-hidden="true"></span>${main.map(chip).join(`<span class="lg-arrow" aria-hidden="true">→</span>`)}<span class="tab-sep" aria-hidden="true"></span>${chip(flow.find(x => x[0] === "cancelled"))}</div>
       <p class="meta lg-desc"><b>${esc(stDef[1])}</b> · ${esc(stDef[4])}</p></div>`; })()}
   <p class="meta" style="margin:-4px 0 0">${groups.length}건 · 장비 ${list.length}대</p>
   ${(() => { const grp = g => `<div class="lg-grp">${head(g)}${lgOpen.has(g[0].loan_no) || q ? `<div class="lg-items">${g.map(item).join("")}</div>` : ""}</div>`;
