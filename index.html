@@ -513,6 +513,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.109", date: "2026-11-04", items: ["반납 자가점검: [다음] 버튼을 빼고 [예]·[아니오]를 누르면 바로 다음 질문으로 넘어감. 여러 대를 함께 반납할 때 [아니오]를 누르면 이상 있는 장비를 고른 뒤 [다음]. 날짜·장소·방법 등 다른 단계는 그대로 [다음]"] },
   { v: "v0.108", date: "2026-11-04", db: "029_return_date_self.sql", items: ["반납 신청: 고르면 바로 넘어가던 화면(장소·방법·자가점검 예/아니오)을 모두 ‘고른 뒤 아래 [다음]’으로 통일", "반납 신청 첫 단계에 ‘반납 날짜가 오늘이 맞나요?’ 추가. ‘아니오’면 실제 반납일을 입력(오늘 이전, 사용 시작일 이후). 마지막 확인에도 반납 날짜 표시"] },
   { v: "v0.107", date: "2026-11-04", db: "028_confirm_delivery.sql", items: ["신청자 도착 확인: 배송 중인 내 신청은 [내 신청] 위 ‘배송 중’ 칸과 [물류] 카드에 [도착 확인] 버튼이 나옴. 누르면 ‘도착’으로 바뀌고 Teams 알림이 감 (신청자는 배송 중 → 도착만 바꿀 수 있음)", "[출입고 확인] ‘도착 확인 대기’ 추가: 도착 희망일이 지났는데 아직 배송 중인 건. [도착 처리]로 바로 바꿈. 탭 배지와 [현황]의 [출입고 확인 N건]에도 포함"] },
   { v: "v0.106", date: "2026-11-04", items: ["분류 이름을 화면에서 짧게: 시뮬레이터 → SIM, Skill T. → SKILL (분류 버튼, 장비 목록, 장비 등록·수정 창). DB 값은 그대로"] },
@@ -2509,7 +2510,7 @@ function returnForm(l) {
         <div class="flow-opts">${its.map(x => `<button class="opt" data-qx="${x.id}" aria-pressed="false">${esc(eqOf(x).name)}<span class="opt-sub">${esc(eqNo(eqOf(x)))}${q.k === "parts" && eqOf(x).components ? `${eqNo(eqOf(x)) ? " · " : ""}구성품: ${esc(eqOf(x).components.replace(/\s*\n\s*/g, ", "))}` : ""}</span></button>`).join("")}</div>
       </div>
       <div class="flow-yn"><button class="big yn-n" data-yn="n" aria-pressed="false">아니오</button><button class="big yn-y" data-yn="y" aria-pressed="false">예</button></div>
-      <div class="flow-foot qq-foot"><div class="notice bad" hidden></div><button class="btn pri big" data-qq-next>다음</button></div>
+      <div class="flow-foot qq-foot" hidden><div class="notice bad" hidden></div><button class="btn pri big" data-qq-next>다음</button></div>
     </section>`;
   };
   const qSec = (x, q, i, n, k, kn) => `<section data-step="q:${x.id}:${q.k}" data-lid="${x.id}" hidden>
@@ -2517,7 +2518,6 @@ function returnForm(l) {
       ${q.sub ? `<p class="meta">${esc(q.sub)}</p>` : ""}
       ${q.k === "parts" && eqOf(x).components ? `<div class="flow-box"><b>구성품</b><div style="white-space:pre-wrap">${esc(eqOf(x).components)}</div></div>` : ""}
       <div class="flow-yn"><button class="big yn-n" data-yn="n" aria-pressed="false">아니오</button><button class="big yn-y" data-yn="y" aria-pressed="false">예</button></div>
-      <div class="flow-foot"><div class="notice bad" hidden></div><button class="btn pri big" data-q-next>다음</button></div>
     </section>`;
   const head = () => {
     const its = items();
@@ -2592,13 +2592,13 @@ function returnForm(l) {
           const bad = () => its.filter(x => ansOf(x)[k] === "n");
           const paint = () => {
             const open = sec.dataset.mode === "n";
-            sec.querySelector(".qq-pick").hidden = !open;
+            sec.querySelector(".qq-pick").hidden = !open; sec.querySelector(".qq-foot").hidden = !open;
             sec.querySelectorAll("[data-yn]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.yn === sec.dataset.mode)));
             sec.querySelectorAll("[data-qx]").forEach(b => b.setAttribute("aria-pressed", String(ansOf(cands.find(c => c.id === b.dataset.qx))[k] === "n")));
             const n = bad().length; sec.querySelector("[data-qq-next]").textContent = n ? `${n}대 이상 있음 · 다음` : "다음";
           };
           // 예: 모두 이상 없음. 아니오: 이상 있는 장비를 고른다.
-          sec.querySelector(".yn-y").addEventListener("click", () => { its.forEach(x => ansOf(x)[k] = "y"); sec.dataset.mode = "y"; sec.querySelector(".notice").hidden = true; paint(); });
+          sec.querySelector(".yn-y").addEventListener("click", () => { its.forEach(x => ansOf(x)[k] = "y"); sec.dataset.mode = "y"; sec.querySelector(".notice").hidden = true; paint(); setTimeout(next, 150); });
           sec.querySelector(".yn-n").addEventListener("click", () => { sec.dataset.mode = "n"; sec.querySelector(".notice").hidden = true; paint(); });
           sec.querySelectorAll("[data-qx]").forEach(b => b.addEventListener("click", () => {
             const x = cands.find(c => c.id === b.dataset.qx); ansOf(x)[k] = ansOf(x)[k] === "n" ? "y" : "n"; sec.querySelector(".notice").hidden = true; paint();
@@ -2621,13 +2621,11 @@ function returnForm(l) {
         sec.querySelectorAll("[data-yn]").forEach(btn => {
           btn.setAttribute("aria-pressed", String(ansOf(x)[k] === btn.dataset.yn));
           btn.addEventListener("click", () => {
-            ansOf(x)[k] = btn.dataset.yn; sec.querySelector(".notice").hidden = true;
+            // 자가점검은 [예]·[아니오]가 곧 다음으로 넘어가는 버튼이다
+            ansOf(x)[k] = btn.dataset.yn;
             sec.querySelectorAll("[data-yn]").forEach(y => y.setAttribute("aria-pressed", String(y === btn)));
+            setTimeout(next, 150);
           });
-        });
-        sec.querySelector("[data-q-next]").addEventListener("click", () => {
-          if (!ansOf(x)[k]) { const e = sec.querySelector(".notice"); e.textContent = "‘예’ 또는 ‘아니오’를 골라 주세요."; e.hidden = false; return; }
-          next();
         });
       });
     };
