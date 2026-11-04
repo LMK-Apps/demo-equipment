@@ -148,6 +148,8 @@ h3{font-size:14px;margin:0;font-weight:600}
 .lg-h1{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:14px}
 .lg-h1 .lg-st{display:inline-flex;flex-wrap:wrap;gap:4px;margin-left:auto}
 .lg-items .r2.lg-item{padding-left:46px}
+.lg-items .r2.lg-item{padding-top:7px;padding-bottom:7px}
+.lg-item .r2-side{flex-direction:row;align-items:center;gap:8px}
 .cat-chip .n{font-family:var(--mono);font-size:11.5px;opacity:.75}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 input,select,textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;min-width:0;font-size:16px}
@@ -489,6 +491,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.088", date: "2026-11-04", items: ["[출납 대장] 장비 줄: 상태 표시와 버튼(출고·반납 확인 등)을 위아래가 아니라 옆으로 나란히 두고 위아래 여백을 줄여 줄 높이를 낮춤"] },
   { v: "v0.087", date: "2026-11-04", items: ["[현황]·[출입고 확인] 신청 묶음 머리: 신청번호 대신 신청자와 고객사·기관을 크게 보여 줌. 신청번호는 아랫줄에 작게", "데모 신청·신청 정보 수정: 외부 요청자를 목록에서 고름(없음·성암메테크·남북의료기·써지칼코리아·기타). ‘기타’를 고르면 직접 입력 칸이 나옴"] },
   { v: "v0.086", date: "2026-11-04", items: ["데이터 사용량 줄이기: 1분마다 하는 자동 새로 고침은 장비·신청·배송 중 바뀐 것만 받아 옴(전에는 전체를 다시 받음). 15분마다, 그리고 [새로 고침]을 누르면 전체를 다시 받음", "로그인 기록(관리자)은 전체를 다시 받을 때만 불러옴"] },
   { v: "v0.085", date: "2026-11-04", items: ["메뉴 이름 변경: 배송 → 물류", "캘린더 장비별 막대: 신청자 이름 대신 머리표(예: [SH])와 고객사를 보여 줌. 머리표가 없으면 이름", "폰에서 메뉴 두 줄이 옆으로 밀지 않아도 한 화면에 다 들어오게 글자 크기와 간격을 줄임"] },
