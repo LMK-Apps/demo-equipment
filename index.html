@@ -513,6 +513,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.111", date: "2026-11-04", items: ["반납 신청 마지막 버튼 이름을 다시 [반납 신청]으로 되돌림"] },
   { v: "v0.110", date: "2026-11-04", items: ["반납 신청 마지막 확인 화면의 버튼 이름을 [반납 신청] → [반납 완료]로 바꿈"] },
   { v: "v0.109", date: "2026-11-04", items: ["반납 자가점검: [다음] 버튼을 빼고 [예]·[아니오]를 누르면 바로 다음 질문으로 넘어감. 여러 대를 함께 반납할 때 [아니오]를 누르면 이상 있는 장비를 고른 뒤 [다음]. 날짜·장소·방법 등 다른 단계는 그대로 [다음]"] },
   { v: "v0.108", date: "2026-11-04", db: "029_return_date_self.sql", items: ["반납 신청: 고르면 바로 넘어가던 화면(장소·방법·자가점검 예/아니오)을 모두 ‘고른 뒤 아래 [다음]’으로 통일", "반납 신청 첫 단계에 ‘반납 날짜가 오늘이 맞나요?’ 추가. ‘아니오’면 실제 반납일을 입력(오늘 이전, 사용 시작일 이후). 마지막 확인에도 반납 날짜 표시"] },
@@ -2578,7 +2579,7 @@ function returnForm(l) {
     <section data-step="sum" hidden>
       <p class="flow-k">마지막 확인</p><h2 class="flow-q">이대로 반납 신청할까요?</h2>
       <div id="sumBox" class="flow-sum"></div>
-      <div class="flow-foot"><div class="notice">[반납 완료]를 누르면 반납이 접수되고, 장비 관리자가 상태를 확인하면 반납이 마무리돼요.</div><div class="notice bad" id="rErr" hidden></div><button class="btn pri big" id="rOk">반납 완료</button></div>
+      <div class="flow-foot"><div class="notice">반납 신청 후 장비 관리자가 상태를 점검하면 반납이 완료돼요.</div><div class="notice bad" id="rErr" hidden></div><button class="btn pri big" id="rOk">반납 신청</button></div>
     </section></div>`, m => {
     m.classList.add("full"); m.parentElement.classList.add("full");
     let cur = null, back2sum = false;
