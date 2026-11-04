@@ -126,6 +126,7 @@ h3{font-size:14px;margin:0;font-weight:600}
 .cat-chip.bad{background:var(--bad-soft);color:var(--bad)}
 .cat-chip.bad[aria-pressed="true"]{background:var(--bad);color:#fff}
 .lg-list{display:flex;flex-direction:column;gap:12px}
+.lg-sec{margin:22px 0 10px;font-size:15px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.lg-sec .meta{font-weight:400}
 .hg{border-top:1px solid var(--line);padding:10px 0}
 .list>.hg:first-child{border-top:0;padding-top:2px}
 .hg-h{display:flex;gap:10px;align-items:center}
@@ -492,6 +493,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.091", date: "2026-11-04", items: ["[출납 대장] 기본 보기 ‘진행 중’을 세 구역으로 나눔: 지금 나가 있음(반납일 가까운 순) → 반납 확인 대기 → 출고 예정(출고일 가까운 순). 상태 버튼에 ‘나가 있음’·‘출고 예정’ 추가 (전에는 ‘대여 중’에 예약까지 섞여 있었음)", "신청 묶음 머리에 날짜 배지: 나가 있으면 ‘반납 D-3·내일 반납·반납일 2일 지남’, 예정이면 ‘출고 D-5·오늘 출고’. 가까울수록 주황·지나면 빨강"] },
   { v: "v0.090", date: "2026-11-04", items: ["배차 요청 메일 물품 목록: 라벨을 [ ]로 감싸 장비 이름과 구분 (예: [RA1] Resusci Anne QCPR)"] },
   { v: "v0.089", date: "2026-11-04", db: "025_shipment_dispatch.sql", items: ["배송 건 출고: 출고 창에 차량 정보·출고자 확인 칸이 나오고, 출고하면 [물류]의 진행 단계가 ‘배송 중’으로 자동으로 바뀜", "[물류] ‘배차 정보’ 창 추가 (장비 관리자): 출발 시간, 사무실(출발지·입고지)과 담당자·연락처, 도착 시간, 추가 물품(배너·테이블보 등), 차량 정보, 출고·입고자 확인, 물류사·운송장. 빈 칸은 가장 최근 배차의 사무실·담당자·확인자로 미리 채움", "장비 관리자: 머리 줄 [사용자 화면으로 보기]로 신청자 화면을 미리 볼 수 있음. 다시 누르면 관리자 화면. 이 탭에서만 유지됨", "배송·회수 요청 메일을 화물 배차 양식으로 바꿈 (출발시간·출발지·담당자·도착시간·도착지·물품(라벨)·차량정보·출(입)고자 확인). 비어 있는 항목은 ‘(입력 필요)’로 표시"] },
   { v: "v0.088", date: "2026-11-04", items: ["[출납 대장] 장비 줄: 상태 표시와 버튼(출고·반납 확인 등)을 위아래가 아니라 옆으로 나란히 두고 위아래 여백을 줄여 줄 높이를 낮춤"] },
@@ -1881,7 +1883,9 @@ function vShip() {
 // 출납 대장 상태 버튼: 전체, 대여 중(예약·출고·반납 확인 중, 기본값), 연체, 반납 확인 중, 반납 완료, 취소
 const LEDGER_ST = [
   ["all", "전체", () => true],
-  ["open", "대여 중", l => ACTIVE(l.status) || l.status === "checking"],
+  ["open", "진행 중", l => ACTIVE(l.status) || l.status === "checking"],
+  ["out", "나가 있음", l => l.status === "out"],
+  ["reserved", "출고 예정", l => l.status === "reserved"],
   ["overdue", "연체", l => isOverdue(l)],
   ["checking", "반납 확인 중", l => l.status === "checking"],
   ["done", "반납 완료", l => l.status === "done"],
@@ -1899,6 +1903,20 @@ function vLedger() {
   const groups = [...list.reduce((m, l) => (m.has(l.loan_no) ? m.get(l.loan_no).push(l) : m.set(l.loan_no, [l]), m), new Map()).values()]
     .map(g => g.sort(loanEqCmp))
     .sort((a, b) => b[0].start_date.localeCompare(a[0].start_date) || b[0].loan_no.localeCompare(a[0].loan_no));
+  // 진행 중 보기: 지금 나가 있음(반납일 가까운 순) → 반납 확인 대기 → 출고 예정(시작일 가까운 순)으로 나눈다
+  const t = todayStr();
+  const phase = g => g.some(x => x.status === "out") ? "out" : g.some(x => x.status === "checking") ? "checking" : g.some(x => x.status === "reserved") ? "reserved" : "other";
+  const minOf = (g, k, st) => g.filter(x => x.status === st).map(x => x[k]).sort()[0] || "";
+  const SECTIONS = [["out", "지금 나가 있음", "반납 예정일이 가까운 순", (a, b) => minOf(a, "due_date", "out").localeCompare(minOf(b, "due_date", "out"))],
+    ["checking", "반납 확인 대기", "돌아왔고 관리자 확인을 기다리는 건", (a, b) => (a[0].returned_at || "").localeCompare(b[0].returned_at || "")],
+    ["reserved", "출고 예정", "출고일이 가까운 순", (a, b) => minOf(a, "start_date", "reserved").localeCompare(minOf(b, "start_date", "reserved"))]];
+  const sectioned = stDef[0] === "open" || stDef[0] === "out" || stDef[0] === "reserved";
+  // 머리 줄의 날짜 배지: 나가 있으면 반납까지, 예정이면 출고까지 남은 날
+  const dday = (d, word) => { const n = daysBetween(t, d); return n === 0 ? `오늘 ${word}` : n === 1 ? `내일 ${word}` : n > 0 ? `${word} D-${n}` : `${word}일 ${-n}일 지남`; };
+  const whenPill = g => { const ph = phase(g);
+    if (ph === "out") { const d = minOf(g, "due_date", "out"), n = daysBetween(t, d); return `<span class="pill ${n < 0 ? "p-bad" : n <= 1 ? "p-warn" : "p-info"}">${dday(d, "반납")}</span>`; }
+    if (ph === "reserved") { const d = minOf(g, "start_date", "reserved"), n = daysBetween(t, d); return `<span class="pill ${n < 0 ? "p-bad" : n <= 1 ? "p-warn" : "p-ok"}">${dday(d, "출고")}</span>`; }
+    return ""; };
   const act = l => {
     if (!me.isAdmin) return "";
     if (l.status === "reserved") return `<button class="btn sm pri" data-act="checkout" data-id="${l.id}">출고</button>`;
@@ -1924,7 +1942,7 @@ function vLedger() {
     const open = lgOpen.has(l.loan_no) || !!q;
     return `<div class="lg-h${late ? " late" : ""}${open ? " open" : ""}" data-act="lgGrp" data-k="${esc(l.loan_no)}" role="button" aria-expanded="${open}">
       <div class="lg-h1"><span class="grp-arrow" aria-hidden="true">▸</span><b class="mono">${esc(l.loan_no)}</b><span>${esc(nameOf(l.requester_id))}${ri ? ` <span class="meta">(${esc(ri)})</span>` : ""}</span><span class="grp-n">장비 ${all.length || g.length}대</span>
-        <span class="lg-st">${late ? `<span class="pill p-bad">연체 ${late}</span>` : ""}${counts.map(([k, n]) => `<span class="pill ${LOAN_STATUS[k][1]}">${esc(LOAN_STATUS[k][0])} ${n}</span>`).join("")}</span>
+        <span class="lg-st">${whenPill(all)}${late ? `<span class="pill p-bad">연체 ${late}</span>` : ""}${counts.map(([k, n]) => `<span class="pill ${LOAN_STATUS[k][1]}">${esc(LOAN_STATUS[k][0])} ${n}</span>`).join("")}</span>
         ${me.isAdmin && checking.length > 1 ? `<button class="btn sm pri" data-act="inspect" data-id="${checking[0].id}">반납 확인 ${checking.length}대</button>` : ""}</div>
       <div class="r2-l2 lg-h2"><span>${esc(purposeText(l))}${l.customer ? ` · ${esc(l.customer)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div></div>`; };
   return `
@@ -1935,7 +1953,11 @@ function vLedger() {
   </div>
   <div class="cat-chips" role="group" aria-label="상태">${LEDGER_ST.map(([k, t, f]) => `<button type="button" class="cat-chip${k === "overdue" && nGroups(f) ? " bad" : ""}" data-act="lgSt" data-v="${k}" aria-pressed="${stDef[0] === k}">${t}<span class="n">${nGroups(f)}</span></button>`).join("")}</div>
   <p class="meta" style="margin:-4px 0 0">${groups.length}건 · 장비 ${list.length}대</p>
-  <div class="lg-list">${groups.map(g => `<div class="lg-grp">${head(g)}${lgOpen.has(g[0].loan_no) || q ? `<div class="lg-items">${g.map(item).join("")}</div>` : ""}</div>`).join("") || `<div class="list2"><div class="empty">조건에 맞는 기록이 없어요.</div></div>`}</div>`;
+  ${(() => { const grp = g => `<div class="lg-grp">${head(g)}${lgOpen.has(g[0].loan_no) || q ? `<div class="lg-items">${g.map(item).join("")}</div>` : ""}</div>`;
+    if (!groups.length) return `<div class="lg-list"><div class="list2"><div class="empty">조건에 맞는 기록이 없어요.</div></div></div>`;
+    if (!sectioned) return `<div class="lg-list">${groups.map(grp).join("")}</div>`;
+    return SECTIONS.map(([k, title, sub, cmp]) => { const gs = groups.filter(g => phase(loans.filter(x => x.loan_no === g[0].loan_no && x.status !== "cancelled")) === k).sort(cmp);
+      return gs.length ? `<h3 class="lg-sec">${title} <span class="grp-n">${gs.length}건</span> <span class="meta">${sub}</span></h3><div class="lg-list">${gs.map(grp).join("")}</div>` : ""; }).join(""); })()}`;
 }
 
 function nameForm(p, approve) {
