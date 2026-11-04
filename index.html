@@ -512,6 +512,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.106", date: "2026-11-04", items: ["분류 이름을 화면에서 짧게: 시뮬레이터 → SIM, Skill T. → SKILL (분류 버튼, 장비 목록, 장비 등록·수정 창). DB 값은 그대로"] },
   { v: "v0.105", date: "2026-11-04", db: "027_category_supplies.sql", items: ["분류를 5개로 정리: 시뮬레이터 → BLS → Skill T. → 기타 → 비품. MBL은 시뮬레이터로 합치고(MBL1·MBL2), 비품을 새로 만듦", "LED부스·접이식테이블·LG스탠바이미를 기타 → 비품으로 옮김", "반납 자가점검: MBL은 시뮬레이터 분류여도 노트북 질문 없이 기본 질문(구성품·깨짐·정상 작동). 비품도 기본 질문"] },
   { v: "v0.104", date: "2026-11-04", items: ["[통계] 장비 표 머리글을 누르면 그 항목으로 정렬 (장비·보관 위치·대여 횟수·대여 일수·가동률·마지막 사용). 한 번 더 누르면 오름차순↔내림차순. 고른 항목에 ▲·▼, 나머지는 ↕ 표시. 기본은 대여 일수 내림차순"] },
   { v: "v0.103", date: "2026-11-04", items: ["[통계] 장비 표: 기간 중 사용도 예약도 없는 장비는 맨 아래 ‘사용·예약 0건인 장비 N대 [펼쳐 보기 ▼]’ 줄로 접어 둠"] },
@@ -840,7 +841,10 @@ const placeOf = l => l.return_place || ({ drop_uiwang: "의왕", drop_munjeong: 
 // 반납 방법 표시: "직접 반납 – 의왕", "물류사 회수 → 문정"
 const retLabel = l => !l.return_method ? "" : l.return_method === "pickup" ? `물류사 회수 → ${placeOf(l) || "장소 미정"}` : `직접 반납 – ${placeOf(l)}`;
 const USER_STATUS = { pending:["승인 대기","p-warn"], active:["사용 중","p-ok"], disabled:["사용 중지",""] };
-const CATS = ["시뮬레이터","BLS","Skill T.","기타","비품"];   // MBL은 시뮬레이터에 합침 (2026-11-04)
+const CATS = ["시뮬레이터","BLS","Skill T.","기타","비품"];   // MBL은 시뮬레이터에 합침 (2026-11-04). DB 값은 그대로
+// 화면에 보이는 분류 이름 (짧게). DB에는 CATS 값이 들어간다
+const CAT_LABEL = { "시뮬레이터": "SIM", "Skill T.": "SKILL" };
+const catName = c => CAT_LABEL[c] || c || "";
 // 장비 순서 규칙 (모든 장비 목록 공통): 분류 순서(시뮬레이터 → BLS → Skill T. → 기타 → 비품) → 내부 ID 순
 const catRank = c => { const i = CATS.indexOf(c); return i < 0 ? CATS.length : i; };
 const eqCmp = (a, b) => catRank(a && a.category) - catRank(b && b.category) || ((a && a.internal_id) || "").localeCompare((b && b.internal_id) || "", "en", { numeric: true });
@@ -891,7 +895,7 @@ const CHECKS_BY_CATEGORY = {
 function catChips(scope, cur, countOf) {
   const live = equipment.filter(e => e.status !== "retired");
   const n = countOf || (v => v ? live.filter(e => e.category === v).length : live.length);
-  return `<div class="cat-chips" role="group" aria-label="분류">${[["", "전체"], ...CATS.map(c => [c, c])].map(([v, t]) => `<button type="button" class="cat-chip" data-act="catChip" data-scope="${scope}" data-v="${esc(v)}" aria-pressed="${cur === v}">${esc(t)}<span class="n">${n(v)}</span></button>`).join("")}</div>`;
+  return `<div class="cat-chips" role="group" aria-label="분류">${[["", "전체"], ...CATS.map(c => [c, catName(c)])].map(([v, t]) => `<button type="button" class="cat-chip" data-act="catChip" data-scope="${scope}" data-v="${esc(v)}" aria-pressed="${cur === v}">${esc(t)}<span class="n">${n(v)}</span></button>`).join("")}</div>`;
 }
 // MBL(Monitor by Laerdal)은 시뮬레이터 분류지만 노트북이 없으므로 기본 질문을 쓴다
 const isMBL = e => !!e && (/^MBL/i.test(e.label || "") || /monitor by laerdal/i.test(e.name || ""));
@@ -1553,7 +1557,7 @@ function eqRow(e, t, child, showName) {
         ${eqSel ? `<span class="r2-chk" aria-hidden="true">${on ? "✓" : ""}</span>` : ""}
         <div class="r2-main">
           <div class="r2-l1">${frontTag(e)}${child && !showName ? "" : `<b class="r2-title${child ? " sub" : ""}">${esc(e.name)}</b>`}${backId(e)}${assetNo(e) ? `<span class="mono meta" title="자산번호">${esc(assetNo(e))}</span>` : ""}${e.item_no ? `<span class="mono meta" title="품목번호">${esc(e.item_no)}</span>` : ""}</div>
-          <div class="r2-l2"><span>${esc(e.category)}</span><span>보관 ${esc(e.location)}</span>${cur ? `<span>지금 ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</span>` : ""}<span>점검 ${condText(e.last_check)}${e.last_check_at ? ` ${fmtD(e.last_check_at.slice(0, 10))}` : ""}</span><span>다음 예약 ${next ? `<span class="mono">${fmtD(next.start_date)}–${fmtD(next.due_date)}</span>` : "없음"}</span></div>
+          <div class="r2-l2"><span>${esc(catName(e.category))}</span><span>보관 ${esc(e.location)}</span>${cur ? `<span>지금 ${esc(cur.customer || cur.purpose)} (${esc(nameOf(cur.requester_id))})</span>` : ""}<span>점검 ${condText(e.last_check)}${e.last_check_at ? ` ${fmtD(e.last_check_at.slice(0, 10))}` : ""}</span><span>다음 예약 ${next ? `<span class="mono">${fmtD(next.start_date)}–${fmtD(next.due_date)}</span>` : "없음"}</span></div>
           ${compLine(e) ? `<div class="r2-comp" title="${esc(e.components)}"><span>구성품</span> ${esc(compLine(e))}</div>` : ""}
         </div>
         <div class="r2-side">${pill(EQ_STATUS, e.status)}</div></div>`;
@@ -1596,7 +1600,7 @@ function vEquip() {
       return `<div class="r2 grp${open ? " open" : ""}" data-act="eqGrp" data-k="${esc(g.k)}" aria-expanded="${open}">
         <span class="grp-arrow" aria-hidden="true">▸</span>
         <div class="r2-main"><div class="r2-l1"><b class="r2-title">${esc(modelName(f))}</b><span class="grp-n">${g.items.length}대</span></div>
-          <div class="r2-l2"><span>${esc(f.category)}</span>${sum}<span class="mono">${tags}</span></div></div></div>
+          <div class="r2-l2"><span>${esc(catName(f.category))}</span>${sum}<span class="mono">${tags}</span></div></div></div>
         ${open ? g.items.map(e => eqRow(e, t, true, mixedNames(g.items))).join("") : ""}`;
     }).join("") || `<div class="empty">조건에 맞는 장비가 없어요.</div>`}
   </div>
@@ -1710,7 +1714,7 @@ function addOutItems(l) {
     <p class="sub">같이 가져간 장비를 이 신청에 더해요. 같은 기간(<span class="mono">${fmtD(l.start_date)} ~ ${fmtD(l.due_date)}</span>)으로 바로 출고 상태가 돼요.</p>
     ${rows.length ? `<input id="aoQ" type="search" placeholder="장비 이름이나 번호로 찾기" style="margin-bottom:8px">
       <div class="pick" id="aoList" style="max-height:46vh;overflow:auto">${rows.map(e => `<label data-hay="${esc(`${e.name} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no || ""} ${e.category} ${e.location}`.toLowerCase())}"><input type="checkbox" data-ao="${e.id}">
-        <div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span><div class="meta">${esc(e.category)} · ${esc(e.location)}</div></div></label>`).join("")}</div>`
+        <div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span><div class="meta">${esc(catName(e.category))} · ${esc(e.location)}</div></div></label>`).join("")}</div>`
       : `<div class="empty">그 기간에 더할 수 있는 장비가 없어요.</div>`}
     <p class="meta" id="aoCnt">선택 0대</p>
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="aoOk" disabled>추가</button></div>`, m => {
@@ -1761,12 +1765,12 @@ function vRequest() {
       return `${c.map(x => `${fmtD(x.start_date)}–${fmtD(x.due_date)}`).slice(0, 2).join(", ")}${c.length > 2 ? ` 외 ${c.length - 2}건` : ""} 예약돼 있어요.${nf ? ` ${fmtD(nf)}부터 쓸 수 있어요.` : ""}`; })() : "";
     const hay = `${e.name} ${e.model || ""} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.item_no} ${e.serial_no} ${e.location} ${e.category}`.toLowerCase();
     return `<label class="${blocked ? "off" : ""}" data-hay="${esc(hay)}" data-cat="${esc(e.category)}" data-loc="${esc(locGroup(e.location))}" data-ok="${blocked ? "0" : "1"}"><input type="checkbox" data-pick="${e.id}" ${draft.picks.has(e.id) ? "checked" : ""} ${blocked ? "disabled" : ""}>
-      <div class="main">${child ? `${frontTag(e)}${showName ? ` <b class="sub">${esc(e.name)}</b>` : ""} ${backId(e)}` : `${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}`}<div class="meta">${child ? "" : `${esc(e.category)} · `}${esc(e.location)}</div>${blocked && detail ? `<div class="why">${esc(detail)}</div>` : ""}${compLine(e) ? `<div class="r2-comp" title="${esc(e.components)}"><span>구성품</span> ${esc(compLine(e))}</div>` : ""}</div>
+      <div class="main">${child ? `${frontTag(e)}${showName ? ` <b class="sub">${esc(e.name)}</b>` : ""} ${backId(e)}` : `${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}`}<div class="meta">${child ? "" : `${esc(catName(e.category))} · `}${esc(e.location)}</div>${blocked && detail ? `<div class="why">${esc(detail)}</div>` : ""}${compLine(e) ? `<div class="r2-comp" title="${esc(e.components)}"><span>구성품</span> ${esc(compLine(e))}</div>` : ""}</div>
       ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
   };
   // 같은 모델이 2대 이상이면 모델 줄 하나로 묶고, 펼치면 실제 장비를 고른다
   const pickHtml = groupByModel(rows).map(g => g.items.length === 1 ? pickRow(g.items[0], false) : `${(() => { const op = pickOpen.has(g.k) || g.items.some(e => draft.picks.has(e.id)); return `<div class="pgrp" data-grp="${esc(g.k)}" data-open="${op ? 1 : 0}">`; })()}
-      <button type="button" class="pgrp-h" data-act="pickGrp" data-k="${esc(g.k)}"><span class="grp-arrow" aria-hidden="true">▸</span><div class="main"><b>${esc(modelName(g.items[0]))}</b> <span class="grp-n">${g.items.length}대</span><div class="meta">${esc(g.items[0].category)} · <span class="pgrp-st"></span></div></div></button>
+      <button type="button" class="pgrp-h" data-act="pickGrp" data-k="${esc(g.k)}"><span class="grp-arrow" aria-hidden="true">▸</span><div class="main"><b>${esc(modelName(g.items[0]))}</b> <span class="grp-n">${g.items.length}대</span><div class="meta">${esc(catName(g.items[0].category))} · <span class="pgrp-st"></span></div></div></button>
       <div class="pgrp-b" ${pickOpen.has(g.k) || g.items.some(e => draft.picks.has(e.id)) ? "" : "hidden"}>${g.items.map(e => pickRow(e, true, mixedNames(g.items))).join("")}</div></div>`).join("");
   const ed = draft.edit, ownerName = ed ? nameOf(draft.owner) : profile?.display_name || "나";
   const owners = proxy ? people.filter(p => p.status === "active").sort((a, b) => (a.id === me.id ? -1 : b.id === me.id ? 1 : (a.display_name || "").localeCompare(b.display_name || "", "ko"))) : [];
@@ -2291,7 +2295,7 @@ function eqForm(e, defCat) {
       <label class="f"><span>모델 (묶음 이름)</span><input id="eModel" list="eModelList" value="${esc(e.model || "")}" placeholder="비워 두면 제품명으로 묶어요"><datalist id="eModelList">${[...new Set(equipment.map(x => modelName(x)))].sort().map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
       <label class="f"><span>품목번호</span><input id="eItem" value="${esc(e.item_no)}"></label>
       <label class="f"><span>시리얼 번호</span><input id="eSerial" value="${esc(e.serial_no)}"></label>
-      <label class="f"><span>분류</span><select id="eCat">${CATS.map(c => `<option ${e.category === c ? "selected" : ""}>${c}</option>`).join("")}</select></label>
+      <label class="f"><span>분류</span><select id="eCat">${CATS.map(c => `<option value="${esc(c)}" ${e.category === c ? "selected" : ""}>${esc(catName(c))}</option>`).join("")}</select></label>
       <label class="f"><span>보관 위치</span><select id="eLoc">${LOCS.map(c => `<option ${e.location === c ? "selected" : ""}>${c}</option>`).join("")}<option value="__etc" ${isEtc ? "selected" : ""}>기타 (직접 기록)</option></select></label>
       <label class="f" id="eLocEtcWrap" ${isEtc ? "" : "hidden"}><span>기타 위치</span><input id="eLocEtc" value="${esc(isEtc ? e.location : "")}" placeholder="예: OO병원 시뮬레이션센터"></label>
       <label class="f"><span>상태</span><select id="eSt">${Object.entries(EQ_STATUS).map(([k, [t]]) => `<option value="${k}" ${e.status === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -2511,7 +2515,7 @@ function returnForm(l) {
     ${multi ? `<section data-step="items">
       <p class="flow-k">반납할 장비</p><h2 class="flow-q">어떤 장비를 반납하나요?</h2>
       <p class="meta">같은 신청번호(${esc(l.loan_no)})의 장비예요. 함께 반납할 장비를 모두 골라 주세요.</p>
-      <div class="flow-opts">${cands.map(x => `<button class="opt" data-sel="${x.id}" aria-pressed="true">${esc(eqOf(x).name)}<span class="opt-sub">${esc([eqNo(eqOf(x)), eqOf(x).category].filter(Boolean).join(" · "))} · 반납 예정 ${fmtD(x.due_date)}</span></button>`).join("")}</div>
+      <div class="flow-opts">${cands.map(x => `<button class="opt" data-sel="${x.id}" aria-pressed="true">${esc(eqOf(x).name)}<span class="opt-sub">${esc([eqNo(eqOf(x)), catName(eqOf(x).category)].filter(Boolean).join(" · "))} · 반납 예정 ${fmtD(x.due_date)}</span></button>`).join("")}</div>
       <div class="flow-foot"><div class="notice bad" id="iErr" hidden></div><button class="btn pri big" id="iNext">다음</button></div>
     </section>` : ""}
     <section data-step="place" hidden>
