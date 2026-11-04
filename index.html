@@ -492,6 +492,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.090", date: "2026-11-04", items: ["배차 요청 메일 물품 목록: 라벨을 [ ]로 감싸 장비 이름과 구분 (예: [RA1] Resusci Anne QCPR)"] },
   { v: "v0.089", date: "2026-11-04", db: "025_shipment_dispatch.sql", items: ["배송 건 출고: 출고 창에 차량 정보·출고자 확인 칸이 나오고, 출고하면 [물류]의 진행 단계가 ‘배송 중’으로 자동으로 바뀜", "[물류] ‘배차 정보’ 창 추가 (장비 관리자): 출발 시간, 사무실(출발지·입고지)과 담당자·연락처, 도착 시간, 추가 물품(배너·테이블보 등), 차량 정보, 출고·입고자 확인, 물류사·운송장. 빈 칸은 가장 최근 배차의 사무실·담당자·확인자로 미리 채움", "장비 관리자: 머리 줄 [사용자 화면으로 보기]로 신청자 화면을 미리 볼 수 있음. 다시 누르면 관리자 화면. 이 탭에서만 유지됨", "배송·회수 요청 메일을 화물 배차 양식으로 바꿈 (출발시간·출발지·담당자·도착시간·도착지·물품(라벨)·차량정보·출(입)고자 확인). 비어 있는 항목은 ‘(입력 필요)’로 표시"] },
   { v: "v0.088", date: "2026-11-04", items: ["[출납 대장] 장비 줄: 상태 표시와 버튼(출고·반납 확인 등)을 위아래가 아니라 옆으로 나란히 두고 위아래 여백을 줄여 줄 높이를 낮춤"] },
   { v: "v0.087", date: "2026-11-04", items: ["[현황]·[출입고 확인] 신청 묶음 머리: 신청번호 대신 신청자와 고객사·기관을 크게 보여 줌. 신청번호는 아랫줄에 작게", "데모 신청·신청 정보 수정: 외부 요청자를 목록에서 고름(없음·성암메테크·남북의료기·써지칼코리아·기타). ‘기타’를 고르면 직접 입력 칸이 나옴"] },
@@ -2751,7 +2752,7 @@ function inspectBulk(l, group) {
 function mailText(no, dir) {
   const g = loans.filter(l => l.loan_no === no).sort(loanEqCmp), l = g[0], s = shipOf(no, dir) || {}, d = dispatchDefaults(s);
   const need = v => (v || "").trim() || "(입력 필요)";
-  const items = [...g.map(x => { const e = eqById(x.equipment_id) || {}; return [e.label, e.name].filter(Boolean).join(" "); }), ...(d.extra_items ? [d.extra_items] : [])].join(", ");
+  const items = [...g.map(x => { const e = eqById(x.equipment_id) || {}; return [e.label && `[${e.label}]`, e.name].filter(Boolean).join(" "); }), ...(d.extra_items ? [d.extra_items] : [])].join(", ");
   const ext = l.external_requester && !(s.recipient || "").includes(l.external_requester) ? `(${l.external_requester})` : "";
   const cust = { name: `${s.recipient || ""}${ext}`, phone: s.phone, place: s.address };
   const office = { name: d.office_name, phone: d.office_phone, place: d.office };
