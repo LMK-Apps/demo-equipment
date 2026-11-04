@@ -512,7 +512,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
-  { v: "v0.105", date: "2026-11-04", db: "027_category_supplies.sql", items: ["분류 ‘비품’ 추가 (Skill T.와 기타 사이). [자산]·[데모 신청]·[캘린더] 분류 버튼과 장비 등록·수정 창에 나옴", "LED부스·접이식테이블·LG스탠바이미를 기타 → 비품으로 옮김. 반납 자가점검 질문은 기타와 같음 (구성품·깨짐·정상 작동)"] },
+  { v: "v0.105", date: "2026-11-04", db: "027_category_supplies.sql", items: ["분류를 5개로 정리: 시뮬레이터 → BLS → Skill T. → 기타 → 비품. MBL은 시뮬레이터로 합치고(MBL1·MBL2), 비품을 새로 만듦", "LED부스·접이식테이블·LG스탠바이미를 기타 → 비품으로 옮김", "반납 자가점검: MBL은 시뮬레이터 분류여도 노트북 질문 없이 기본 질문(구성품·깨짐·정상 작동). 비품도 기본 질문"] },
   { v: "v0.104", date: "2026-11-04", items: ["[통계] 장비 표 머리글을 누르면 그 항목으로 정렬 (장비·보관 위치·대여 횟수·대여 일수·가동률·마지막 사용). 한 번 더 누르면 오름차순↔내림차순. 고른 항목에 ▲·▼, 나머지는 ↕ 표시. 기본은 대여 일수 내림차순"] },
   { v: "v0.103", date: "2026-11-04", items: ["[통계] 장비 표: 기간 중 사용도 예약도 없는 장비는 맨 아래 ‘사용·예약 0건인 장비 N대 [펼쳐 보기 ▼]’ 줄로 접어 둠"] },
   { v: "v0.102", date: "2026-11-04", items: ["[통계] 신청 건수와 목적·고객사·신청자별 순위가 ‘기간 안에 시작한 신청’만 세던 것을 ‘기간 중에 진행된 신청’으로 바꿈. 지난달에 나가 이번 달까지 쓰는 신청도 이번 달에 잡힘", "평균 대여 기간·연체 비율도 ‘기간 안에 반납된 신청’ 기준으로 바꿈 (전에는 기간 안에 시작한 신청만)"] },
@@ -840,8 +840,8 @@ const placeOf = l => l.return_place || ({ drop_uiwang: "의왕", drop_munjeong: 
 // 반납 방법 표시: "직접 반납 – 의왕", "물류사 회수 → 문정"
 const retLabel = l => !l.return_method ? "" : l.return_method === "pickup" ? `물류사 회수 → ${placeOf(l) || "장소 미정"}` : `직접 반납 – ${placeOf(l)}`;
 const USER_STATUS = { pending:["승인 대기","p-warn"], active:["사용 중","p-ok"], disabled:["사용 중지",""] };
-const CATS = ["시뮬레이터","BLS","MBL","Skill T.","비품","기타"];
-// 장비 순서 규칙 (모든 장비 목록 공통): 분류 순서(시뮬레이터 → BLS → MBL → Skill T. → 비품 → 기타) → 내부 ID 순
+const CATS = ["시뮬레이터","BLS","Skill T.","기타","비품"];   // MBL은 시뮬레이터에 합침 (2026-11-04)
+// 장비 순서 규칙 (모든 장비 목록 공통): 분류 순서(시뮬레이터 → BLS → Skill T. → 기타 → 비품) → 내부 ID 순
 const catRank = c => { const i = CATS.indexOf(c); return i < 0 ? CATS.length : i; };
 const eqCmp = (a, b) => catRank(a && a.category) - catRank(b && b.category) || ((a && a.internal_id) || "").localeCompare((b && b.internal_id) || "", "en", { numeric: true });
 const loanEqCmp = (a, b) => eqCmp(eqById(a.equipment_id), eqById(b.equipment_id));
@@ -893,7 +893,9 @@ function catChips(scope, cur, countOf) {
   const n = countOf || (v => v ? live.filter(e => e.category === v).length : live.length);
   return `<div class="cat-chips" role="group" aria-label="분류">${[["", "전체"], ...CATS.map(c => [c, c])].map(([v, t]) => `<button type="button" class="cat-chip" data-act="catChip" data-scope="${scope}" data-v="${esc(v)}" aria-pressed="${cur === v}">${esc(t)}<span class="n">${n(v)}</span></button>`).join("")}</div>`;
 }
-const checksFor = e => CHECKS_BY_CATEGORY[e && e.category] || CHECKS_DEFAULT;
+// MBL(Monitor by Laerdal)은 시뮬레이터 분류지만 노트북이 없으므로 기본 질문을 쓴다
+const isMBL = e => !!e && (/^MBL/i.test(e.label || "") || /monitor by laerdal/i.test(e.name || ""));
+const checksFor = e => isMBL(e) ? CHECKS_DEFAULT : CHECKS_BY_CATEGORY[e && e.category] || CHECKS_DEFAULT;
 const COND_RANK = { ok:0, minor:1, broken:2, missing:3 };
 const locGroup = loc => LOCS.includes(loc) ? loc : "기타";
 function locPicker(px, cur) {
