@@ -126,7 +126,8 @@ h3{font-size:14px;margin:0;font-weight:600}
 .cat-chip.bad{background:var(--bad-soft);color:var(--bad)}
 .cat-chip.bad[aria-pressed="true"]{background:var(--bad);color:#fff}
 .lg-list{display:flex;flex-direction:column;gap:12px}
-.lg-eqs{padding-left:26px;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;font-size:13px;font-weight:600}
+.lg-eqs{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:15.5px;min-width:0;flex:1 1 180px}.lg-eq{display:inline-flex;gap:6px;align-items:center}.lg-eq b{font-weight:700}.lg-more-n{font-size:13px;font-weight:600;color:var(--muted)}
+.lg-who2{padding-left:26px;font-size:13.5px;font-weight:600;color:var(--fg)}
 .lg-tag{font-family:var(--mono);font-size:11.5px;padding:1px 6px;border-radius:5px;background:var(--accent-soft);color:var(--accent)}
 .lg-h1 .btn{flex:none}
 .lg-grp.lg-later{border:1.5px dashed color-mix(in srgb,var(--accent) 45%,var(--line))}
@@ -509,6 +510,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.101", date: "2026-11-04", items: ["[출납 대장] 묶음 머리 순서 변경: 맨 위에 장비(라벨 + 이름, 2대까지·나머지는 ‘외 N대’)를 크게, 그 아래 ‘신청자 · 사용 기관’, 맨 아래 신청번호·목적·기간"] },
   { v: "v0.100", date: "2026-11-04", items: ["[물류] 카드 머리: 신청번호 대신 ‘신청자 · 고객사·기관’을 크게 보여 주고, 신청번호와 대여 기간은 아랫줄에 작게"] },
   { v: "v0.099", date: "2026-11-04", items: ["배차 정보: 출발·도착을 글자 입력 대신 날짜 + 시간 선택(오전·오후·오전 8시~오후 7시)으로 고름. 기본 날짜는 도착(회수) 희망일. 시간을 안 고르면 메시지에 ‘(시간 입력 필요)’로 표시"] },
   { v: "v0.098", date: "2026-11-04", items: ["데모 신청 배송: 도착 희망일은 사용 시작일, 회수 희망일은 반납 예정일과 같게 기본값을 맞추고 대여 기간을 바꾸면 함께 바뀜 (전에는 처음 연 날짜에 머물렀고, 회수는 반납 다음 날이었음). 물류 날짜를 직접 바꾸면 그 값은 유지"] },
@@ -1987,12 +1989,13 @@ function vLedger() {
       : !sectioned && counts.length ? `<span class="pill ${LOAN_STATUS[counts[0][0]][1]}">${esc(stName(counts[0][0]))}</span>` : "";
     // 펼치지 않아도 무엇이 나갔는지 보이게: 1대면 이름, 여러 대면 라벨 몇 개
     const eqs = (all.length ? all : g).map(x => eqById(x.equipment_id) || {});
-    const eqLine = eqs.length === 1 ? `${frontTag(eqs[0])} ${esc(eqs[0].name || "")}` : `${eqs.slice(0, 4).map(e => `<span class="lg-tag">${esc(e.label || e.name || "")}</span>`).join("")}${eqs.length > 4 ? `<span class="meta">외 ${eqs.length - 4}</span>` : ""}`;
+    // 맨 윗줄은 장비: 2대까지 라벨 + 이름, 더 있으면 ‘외 N대’
+    const eqLine = `${eqs.slice(0, 2).map(e => `<span class="lg-eq">${frontTag(e)} <b>${esc(e.name || "")}</b></span>`).join("")}${eqs.length > 2 ? `<span class="lg-more-n">외 ${eqs.length - 2}대</span>` : ""}`;
     const btns = !me.isAdmin ? "" : `${reserved.length ? (reserved.length > 1 ? `<button class="btn sm pri" data-act="checkoutAll" data-no="${esc(l.loan_no)}">출고 처리 ${reserved.length}대</button>` : `<button class="btn sm pri" data-act="checkout" data-id="${reserved[0].id}">출고 처리</button>`) : ""}${checking.length ? `<button class="btn sm pri" data-act="inspect" data-id="${checking[0].id}">반납 확인${checking.length > 1 ? ` ${checking.length}대` : ""}</button>` : ""}`;
     return `<div class="lg-h${late ? " late" : ""}${open ? " open" : ""}" data-act="lgGrp" data-k="${esc(l.loan_no)}" role="button" aria-expanded="${open}">
-      <div class="lg-h1"><span class="grp-arrow" aria-hidden="true">▸</span><b class="hg-who">${esc(nameOf(l.requester_id))} · ${esc(l.customer || purposeText(l))}</b><span class="grp-n">장비 ${all.length || g.length}대</span>
+      <div class="lg-h1"><span class="grp-arrow" aria-hidden="true">▸</span><span class="lg-eqs">${eqLine}</span>
         <span class="lg-st">${whenPill(all)}${stPills}</span>${btns}</div>
-      <div class="lg-eqs">${eqLine}</div>
+      <div class="lg-who2">${esc(nameOf(l.requester_id))} · ${esc(l.customer || purposeText(l))}</div>
       <div class="r2-l2 lg-h2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(purposeText(l))}${ri ? ` · ${esc(ri)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}${shipMissing(o) ? ` <span class="pill p-warn">정보 입력 전</span>` : ""}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div></div>`; };
   return `
   <div class="head"><div class="grow"><h2>출납 대장</h2><p class="sub">대여번호(신청번호)별로 묶어서 보여 줘요. 번호 줄을 누르면 장비 목록이 펼쳐지고, 장비 줄을 누르면 자세히 볼 수 있어요.${me.isAdmin ? "" : " 출고·점검은 장비 관리자만 할 수 있어요."}</p></div>
