@@ -512,6 +512,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.107", date: "2026-11-04", db: "028_confirm_delivery.sql", items: ["신청자 도착 확인: 배송 중인 내 신청은 [내 신청] 위 ‘배송 중’ 칸과 [물류] 카드에 [도착 확인] 버튼이 나옴. 누르면 ‘도착’으로 바뀌고 Teams 알림이 감 (신청자는 배송 중 → 도착만 바꿀 수 있음)", "[출입고 확인] ‘도착 확인 대기’ 추가: 도착 희망일이 지났는데 아직 배송 중인 건. [도착 처리]로 바로 바꿈. 탭 배지와 [현황]의 [출입고 확인 N건]에도 포함"] },
   { v: "v0.106", date: "2026-11-04", items: ["분류 이름을 화면에서 짧게: 시뮬레이터 → SIM, Skill T. → SKILL (분류 버튼, 장비 목록, 장비 등록·수정 창). DB 값은 그대로"] },
   { v: "v0.105", date: "2026-11-04", db: "027_category_supplies.sql", items: ["분류를 5개로 정리: 시뮬레이터 → BLS → Skill T. → 기타 → 비품. MBL은 시뮬레이터로 합치고(MBL1·MBL2), 비품을 새로 만듦", "LED부스·접이식테이블·LG스탠바이미를 기타 → 비품으로 옮김", "반납 자가점검: MBL은 시뮬레이터 분류여도 노트북 질문 없이 기본 질문(구성품·깨짐·정상 작동). 비품도 기본 질문"] },
   { v: "v0.104", date: "2026-11-04", items: ["[통계] 장비 표 머리글을 누르면 그 항목으로 정렬 (장비·보관 위치·대여 횟수·대여 일수·가동률·마지막 사용). 한 번 더 누르면 오름차순↔내림차순. 고른 항목에 ▲·▼, 나머지는 ↕ 표시. 기본은 대여 일수 내림차순"] },
@@ -1161,7 +1162,10 @@ function render() {
 const groupByNo = list => [...list.reduce((m, l) => (m.has(l.loan_no) ? m.get(l.loan_no).push(l) : m.set(l.loan_no, [l]), m), new Map()).values()].map(g => g.sort(loanEqCmp));
 const checkoutDue = () => loans.filter(l => l.status === "reserved" && l.start_date <= addDays(todayStr(), 1));
 const returnDue = () => loans.filter(l => l.status === "checking");
-const checkCount = () => groupByNo(checkoutDue()).length + groupByNo(returnDue()).length;
+// 도착 희망일이 지났는데 아직 ‘배송 중’인 배송
+const arriveDue = () => shipments.filter(x => x.direction === "outbound" && x.status === "in_transit" && x.requested_date && x.requested_date < todayStr())
+  .filter(x => loans.some(l => l.loan_no === x.loan_no && l.status !== "cancelled"));
+const checkCount = () => groupByNo(checkoutDue()).length + groupByNo(returnDue()).length + arriveDue().length;
 // 반납 확인 대기: 신청번호별 묶음. 머리에 [반납 확인 N대] (여러 대면 한 번에 확인하는 창이 열림)
 function returnCheckGroups(list) {
   return groupByNo(list).sort((a, b) => (a[0].returned_at || "").localeCompare(b[0].returned_at || "")).map(g => { const l = g[0], ri = reqInfo(l);
@@ -1180,6 +1184,10 @@ function vCheck() {
   ${n ? "" : `<div class="panel"><div class="empty">지금 확인할 건이 없어요.</div></div>`}
   <div class="grid2">
     <div class="panel"><h3>출고 대기 <span class="grp-n">${groupByNo(co).length}건</span></h3><div class="list">${co.length ? homeCheckoutGroups(co) : `<div class="empty">출고할 예약이 없어요.</div>`}</div></div>
+    ${arriveDue().length ? `<div class="panel"><h3>도착 확인 대기 <span class="grp-n">${arriveDue().length}건</span></h3><p class="meta" style="margin:0 0 6px">도착 희망일이 지났는데 아직 ‘배송 중’이에요. 받았는지 신청자에게 확인하고 [도착 처리]를 눌러 주세요.</p><div class="list">${arriveDue().map(x => { const l = loans.find(y => y.loan_no === x.loan_no && y.status !== "cancelled") || {};
+      return `<div class="hg"><div class="hg-h"><div class="main"><b class="hg-who">${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose || "")}</b>
+        <div class="meta"><span class="mono">${esc(x.loan_no)}</span> · 도착 희망 ${fmtD(x.requested_date)} · <span class="pill p-warn">${daysBetween(x.requested_date, todayStr())}일 지남</span>${x.address ? ` · ${esc(x.address)}` : ""}</div></div>
+        <button class="btn sm pri" data-act="shipArrive" data-sid="${x.id}">도착 처리</button></div></div>`; }).join("")}</div></div>` : ""}
     <div class="panel"><h3>반납 확인 대기 <span class="grp-n">${groupByNo(rt).length}건</span></h3><div class="list">${rt.length ? returnCheckGroups(rt) : `<div class="empty">확인을 기다리는 반납이 없어요.</div>`}</div></div>
   </div>`;
 }
@@ -1893,6 +1901,9 @@ function vMine() {
       ${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)} ${actions(l)}</div>`; };
   return `
   <div class="head"><div class="grow"><h2>내 신청</h2><p class="sub">반납을 누르면 반납 방법과 장비 상태를 적는 반납 신청서가 열려요. 장비 관리자가 점검하면 반납이 완료돼요.</p></div></div>
+  ${(() => { const coming = shipments.filter(x => x.direction === "outbound" && x.status === "in_transit" && loans.some(l => l.loan_no === x.loan_no && l.requester_id === me.id && l.status !== "cancelled"));
+    return coming.length ? `<div class="panel"><h3>배송 중 ${coming.length}건</h3><p class="meta" style="margin:0 0 6px">장비를 받았으면 [도착 확인]을 눌러 주세요. 장비 관리자에게 알림이 가요.</p><div class="list">${coming.map(x => { const l = loans.find(y => y.loan_no === x.loan_no && y.status !== "cancelled") || {};
+      return `<div class="row"><div class="main"><b>${esc(l.customer || l.purpose || "")}</b><div class="meta"><span class="mono">${esc(x.loan_no)}</span> · 도착 희망 ${fmtD(x.requested_date) || "–"}${x.address ? ` · ${esc(x.address)}` : ""}</div></div><button class="btn sm pri" data-act="shipArrive" data-sid="${x.id}">도착 확인</button></div>`; }).join("")}</div></div>` : ""; })()}
   <div class="panel"><h3>진행 중 ${open.length}건</h3><div class="list">${open.map(line).join("") || `<div class="empty">진행 중인 신청이 없어요. ‘데모 신청’에서 장비를 빌려 보세요.</div>`}</div></div>
   <div class="panel"><h3>지난 신청</h3><div class="list">${past.map(line).join("") || `<div class="empty">지난 신청이 없어요.</div>`}</div></div>`;
 }
@@ -1938,7 +1949,7 @@ function vShip() {
         : `<div class="meta">${o.id ? "수령" : "회수 담당"} ${esc(c.recipient)} · ${esc(c.phone)} · ${esc(c.address)}</div>`}
       ${o.id ? `<div class="row"><div class="main"><b>출고 배송</b><div class="meta">도착 희망 ${fmtD(o.requested_date)}${trackTxt(o)}</div></div>
         ${me.isAdmin ? `<button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="outbound">물류 요청 메시지</button>` : ""}
-        <div class="steps-line">${steps(o, OUT_STEPS, OUT_STATUS)}</div></div>` : ""}
+        <div class="steps-line">${!me.isAdmin && o.status === "in_transit" && l.requester_id === me.id ? `<button class="btn sm pri" data-act="shipArrive" data-sid="${o.id}">받았어요 · 도착 확인</button>` : ""}${steps(o, OUT_STEPS, OUT_STATUS)}</div></div>` : ""}
       ${p ? `<div class="row"><div class="main"><b>회수</b><div class="meta">회수 희망 ${fmtD(p.requested_date)}${trackTxt(p)}</div></div>
         ${me.isAdmin ? `<button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="pickup">회수 요청 메시지</button>` : ""}
         <div class="steps-line">${["cancelled", "scheduled"].includes(p.status) ? pill(PICK_STATUS, p.status) : steps(p, PICK_STEPS, PICK_STATUS)}</div></div>` : ""}
@@ -3024,6 +3035,12 @@ document.addEventListener("click", e => {
       async () => { await must(sb.from("loans").update({ status: "cancelled" }).eq("id", l.id)); toast("예약을 취소했어요."); }, true); break;
     case "mail": mail(a.dataset.no, a.dataset.dir); break;
     case "shipEdit": shipEdit(a.dataset.sid); break;
+    case "shipArrive": {
+      const sh = shipments.find(x => x.id === a.dataset.sid); if (!sh) break;
+      confirmBox("도착 확인", `<span class="mono">${esc(sh.loan_no)}</span> 배송을 ‘도착’으로 바꿔요. 장비를 받았는지 확인해 주세요.`, "도착 확인",
+        async () => { await must(sb.rpc("confirm_delivery", { p_shipment_id: sh.id })); toast("도착을 확인했어요."); });
+      break;
+    }
     case "shipStep": {
       if (!me.isAdmin) break;
       const sh = shipments.find(x => x.id === a.dataset.sid); if (!sh || sh.status === a.dataset.st) break;
