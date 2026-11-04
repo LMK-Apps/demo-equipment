@@ -129,6 +129,9 @@ h3{font-size:14px;margin:0;font-weight:600}
 .lg-eqs{padding-left:26px;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;font-size:13px;font-weight:600}
 .lg-tag{font-family:var(--mono);font-size:11.5px;padding:1px 6px;border-radius:5px;background:var(--accent-soft);color:var(--accent)}
 .lg-h1 .btn{flex:none}
+.lg-grp.lg-later{border:1.5px dashed color-mix(in srgb,var(--accent) 45%,var(--line))}
+.lg-toggle{font-size:12.5px;font-weight:600;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));background:var(--surface);border-radius:6px;padding:4px 10px;white-space:nowrap}.lg-later>.lg-h .hg-who{color:var(--muted)}.lg-later.open>.lg-h .hg-who{color:var(--fg)}
+.lg-later-b{padding:12px;background:var(--sunk)}
 .lg-more{font:inherit;font-size:13px;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:var(--r);padding:10px 14px;margin-top:12px;width:100%;text-align:left;cursor:pointer;display:flex;gap:6px;align-items:center}
 .lg-more[aria-expanded="true"] .grp-arrow{transform:rotate(90deg)}
 .lg-more+.lg-list{margin-top:12px}
@@ -505,6 +508,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.095", date: "2026-11-04", items: ["[출납 대장] 출고 예정의 ‘그 이후’ 접기 줄을 신청 묶음과 같은 카드 모양으로 바꿈: ▸ 표시, ‘8일 뒤 출고 예정 N건’ 제목, 출고일 범위·신청자, 오른쪽 [펼쳐 보기 ▼] 버튼. 펼치면 카드 안에 들여서 보여 줌"] },
   { v: "v0.094", date: "2026-11-04", items: ["[출납 대장] 상태 버튼: ‘모아 보기’ 줄에서 전체를 맨 앞으로, ‘단계별’ 줄 맨 앞에도 전체 추가"] },
   { v: "v0.093", date: "2026-11-04", items: ["[출납 대장] 상태 버튼을 두 줄로 정리: ‘모아 보기’(진행 중·연체·전체)와 ‘단계별’(출고 예정 → 대여 중 → 반납 확인 대기 → 반납 완료, 취소). 숫자에 ‘건’ 표시, 고른 보기의 뜻을 아래 한 줄로 설명", "‘나가 있음’을 ‘대여 중’으로, ‘반납 확인 중’을 ‘반납 확인 대기’로 이름 통일", "‘배송 건만’을 ‘물류 건만’으로 바꾸고, 관리자 전용 화면이라 ‘내 신청만’은 뺌", "묶음 상태 배지: 단계 버튼과 같은 이름 사용. 상태가 섞이면 ‘대여 중 2대 · 출고 예정 1대’처럼 대수 표시, 한 상태면 이름만"] },
   { v: "v0.092", date: "2026-11-04", items: ["[출납 대장] 머리 줄을 ‘신청자 · 고객사’ 중심으로 바꾸고 신청번호는 아랫줄에 작게", "펼치지 않아도 장비가 보임: 1대면 이름, 여러 대면 라벨 4개까지와 ‘외 N’", "출고 예정은 7일 안만 펼치고, 그 이후는 ‘그 이후 N건 펼치기’로 접어 둠", "상태 배지는 상태가 섞인 묶음에만 표시(구역 제목과 중복 제거). 연체는 날짜 배지(빨강)로 표시", "장비 관리자: 머리 줄에 [출고 처리 N대]·[반납 확인 N대] 버튼. 펼치지 않고 바로 처리", "검색 옆에 ‘내 신청만’·‘배송 건만’ 체크 추가", "폰: 머리 줄에는 날짜 배지만 남기고 나머지 배지는 숨김"] },
@@ -1995,7 +1999,13 @@ function vLedger() {
       const soon = gs.filter(g => minOf(g, "start_date", "reserved") <= wk), later = gs.filter(g => minOf(g, "start_date", "reserved") > wk);
       return `<div class="lg-block"><h3 class="lg-sec">${title} <span class="grp-n">${gs.length}건</span> <span class="meta">${sub} · 7일 안 ${soon.length}건</span></h3>
         <div class="lg-list">${soon.map(grp).join("") || `<div class="list2"><div class="empty">7일 안에 출고할 예약이 없어요.</div></div>`}</div>
-        ${later.length ? `<button type="button" class="lg-more" data-act="lgLater" aria-expanded="${filters.lgLater}"><span class="grp-arrow" aria-hidden="true">▸</span> 그 이후 ${later.length}건 ${filters.lgLater ? "접기" : "펼치기"}</button>${filters.lgLater ? `<div class="lg-list">${later.map(grp).join("")}</div>` : ""}` : ""}</div>`; }).join(""); })()}`;
+        ${later.length ? (() => { const ds = later.map(g => minOf(g, "start_date", "reserved")).sort(), who = [...new Set(later.map(g => nameOf(g[0].requester_id)))];
+          // 신청 묶음과 같은 카드 모양으로 접어 둔다 (펼치기 단서: ▸, 건수, 큰 제목, 오른쪽 버튼)
+          return `<div class="lg-grp lg-later${filters.lgLater ? " open" : ""}"><div class="lg-h${filters.lgLater ? " open" : ""}" data-act="lgLater" role="button" aria-expanded="${filters.lgLater}">
+            <div class="lg-h1"><span class="grp-arrow" aria-hidden="true">▸</span><b class="hg-who">8일 뒤 출고 예정</b><span class="grp-n">${later.length}건</span>
+              <span class="lg-st"><span class="lg-toggle">${filters.lgLater ? "접기 ▲" : "펼쳐 보기 ▼"}</span></span></div>
+            <div class="r2-l2 lg-h2"><span class="mono">${fmtD(ds[0])}–${fmtD(ds[ds.length - 1])} 출고</span><span>${esc(who.slice(0, 4).join(", "))}${who.length > 4 ? ` 외 ${who.length - 4}명` : ""}</span></div></div>
+            ${filters.lgLater ? `<div class="lg-later-b"><div class="lg-list">${later.map(grp).join("")}</div></div>` : ""}</div>`; })() : ""}</div>`; }).join(""); })()}`;
 }
 
 function nameForm(p, approve) {
