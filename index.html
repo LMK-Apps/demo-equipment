@@ -126,7 +126,15 @@ h3{font-size:14px;margin:0;font-weight:600}
 .cat-chip.bad{background:var(--bad-soft);color:var(--bad)}
 .cat-chip.bad[aria-pressed="true"]{background:var(--bad);color:#fff}
 .lg-list{display:flex;flex-direction:column;gap:12px}
-.lg-sec{margin:22px 0 10px;font-size:15px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.lg-sec .meta{font-weight:400}
+.lg-eqs{padding-left:26px;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;font-size:13px;font-weight:600}
+.lg-tag{font-family:var(--mono);font-size:11.5px;padding:1px 6px;border-radius:5px;background:var(--accent-soft);color:var(--accent)}
+.lg-h1 .btn{flex:none}
+.lg-more{font:inherit;font-size:13px;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:var(--r);padding:10px 14px;margin-top:12px;width:100%;text-align:left;cursor:pointer;display:flex;gap:6px;align-items:center}
+.lg-more[aria-expanded="true"] .grp-arrow{transform:rotate(90deg)}
+.lg-more+.lg-list{margin-top:12px}
+@media (max-width:640px){ .lg-st .pill:not(.when){display:none} .lg-h1 .hg-who{font-size:14.5px} }
+.lg-block{display:flex;flex-direction:column;gap:10px;margin-top:8px}.lg-block .lg-more{margin-top:2px}.lg-block .lg-more+.lg-list{margin-top:0}
+.lg-sec{margin:0;font-size:15px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.lg-sec .meta{font-weight:400}
 .hg{border-top:1px solid var(--line);padding:10px 0}
 .list>.hg:first-child{border-top:0;padding-top:2px}
 .hg-h{display:flex;gap:10px;align-items:center}
@@ -493,6 +501,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.092", date: "2026-11-04", items: ["[출납 대장] 머리 줄을 ‘신청자 · 고객사’ 중심으로 바꾸고 신청번호는 아랫줄에 작게", "펼치지 않아도 장비가 보임: 1대면 이름, 여러 대면 라벨 4개까지와 ‘외 N’", "출고 예정은 7일 안만 펼치고, 그 이후는 ‘그 이후 N건 펼치기’로 접어 둠", "상태 배지는 상태가 섞인 묶음에만 표시(구역 제목과 중복 제거). 연체는 날짜 배지(빨강)로 표시", "장비 관리자: 머리 줄에 [출고 처리 N대]·[반납 확인 N대] 버튼. 펼치지 않고 바로 처리", "검색 옆에 ‘내 신청만’·‘배송 건만’ 체크 추가", "폰: 머리 줄에는 날짜 배지만 남기고 나머지 배지는 숨김"] },
   { v: "v0.091", date: "2026-11-04", items: ["[출납 대장] 기본 보기 ‘진행 중’을 세 구역으로 나눔: 지금 나가 있음(반납일 가까운 순) → 반납 확인 대기 → 출고 예정(출고일 가까운 순). 상태 버튼에 ‘나가 있음’·‘출고 예정’ 추가 (전에는 ‘대여 중’에 예약까지 섞여 있었음)", "신청 묶음 머리에 날짜 배지: 나가 있으면 ‘반납 D-3·내일 반납·반납일 2일 지남’, 예정이면 ‘출고 D-5·오늘 출고’. 가까울수록 주황·지나면 빨강"] },
   { v: "v0.090", date: "2026-11-04", items: ["배차 요청 메일 물품 목록: 라벨을 [ ]로 감싸 장비 이름과 구분 (예: [RA1] Resusci Anne QCPR)"] },
   { v: "v0.089", date: "2026-11-04", db: "025_shipment_dispatch.sql", items: ["배송 건 출고: 출고 창에 차량 정보·출고자 확인 칸이 나오고, 출고하면 [물류]의 진행 단계가 ‘배송 중’으로 자동으로 바뀜", "[물류] ‘배차 정보’ 창 추가 (장비 관리자): 출발 시간, 사무실(출발지·입고지)과 담당자·연락처, 도착 시간, 추가 물품(배너·테이블보 등), 차량 정보, 출고·입고자 확인, 물류사·운송장. 빈 칸은 가장 최근 배차의 사무실·담당자·확인자로 미리 채움", "장비 관리자: 머리 줄 [사용자 화면으로 보기]로 신청자 화면을 미리 볼 수 있음. 다시 누르면 관리자 화면. 이 탭에서만 유지됨", "배송·회수 요청 메일을 화물 배차 양식으로 바꿈 (출발시간·출발지·담당자·도착시간·도착지·물품(라벨)·차량정보·출(입)고자 확인). 비어 있는 항목은 ‘(입력 필요)’로 표시"] },
@@ -922,7 +931,7 @@ function groupByModel(list) {
   return [...m.entries()].map(([k, items]) => ({ k, items }));
 }
 let eqSel = null;   // 장비 여러 대 선택 모드 (관리자). null이면 꺼짐
-let filters = { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", eqX: "", ledgerQ: "", ledgerSt: "open" };
+let filters = { eqQ: "", eqCat: "", eqLoc: "", eqSt: "", eqX: "", ledgerQ: "", ledgerSt: "open", lgMine: false, lgShip: false, lgLater: false };
 // 기본 사용 기간: 3일 (시작일 포함, 시작일 + 2일). 반납 예정일을 직접 고르면 그 값을 유지한다
 const DEFAULT_DAYS = 3;
 const defaultDue = start => addDays(start, DEFAULT_DAYS - 1);
@@ -1896,7 +1905,7 @@ function vLedger() {
   const stDef = LEDGER_ST.find(x => x[0] === st) || LEDGER_ST.find(x => x[0] === "open");   // 기본은 대여 중
   const matchQ = l => { const e = eqById(l.equipment_id) || {};
     return !q || `${l.loan_no} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.model || ""} ${l.customer} ${nameOf(l.requester_id)} ${reqInfo(l)}`.toLowerCase().includes(q); };
-  const searched = loans.filter(matchQ);
+  const searched = loans.filter(l => matchQ(l) && (!filters.lgMine || l.requester_id === me.id) && (!filters.lgShip || l.delivery));
   const nGroups = test => new Set(searched.filter(test).map(l => l.loan_no)).size;
   const list = searched.filter(stDef[2]);
   // 대여번호(신청번호)별로 묶는다. 최근 시작한 신청이 위로.
@@ -1914,8 +1923,8 @@ function vLedger() {
   // 머리 줄의 날짜 배지: 나가 있으면 반납까지, 예정이면 출고까지 남은 날
   const dday = (d, word) => { const n = daysBetween(t, d); return n === 0 ? `오늘 ${word}` : n === 1 ? `내일 ${word}` : n > 0 ? `${word} D-${n}` : `${word}일 ${-n}일 지남`; };
   const whenPill = g => { const ph = phase(g);
-    if (ph === "out") { const d = minOf(g, "due_date", "out"), n = daysBetween(t, d); return `<span class="pill ${n < 0 ? "p-bad" : n <= 1 ? "p-warn" : "p-info"}">${dday(d, "반납")}</span>`; }
-    if (ph === "reserved") { const d = minOf(g, "start_date", "reserved"), n = daysBetween(t, d); return `<span class="pill ${n < 0 ? "p-bad" : n <= 1 ? "p-warn" : "p-ok"}">${dday(d, "출고")}</span>`; }
+    if (ph === "out") { const d = minOf(g, "due_date", "out"), n = daysBetween(t, d); return `<span class="pill when ${n < 0 ? "p-bad" : n <= 1 ? "p-warn" : "p-info"}">${dday(d, "반납")}</span>`; }
+    if (ph === "reserved") { const d = minOf(g, "start_date", "reserved"), n = daysBetween(t, d); return `<span class="pill when ${n < 0 ? "p-bad" : n <= 1 ? "p-warn" : "p-ok"}">${dday(d, "출고")}</span>`; }
     return ""; };
   const act = l => {
     if (!me.isAdmin) return "";
@@ -1934,30 +1943,45 @@ function vLedger() {
       </div>
       <div class="r2-side">${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}${act(l)}</div></div>`; };
   const head = g => { const l = g[0], ri = reqInfo(l), o = shipOf(l.loan_no, "outbound");
-    const all = loans.filter(x => x.loan_no === l.loan_no && x.status !== "cancelled");
+    const all = loans.filter(x => x.loan_no === l.loan_no && x.status !== "cancelled").sort(loanEqCmp);
     const counts = Object.keys(LOAN_STATUS).map(k => [k, all.filter(x => x.status === k).length]).filter(([, n]) => n);
     const late = all.filter(isOverdue).length, co = all.map(x => x.checkout_at).filter(Boolean).sort()[0];
     const end = all.reduce((m, x) => x.due_date > m ? x.due_date : m, l.due_date);
-    const checking = all.filter(x => x.status === "checking");
+    const checking = all.filter(x => x.status === "checking"), reserved = all.filter(x => x.status === "reserved");
     const open = lgOpen.has(l.loan_no) || !!q;
+    // 상태 배지는 상태가 섞였거나 구역 없이 볼 때만 (구역 제목과 겹치지 않게)
+    const stPills = counts.length > 1 || !sectioned ? counts.map(([k, n]) => `<span class="pill ${LOAN_STATUS[k][1]}">${esc(LOAN_STATUS[k][0])} ${n}</span>`).join("") : "";
+    // 펼치지 않아도 무엇이 나갔는지 보이게: 1대면 이름, 여러 대면 라벨 몇 개
+    const eqs = (all.length ? all : g).map(x => eqById(x.equipment_id) || {});
+    const eqLine = eqs.length === 1 ? `${frontTag(eqs[0])} ${esc(eqs[0].name || "")}` : `${eqs.slice(0, 4).map(e => `<span class="lg-tag">${esc(e.label || e.name || "")}</span>`).join("")}${eqs.length > 4 ? `<span class="meta">외 ${eqs.length - 4}</span>` : ""}`;
+    const btns = !me.isAdmin ? "" : `${reserved.length ? (reserved.length > 1 ? `<button class="btn sm pri" data-act="checkoutAll" data-no="${esc(l.loan_no)}">출고 처리 ${reserved.length}대</button>` : `<button class="btn sm pri" data-act="checkout" data-id="${reserved[0].id}">출고 처리</button>`) : ""}${checking.length ? `<button class="btn sm pri" data-act="inspect" data-id="${checking[0].id}">반납 확인${checking.length > 1 ? ` ${checking.length}대` : ""}</button>` : ""}`;
     return `<div class="lg-h${late ? " late" : ""}${open ? " open" : ""}" data-act="lgGrp" data-k="${esc(l.loan_no)}" role="button" aria-expanded="${open}">
-      <div class="lg-h1"><span class="grp-arrow" aria-hidden="true">▸</span><b class="mono">${esc(l.loan_no)}</b><span>${esc(nameOf(l.requester_id))}${ri ? ` <span class="meta">(${esc(ri)})</span>` : ""}</span><span class="grp-n">장비 ${all.length || g.length}대</span>
-        <span class="lg-st">${whenPill(all)}${late ? `<span class="pill p-bad">연체 ${late}</span>` : ""}${counts.map(([k, n]) => `<span class="pill ${LOAN_STATUS[k][1]}">${esc(LOAN_STATUS[k][0])} ${n}</span>`).join("")}</span>
-        ${me.isAdmin && checking.length > 1 ? `<button class="btn sm pri" data-act="inspect" data-id="${checking[0].id}">반납 확인 ${checking.length}대</button>` : ""}</div>
-      <div class="r2-l2 lg-h2"><span>${esc(purposeText(l))}${l.customer ? ` · ${esc(l.customer)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div></div>`; };
+      <div class="lg-h1"><span class="grp-arrow" aria-hidden="true">▸</span><b class="hg-who">${esc(nameOf(l.requester_id))} · ${esc(l.customer || purposeText(l))}</b><span class="grp-n">장비 ${all.length || g.length}대</span>
+        <span class="lg-st">${whenPill(all)}${stPills}</span>${btns}</div>
+      <div class="lg-eqs">${eqLine}</div>
+      <div class="r2-l2 lg-h2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(purposeText(l))}${ri ? ` · ${esc(ri)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div></div>`; };
   return `
   <div class="head"><div class="grow"><h2>출납 대장</h2><p class="sub">대여번호(신청번호)별로 묶어서 보여 줘요. 번호 줄을 누르면 장비 목록이 펼쳐지고, 장비 줄을 누르면 자세히 볼 수 있어요.${me.isAdmin ? "" : " 출고·점검은 장비 관리자만 할 수 있어요."}</p></div>
     <button class="btn" data-act="csv">CSV 내보내기</button></div>
   <div class="toolbar">
     <input id="lgQ" type="search" placeholder="신청번호·장비·고객사·신청자 검색" value="${esc(filters.ledgerQ)}" style="flex:1;min-width:200px">
+    <label class="check"><input type="checkbox" id="lgMine" ${filters.lgMine ? "checked" : ""}> 내 신청만</label>
+    <label class="check"><input type="checkbox" id="lgShip" ${filters.lgShip ? "checked" : ""}> 배송 건만</label>
   </div>
   <div class="cat-chips" role="group" aria-label="상태">${LEDGER_ST.map(([k, t, f]) => `<button type="button" class="cat-chip${k === "overdue" && nGroups(f) ? " bad" : ""}" data-act="lgSt" data-v="${k}" aria-pressed="${stDef[0] === k}">${t}<span class="n">${nGroups(f)}</span></button>`).join("")}</div>
   <p class="meta" style="margin:-4px 0 0">${groups.length}건 · 장비 ${list.length}대</p>
   ${(() => { const grp = g => `<div class="lg-grp">${head(g)}${lgOpen.has(g[0].loan_no) || q ? `<div class="lg-items">${g.map(item).join("")}</div>` : ""}</div>`;
     if (!groups.length) return `<div class="lg-list"><div class="list2"><div class="empty">조건에 맞는 기록이 없어요.</div></div></div>`;
     if (!sectioned) return `<div class="lg-list">${groups.map(grp).join("")}</div>`;
+    const wk = addDays(t, 7);
     return SECTIONS.map(([k, title, sub, cmp]) => { const gs = groups.filter(g => phase(loans.filter(x => x.loan_no === g[0].loan_no && x.status !== "cancelled")) === k).sort(cmp);
-      return gs.length ? `<h3 class="lg-sec">${title} <span class="grp-n">${gs.length}건</span> <span class="meta">${sub}</span></h3><div class="lg-list">${gs.map(grp).join("")}</div>` : ""; }).join(""); })()}`;
+      if (!gs.length) return "";
+      if (k !== "reserved") return `<div class="lg-block"><h3 class="lg-sec">${title} <span class="grp-n">${gs.length}건</span> <span class="meta">${sub}</span></h3><div class="lg-list">${gs.map(grp).join("")}</div></div>`;
+      // 출고 예정: 7일 안은 펼치고, 그 뒤는 접어 둔다
+      const soon = gs.filter(g => minOf(g, "start_date", "reserved") <= wk), later = gs.filter(g => minOf(g, "start_date", "reserved") > wk);
+      return `<div class="lg-block"><h3 class="lg-sec">${title} <span class="grp-n">${gs.length}건</span> <span class="meta">${sub} · 7일 안 ${soon.length}건</span></h3>
+        <div class="lg-list">${soon.map(grp).join("") || `<div class="list2"><div class="empty">7일 안에 출고할 예약이 없어요.</div></div>`}</div>
+        ${later.length ? `<button type="button" class="lg-more" data-act="lgLater" aria-expanded="${filters.lgLater}"><span class="grp-arrow" aria-hidden="true">▸</span> 그 이후 ${later.length}건 ${filters.lgLater ? "접기" : "펼치기"}</button>${filters.lgLater ? `<div class="lg-list">${later.map(grp).join("")}</div>` : ""}` : ""}</div>`; }).join(""); })()}`;
 }
 
 function nameForm(p, approve) {
@@ -2880,6 +2904,7 @@ document.addEventListener("click", e => {
     case "eqLabels": if (eqSel && eqSel.size) labelForm([...eqSel]); break;
     case "scanQR": scanQR(); break;
     case "lgSt": filters.ledgerSt = a.dataset.v; render(); break;
+    case "lgLater": filters.lgLater = !filters.lgLater; render(); break;
     case "lgGrp": lgOpen.has(a.dataset.k) ? lgOpen.delete(a.dataset.k) : lgOpen.add(a.dataset.k); render(); break;
     case "catChip": {
       const v = a.dataset.v;
@@ -2948,6 +2973,7 @@ document.addEventListener("input", e => {
   }
 });
 document.addEventListener("change", e => {
+  if (e.target.id === "lgMine" || e.target.id === "lgShip") { filters[e.target.id] = e.target.checked; render(); return; }
   const ex = e.target.dataset?.ext;
   if (ex) { const n = $("#" + ex); if (!n) return; if (e.target.value === "__etc") { if (EXT_ORGS.includes(n.value)) n.value = ""; n.hidden = false; n.focus(); } else { n.value = e.target.value; n.hidden = true; } return; }
   const id = e.target.id;
