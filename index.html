@@ -509,6 +509,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.100", date: "2026-11-04", items: ["[물류] 카드 머리: 신청번호 대신 ‘신청자 · 고객사·기관’을 크게 보여 주고, 신청번호와 대여 기간은 아랫줄에 작게"] },
   { v: "v0.099", date: "2026-11-04", items: ["배차 정보: 출발·도착을 글자 입력 대신 날짜 + 시간 선택(오전·오후·오전 8시~오후 7시)으로 고름. 기본 날짜는 도착(회수) 희망일. 시간을 안 고르면 메시지에 ‘(시간 입력 필요)’로 표시"] },
   { v: "v0.098", date: "2026-11-04", items: ["데모 신청 배송: 도착 희망일은 사용 시작일, 회수 희망일은 반납 예정일과 같게 기본값을 맞추고 대여 기간을 바꾸면 함께 바뀜 (전에는 처음 연 날짜에 머물렀고, 회수는 반납 다음 날이었음). 물류 날짜를 직접 바꾸면 그 값은 유지"] },
   { v: "v0.097", date: "2026-11-04", db: "026_shipment_info_later.sql", items: ["데모 신청: 외부 물류 배송을 고르고 ‘수령인·주소는 아직 몰라요. 나중에 입력할게요’를 켜면 수령인·연락처·주소·도착 희망일 없이 신청 가능. 아는 칸만 채워도 됨", "나중에 넣는 곳: 신청자는 [내 신청] 예약 수정(출고 전, 물류 요청 전), 장비 관리자는 [물류] 배차 정보 창(수령인·연락처·주소·희망일 칸 추가)", "정보가 빈 배송 건은 [물류]·[출납 대장]·[현황]·[출입고 확인]·신청 상세에 ‘정보 입력 전’ 표시. 출고 창에도 경고"] },
@@ -1899,7 +1900,8 @@ function vShip() {
   const card = g => {
     const l = g[0], o = shipOf(l.loan_no, "outbound") || {}, p = shipOf(l.loan_no, "pickup"), c = o.id ? o : (p || {});
     return `<div class="panel">
-      <div class="head"><div class="grow"><h3><span class="mono">${esc(l.loan_no)}</span> · ${esc(l.customer || l.purpose)}</h3>
+      <div class="head"><div class="grow"><h3 class="hg-who">${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)}</h3>
+        <div class="meta"><span class="mono">${esc(l.loan_no)}</span> · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</div>
         <div class="meta">${g.map(x => `${esc(eqById(x.equipment_id)?.name)} ${eqParen(eqById(x.equipment_id))}`).join(", ")}</div></div>
         ${[...new Set(g.map(x => x.status))].map(k => pill(LOAN_STATUS, k)).join(" ")}</div>
       ${shipMissing(o) ? `<div class="notice">배송 정보(수령인·연락처·주소·도착 희망일)가 아직 없어요.${me.isAdmin ? ` <button class="linkbtn" data-act="shipEdit" data-sid="${o.id}">지금 입력</button>` : canEditRes(l) ? ` <button class="linkbtn" data-act="editRes" data-id="${l.id}">예약 수정에서 입력</button>` : " 장비 관리자에게 알려 주세요."}</div>`
