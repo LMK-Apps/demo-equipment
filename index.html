@@ -508,6 +508,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.098", date: "2026-11-04", items: ["데모 신청 배송: 도착 희망일은 사용 시작일, 회수 희망일은 반납 예정일과 같게 기본값을 맞추고 대여 기간을 바꾸면 함께 바뀜 (전에는 처음 연 날짜에 머물렀고, 회수는 반납 다음 날이었음). 물류 날짜를 직접 바꾸면 그 값은 유지"] },
   { v: "v0.097", date: "2026-11-04", db: "026_shipment_info_later.sql", items: ["데모 신청: 외부 물류 배송을 고르고 ‘수령인·주소는 아직 몰라요. 나중에 입력할게요’를 켜면 수령인·연락처·주소·도착 희망일 없이 신청 가능. 아는 칸만 채워도 됨", "나중에 넣는 곳: 신청자는 [내 신청] 예약 수정(출고 전, 물류 요청 전), 장비 관리자는 [물류] 배차 정보 창(수령인·연락처·주소·희망일 칸 추가)", "정보가 빈 배송 건은 [물류]·[출납 대장]·[현황]·[출입고 확인]·신청 상세에 ‘정보 입력 전’ 표시. 출고 창에도 경고"] },
   { v: "v0.096", date: "2026-11-04", items: ["‘요청 메일’을 ‘물류 요청 메시지’(회수는 ‘회수 요청 메시지’)로, [문안 복사]를 [메시지 복사]로 이름 변경. 메시지 첫 줄의 ‘제목:’을 빼서 문자·메신저에도 그대로 붙여 넣을 수 있게 함", "물류 요청 메시지 버튼은 장비 관리자에게만 보임. 신청자 화면의 [물류] 안내도 ‘물류 요청과 배차 정보 입력은 장비 관리자가 해요’로 바꿈"] },
   { v: "v0.095", date: "2026-11-04", items: ["[출납 대장] 출고 예정의 ‘그 이후’ 접기 줄을 신청 묶음과 같은 카드 모양으로 바꿈: ▸ 표시, ‘8일 뒤 출고 예정 N건’ 제목, 출고일 범위·신청자, 오른쪽 [펼쳐 보기 ▼] 버튼. 펼치면 카드 안에 들여서 보여 줌"] },
@@ -1653,7 +1654,8 @@ function editReservation(l) {
   if (!canEditRes(l)) return toast("이미 출고된 장비가 있어서 예약을 고칠 수 없어요.");
   const rows = resRows(l.loan_no), out = shipOf(l.loan_no, "outbound"), pk = shipOf(l.loan_no, "pickup");
   draft = { start: l.start_date, due: l.due_date, dueSet: true, picks: new Set(rows.map(x => x.equipment_id)), edit: l.loan_no, owner: l.requester_id,
-    own: new Set(rows.map(x => x.equipment_id)), shipLocked: !!out && out.status !== "pending" };
+    own: new Set(rows.map(x => x.equipment_id)), shipLocked: !!out && out.status !== "pending",
+    sDateSet: !!out?.requested_date && out.requested_date !== l.start_date, sPickSet: !!(pk && pk.status === "scheduled" && pk.requested_date !== l.due_date) };
   closeModal(); go("request");
   restoreReqFields({ rPurpose: l.purpose, rEtc: splitNote(l.note).etc, rCustomer: l.customer || "", rInternal: l.internal_requester || "", rExternal: l.external_requester || "", rNote: splitNote(l.note).memo,
     rDelivery: !!out, rShipLater: shipMissing(out), sName: out?.recipient || "", sPhone: out?.phone || "", sAddr: out?.address || "", sDate: out?.requested_date || l.start_date,
@@ -1792,7 +1794,8 @@ function vRequest() {
           <label class="f req"><span>연락처</span><input id="sPhone" inputmode="tel" placeholder="010-0000-0000"></label>
           <label class="f req wide"><span>배송지 주소</span><input id="sAddr"></label>
           <label class="f req"><span>도착 희망일</span><input type="date" id="sDate" value="${esc(start)}"></label>
-          <label class="f"><span>회수 희망일</span><input type="date" id="sPick" value="${esc(addDays(due || start, 1))}"></label>
+          <label class="f"><span>회수 희망일</span><input type="date" id="sPick" value="${esc(due || start)}"></label>
+          <p class="meta wide" style="margin:-4px 0 0">도착 희망일은 사용 시작일, 회수 희망일은 반납 예정일과 같게 맞춰져요. 물류 일정이 다르면 직접 바꿔 주세요.</p>
           <label class="f wide"><span>배송 메모</span><textarea id="sMemo" placeholder="하차 위치, 엘리베이터 유무, 설치 필요 여부 등"></textarea></label>
         </div>
       </div>
@@ -3027,8 +3030,10 @@ document.addEventListener("change", e => {
   }
   else if (e.target.dataset.pick) { e.target.checked ? draft.picks.add(e.target.dataset.pick) : draft.picks.delete(e.target.dataset.pick); updatePickCount(); paintPickGroups(); }
   else if (id === "rLoc" || id === "rAvail") { pickF[{ rLoc: "loc", rAvail: "avail" }[id]] = id === "rAvail" ? e.target.checked : e.target.value; applyPickFilter(); }
-  else if (id === "rDelivery") { $("#shipBox").hidden = !e.target.checked; }
+  else if (id === "rDelivery") { $("#shipBox").hidden = !e.target.checked; syncShipDates(); }
   else if (id === "rShipLater") paintShipLater();
+  else if (id === "sDate") draft.sDateSet = !!e.target.value;
+  else if (id === "sPick") draft.sPickSet = !!e.target.value;
   else if (id === "rPurpose") { paintPurpose(); if (e.target.value === "기타") $("#rEtc")?.focus(); }
   else if (id === "rOwner") { draft.owner = e.target.value; }
   else if (id === "rOut") { draft.out = e.target.checked; const keep = collectReqFields(); render(); restoreReqFields(keep); }
@@ -3036,7 +3041,9 @@ document.addEventListener("change", e => {
 document.addEventListener("submit", e => { if (e.target.id === "reqForm") { e.preventDefault(); submitRequest(); } });
 const REQ_IDS = ["rPurpose","rEtc","rCustomer","rInternal","rExternal","rNote","rDelivery","rShipLater","sName","sPhone","sAddr","sDate","sPick","sMemo"];
 function collectReqFields() { const o = {}; for (const id of REQ_IDS) { const n = $("#" + id); if (n) o[id] = n.type === "checkbox" ? n.checked : n.value; } return o; }
-function restoreReqFields(o) { for (const [id, v] of Object.entries(o)) { if (!o.rDelivery && (id === "sDate" || id === "sPick")) continue; const n = $("#" + id); if (!n) continue; if (n.type === "checkbox") n.checked = v; else n.value = v; } const d = $("#rDelivery"); if (d) $("#shipBox").hidden = !d.checked; lockShipFields();  paintPurpose(); syncExt("rExternal"); paintShipLater(); }
+function restoreReqFields(o) { for (const [id, v] of Object.entries(o)) { if (!o.rDelivery && (id === "sDate" || id === "sPick")) continue; const n = $("#" + id); if (!n) continue; if (n.type === "checkbox") n.checked = v; else n.value = v; } const d = $("#rDelivery"); if (d) $("#shipBox").hidden = !d.checked; lockShipFields();  paintPurpose(); syncExt("rExternal"); paintShipLater(); syncShipDates(); }
+// 물류 날짜 기본값은 대여 기간을 따라간다 (도착 = 사용 시작일, 회수 = 반납 예정일). 직접 바꾼 날짜는 그대로 둔다
+function syncShipDates() { const a = $("#sDate"), b = $("#sPick"); if (a && !draft.sDateSet && !a.disabled && draft.start) a.value = draft.start; if (b && !draft.sPickSet && draft.due) b.value = draft.due; }
 // ‘나중에 입력’이면 필수 표시(*)를 빼고 안내를 보여 준다
 function paintShipLater() { const c = $("#rShipLater"); if (!c) return; $("#shipLaterTip").hidden = !c.checked; $("#shipFields").querySelectorAll("label.f").forEach(l => { if (["sName","sPhone","sAddr","sDate"].includes(l.querySelector("input")?.id)) l.classList.toggle("req", !c.checked); }); }
 function paintPurpose() { const sel = $("#rPurpose"); if (!sel) return; const pd = $("#rPurposeDesc"); if (pd) pd.textContent = purposeDesc(sel.value); const w = $("#rEtcWrap"); if (w) w.hidden = sel.value !== "기타"; }
