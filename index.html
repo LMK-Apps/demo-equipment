@@ -510,6 +510,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.102", date: "2026-11-04", items: ["[통계] 신청 건수와 목적·고객사·신청자별 순위가 ‘기간 안에 시작한 신청’만 세던 것을 ‘기간 중에 진행된 신청’으로 바꿈. 지난달에 나가 이번 달까지 쓰는 신청도 이번 달에 잡힘", "평균 대여 기간·연체 비율도 ‘기간 안에 반납된 신청’ 기준으로 바꿈 (전에는 기간 안에 시작한 신청만)"] },
   { v: "v0.101", date: "2026-11-04", items: ["[출납 대장] 묶음 머리 순서 변경: 맨 위에 장비(라벨 + 이름, 2대까지·나머지는 ‘외 N대’)를 크게, 그 아래 ‘신청자 · 사용 기관’, 맨 아래 신청번호·목적·기간"] },
   { v: "v0.100", date: "2026-11-04", items: ["[물류] 카드 머리: 신청번호 대신 ‘신청자 · 고객사·기관’을 크게 보여 주고, 신청번호와 대여 기간은 아랫줄에 작게"] },
   { v: "v0.099", date: "2026-11-04", items: ["배차 정보: 출발·도착을 글자 입력 대신 날짜 + 시간 선택(오전·오후·오전 8시~오후 7시)으로 고름. 기본 날짜는 도착(회수) 희망일. 시간을 안 고르면 메시지에 ‘(시간 입력 필요)’로 표시"] },
@@ -1469,10 +1470,11 @@ function vStats() {
   const rclip = l => { const a = l.start_date > ps ? l.start_date : ps; return l.due_date >= a ? daysBetween(a, l.due_date) + 1 : 0; };
   const rsv = loans.filter(l => l.status === "reserved" && rclip(l) > 0);
   const rsvDays = rsv.reduce((n, l) => n + rclip(l), 0);
-  const started = loans.filter(l => l.status !== "cancelled" && l.start_date >= ps && (l.start_date <= t || l.status === "reserved"));
+  // 기간 중에 진행된 신청: 지난달에 시작해 이번 달까지 쓰는 신청도 넣는다. 예약은 기간 시작일 뒤에 끝나는 것
+  const started = loans.filter(l => l.status !== "cancelled" && (l.status === "reserved" ? l.due_date >= ps : l.start_date <= t && endOf(l) >= ps));
   const reqCount = new Set(started.map(l => l.loan_no)).size;
   const devDays = inP.reduce((n, l) => n + clip(l), 0);
-  const finished = used.filter(l => l.status !== "out" && l.start_date >= ps);
+  const finished = used.filter(l => l.status !== "out" && endOf(l) >= ps);   // 기간 안에 반납된 신청
   const avgLen = finished.length ? (finished.reduce((n, l) => n + daysBetween(l.start_date, endOf(l)) + 1, 0) / finished.length) : 0;
   const lateFin = finished.filter(l => endOf(l) > l.due_date).length, overdueNow = loans.filter(isOverdue).length;
   const lateRate = (finished.length + overdueNow) ? Math.round((lateFin + overdueNow) / (finished.length + overdueNow) * 100) : 0;
@@ -1495,7 +1497,7 @@ function vStats() {
   <div class="head"><div class="grow"><h2>통계</h2><p class="sub">${ps.replace(/-/g, ".")} ~ ${t.replace(/-/g, ".")} (${pDays}일). 사용 일수는 실제 출고부터 반납까지, 진행 중이면 오늘까지 세요. 예약은 기간 시작일 이후의 예정 일수를 세요(오늘 뒤 날짜 포함). 취소된 신청은 빼요.</p></div>
     <div class="seg" role="group" aria-label="기간">${[["m", "이번 달"], ["3m", "최근 3개월"], ["y", "올해"], ["all", "전체"]].map(([k, l]) => `<button data-act="statP" data-v="${k}" aria-pressed="${statP === k}">${l}</button>`).join("")}</div></div>
   <div class="stats">
-    <div class="stat"><b>${reqCount}</b><span>신청 건수</span></div>
+    <div class="stat"><b>${reqCount}</b><span>신청 건수 (기간 중 진행)</span></div>
     <div class="stat"><b>${devDays}</b><span>사용 일수 (장비·일)</span></div>
     <div class="stat"><b>${rsvDays}</b><span>예약 일수 (예정, 장비·일)</span></div>
     <div class="stat"><b>${avgLen ? avgLen.toFixed(1) : "–"}</b><span>평균 대여 기간 (일)</span></div>
