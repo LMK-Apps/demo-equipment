@@ -508,6 +508,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.097", date: "2026-11-04", db: "026_shipment_info_later.sql", items: ["데모 신청: 외부 물류 배송을 고르고 ‘수령인·주소는 아직 몰라요. 나중에 입력할게요’를 켜면 수령인·연락처·주소·도착 희망일 없이 신청 가능. 아는 칸만 채워도 됨", "나중에 넣는 곳: 신청자는 [내 신청] 예약 수정(출고 전, 물류 요청 전), 장비 관리자는 [물류] 배차 정보 창(수령인·연락처·주소·희망일 칸 추가)", "정보가 빈 배송 건은 [물류]·[출납 대장]·[현황]·[출입고 확인]·신청 상세에 ‘정보 입력 전’ 표시. 출고 창에도 경고"] },
   { v: "v0.096", date: "2026-11-04", items: ["‘요청 메일’을 ‘물류 요청 메시지’(회수는 ‘회수 요청 메시지’)로, [문안 복사]를 [메시지 복사]로 이름 변경. 메시지 첫 줄의 ‘제목:’을 빼서 문자·메신저에도 그대로 붙여 넣을 수 있게 함", "물류 요청 메시지 버튼은 장비 관리자에게만 보임. 신청자 화면의 [물류] 안내도 ‘물류 요청과 배차 정보 입력은 장비 관리자가 해요’로 바꿈"] },
   { v: "v0.095", date: "2026-11-04", items: ["[출납 대장] 출고 예정의 ‘그 이후’ 접기 줄을 신청 묶음과 같은 카드 모양으로 바꿈: ▸ 표시, ‘8일 뒤 출고 예정 N건’ 제목, 출고일 범위·신청자, 오른쪽 [펼쳐 보기 ▼] 버튼. 펼치면 카드 안에 들여서 보여 줌"] },
   { v: "v0.094", date: "2026-11-04", items: ["[출납 대장] 상태 버튼: ‘모아 보기’ 줄에서 전체를 맨 앞으로, ‘단계별’ 줄 맨 앞에도 전체 추가"] },
@@ -963,6 +964,8 @@ function extField(id, v = "") {
 }
 function syncExt(id) { const n = $("#" + id), s = $(`[data-ext="${id}"]`); if (!n || !s) return; const k = extKind(n.value.trim()); s.value = k; n.hidden = k !== "__etc"; }
 const reqInfo = l => [l.internal_requester ? `내부 ${l.internal_requester}` : "", l.external_requester ? `외부 ${l.external_requester}` : ""].filter(Boolean).join(" · ");
+// 배송 정보(수령인·연락처·주소·도착 희망일)를 아직 안 넣은 배송 건
+const shipMissing = s => !!s && s.direction === "outbound" && (!s.recipient || !s.phone || !s.address || !s.requested_date);
 const shipOf = (no, dir) => shipments.find(s => s.loan_no === no && s.direction === dir);
 
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 3200); }
@@ -1168,6 +1171,7 @@ function checkoutForm(rows, held = []) {
   modal(`<h2>출고 처리</h2><p class="meta"><span class="mono">${esc(l.loan_no)}</span> · ${esc(nameOf(l.requester_id))} · 장비 ${rows.length}대를 출고해요. 구성품을 확인했는지 봐 주세요.</p>
     <div class="list">${rows.map(x => { const e = eqById(x.equipment_id) || {}; return `<div class="row"><div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span>${compLine(e) ? `<div class="meta">구성품 ${esc(compLine(e))}</div>` : ""}</div></div>`; }).join("")}</div>
     ${held.length ? `<div class="notice">앞 신청이 끝나지 않은 ${held.length}대는 이번에 빼요: ${esc(held.map(x => eqNo(eqById(x.equipment_id)) || eqById(x.equipment_id)?.name || "").join(", "))}</div>` : ""}
+    ${o && shipMissing(o) ? `<div class="notice bad">배송 정보(수령인·연락처·주소·도착 희망일)가 아직 비어 있어요. [물류]의 배차 정보에서 먼저 넣어 주세요.</div>` : ""}
     ${o ? `<div class="notice">외부 물류 배송 건이에요. 출고하면 [물류]의 진행 단계가 ‘배송 중’으로 바뀌어요.</div>
     <div class="fields"><label class="f"><span>차량 정보</span><input id="coVeh" maxlength="120" value="${esc(od.vehicle)}" placeholder="예: 1톤 12가3456 / 기사 010-…"></label>
       <label class="f"><span>출고자 확인</span><input id="coHand" maxlength="60" value="${esc(od.handler)}"></label></div>` : ""}
@@ -1214,7 +1218,7 @@ function homeCheckoutGroups(list) {
   return groups.map(g => { const l = g[0], ri = reqInfo(l);
     return `<div class="hg">
       <div class="hg-h"><div class="main"><b class="hg-who">${esc(nameOf(l.requester_id))} · ${esc(l.customer || l.purpose)}</b> <span class="grp-n">장비 ${g.length}대</span>
-        <div class="meta"><span class="mono">${esc(l.loan_no)}</span>${l.customer ? ` · ${esc(l.purpose)}` : ""}${ri ? ` · ${esc(ri)}` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? " · 배송" : ""}</div></div>
+        <div class="meta"><span class="mono">${esc(l.loan_no)}</span>${l.customer ? ` · ${esc(l.purpose)}` : ""}${ri ? ` · ${esc(ri)}` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? ` · 배송${shipMissing(shipOf(l.loan_no, "outbound")) ? ` <span class="pill p-warn">정보 입력 전</span>` : ""}` : ""}</div></div>
         ${me.isAdmin ? (g.length > 1 ? `<button class="btn sm pri" data-act="checkoutAll" data-no="${esc(l.loan_no)}">출고 처리 ${g.length}대</button>` : `<button class="btn sm pri" data-act="checkout" data-id="${l.id}">출고 처리</button>`) : pill(LOAN_STATUS, l.status)}</div>
       <div class="hg-items">${g.map(x => { const e = eqById(x.equipment_id) || {};
         return `<div class="hg-item" data-act="loanView" data-id="${x.id}"><span class="main">${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}</span>${busyBefore(x) ? `<span class="pill p-bad">앞 건 반납 전</span>` : ""}${me.isAdmin && g.length > 1 ? `<button class="btn sm" data-act="checkout" data-id="${x.id}">출고</button>` : ""}</div>`; }).join("")}</div></div>`; }).join("");
@@ -1373,7 +1377,7 @@ function loanView(id) {
   if (adm && ["out", "checking", "done"].includes(l.status)) acts.push(btn("infoEdit", "신청 정보 수정"));
   const f = (label, val, wide) => `<div${wide ? ` class="wide"` : ""}><div class="meta">${label}</div><div>${val}</div></div>`;
   const pre = t => `<span style="white-space:pre-wrap">${esc(t)}</span>`;
-  const shipTxt = (x, map) => `${esc(map[x.status]?.[0] || x.status)} · ${esc(x.recipient || "")} ${esc(x.phone || "")} · ${esc(x.address || "")}${x.requested_date ? ` · 희망일 ${fmtD(x.requested_date)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.carrier || "")} ${esc(x.tracking_no)}</span>` : ""}`;
+  const shipTxt = (x, map) => shipMissing(x) ? `${esc(map[x.status]?.[0] || x.status)} · <span class="pill p-warn">배송 정보 입력 전</span>` : `${esc(map[x.status]?.[0] || x.status)} · ${esc(x.recipient || "")} ${esc(x.phone || "")} · ${esc(x.address || "")}${x.requested_date ? ` · 희망일 ${fmtD(x.requested_date)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.carrier || "")} ${esc(x.tracking_no)}</span>` : ""}`;
   modal(`<h2>${esc(e.name)}</h2>
     <div class="lv-sub"><span class="meta">${keyTag(e) ? keyTag(e) + " · " : ""}<span class="mono">${esc(l.loan_no)}</span></span>${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)}</div>
     <div class="lv-sec"><h3>신청</h3><div class="fields">
@@ -1652,14 +1656,14 @@ function editReservation(l) {
     own: new Set(rows.map(x => x.equipment_id)), shipLocked: !!out && out.status !== "pending" };
   closeModal(); go("request");
   restoreReqFields({ rPurpose: l.purpose, rEtc: splitNote(l.note).etc, rCustomer: l.customer || "", rInternal: l.internal_requester || "", rExternal: l.external_requester || "", rNote: splitNote(l.note).memo,
-    rDelivery: !!out, sName: out?.recipient || "", sPhone: out?.phone || "", sAddr: out?.address || "", sDate: out?.requested_date || l.start_date,
+    rDelivery: !!out, rShipLater: shipMissing(out), sName: out?.recipient || "", sPhone: out?.phone || "", sAddr: out?.address || "", sDate: out?.requested_date || l.start_date,
     sPick: pk && pk.status === "scheduled" ? pk.requested_date : "", sMemo: out?.memo || "" });
   lockShipFields();
   applyPickFilter();
 }
 function lockShipFields() {
   if (!draft.edit || !draft.shipLocked) return;
-  ["rDelivery", "sName", "sPhone", "sAddr", "sDate"].forEach(id => { const n = $("#" + id); if (n) n.disabled = true; });
+  ["rDelivery", "rShipLater", "sName", "sPhone", "sAddr", "sDate"].forEach(id => { const n = $("#" + id); if (n) n.disabled = true; });
 }
 function exitEdit() { draft = newDraft(); go("mine"); }
 
@@ -1781,7 +1785,9 @@ function vRequest() {
       <label class="check"><input type="checkbox" id="rDelivery"> 외부 물류사 배송이 필요해요</label>
       ${ed && draft.shipLocked ? `<div class="notice">물류사에 이미 배송을 요청해서 배송 정보는 여기서 바꿀 수 없어요. 바꿔야 하면 장비 관리자에게 말해 주세요.</div>` : ""}
       <div class="ship-box" id="shipBox" hidden>
-        <div class="fields">
+        <label class="check"><input type="checkbox" id="rShipLater"> 수령인·주소는 아직 몰라요. 나중에 입력할게요</label>
+        <p class="meta" id="shipLaterTip" hidden>지금은 배송 건으로만 신청해요. 출고 전에 [내 신청]의 예약 수정이나 [물류]에서 넣어 주세요. 아는 칸만 채워도 돼요.</p>
+        <div class="fields" id="shipFields">
           <label class="f req"><span>수령인</span><input id="sName"></label>
           <label class="f req"><span>연락처</span><input id="sPhone" inputmode="tel" placeholder="010-0000-0000"></label>
           <label class="f req wide"><span>배송지 주소</span><input id="sAddr"></label>
@@ -1886,7 +1892,8 @@ function vShip() {
       <div class="head"><div class="grow"><h3><span class="mono">${esc(l.loan_no)}</span> · ${esc(l.customer || l.purpose)}</h3>
         <div class="meta">${g.map(x => `${esc(eqById(x.equipment_id)?.name)} ${eqParen(eqById(x.equipment_id))}`).join(", ")}</div></div>
         ${[...new Set(g.map(x => x.status))].map(k => pill(LOAN_STATUS, k)).join(" ")}</div>
-      <div class="meta">${o.id ? "수령" : "회수 담당"} ${esc(c.recipient)} · ${esc(c.phone)} · ${esc(c.address)}</div>
+      ${shipMissing(o) ? `<div class="notice">배송 정보(수령인·연락처·주소·도착 희망일)가 아직 없어요.${me.isAdmin ? ` <button class="linkbtn" data-act="shipEdit" data-sid="${o.id}">지금 입력</button>` : canEditRes(l) ? ` <button class="linkbtn" data-act="editRes" data-id="${l.id}">예약 수정에서 입력</button>` : " 장비 관리자에게 알려 주세요."}</div>`
+        : `<div class="meta">${o.id ? "수령" : "회수 담당"} ${esc(c.recipient)} · ${esc(c.phone)} · ${esc(c.address)}</div>`}
       ${o.id ? `<div class="row"><div class="main"><b>출고 배송</b><div class="meta">도착 희망 ${fmtD(o.requested_date)}${trackTxt(o)}</div></div>
         ${me.isAdmin ? `<button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="outbound">물류 요청 메시지</button>` : ""}
         <div class="steps-line">${steps(o, OUT_STEPS, OUT_STATUS)}</div></div>` : ""}
@@ -1974,7 +1981,7 @@ function vLedger() {
       <div class="lg-h1"><span class="grp-arrow" aria-hidden="true">▸</span><b class="hg-who">${esc(nameOf(l.requester_id))} · ${esc(l.customer || purposeText(l))}</b><span class="grp-n">장비 ${all.length || g.length}대</span>
         <span class="lg-st">${whenPill(all)}${stPills}</span>${btns}</div>
       <div class="lg-eqs">${eqLine}</div>
-      <div class="r2-l2 lg-h2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(purposeText(l))}${ri ? ` · ${esc(ri)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div></div>`; };
+      <div class="r2-l2 lg-h2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(purposeText(l))}${ri ? ` · ${esc(ri)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}${shipMissing(o) ? ` <span class="pill p-warn">정보 입력 전</span>` : ""}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div></div>`; };
   return `
   <div class="head"><div class="grow"><h2>출납 대장</h2><p class="sub">대여번호(신청번호)별로 묶어서 보여 줘요. 번호 줄을 누르면 장비 목록이 펼쳐지고, 장비 줄을 누르면 자세히 볼 수 있어요.${me.isAdmin ? "" : " 출고·점검은 장비 관리자만 할 수 있어요."}</p></div>
     <button class="btn" data-act="csv">CSV 내보내기</button></div>
@@ -2349,8 +2356,10 @@ async function submitRequest() {
   const noteVal = joinNote($("#rPurpose").value, $("#rEtc").value, $("#rNote").value);
   let shipment = null;
   if ($("#rDelivery").checked) {
-    shipment = { recipient: $("#sName").value.trim(), phone: $("#sPhone").value.trim(), address: $("#sAddr").value.trim(), date: $("#sDate").value, memo: $("#sMemo").value.trim() };
-    if (!shipment.recipient || !shipment.phone || !shipment.address || !shipment.date) return show("배송이 필요하면 수령인, 연락처, 주소, 도착 희망일을 모두 입력해 주세요.");
+    const later = $("#rShipLater")?.checked;
+    shipment = { recipient: $("#sName").value.trim(), phone: $("#sPhone").value.trim(), address: $("#sAddr").value.trim(), date: $("#sDate").value || null, memo: $("#sMemo").value.trim() };
+    if (later) shipment.later = true;
+    else if (!shipment.recipient || !shipment.phone || !shipment.address || !shipment.date) return show("배송이 필요하면 수령인, 연락처, 주소, 도착 희망일을 모두 입력해 주세요. 아직 모르면 ‘나중에 입력할게요’를 켜 주세요.");
     if ($("#sPick").value) shipment.pickup_date = $("#sPick").value;
   }
   const btn = $("#reqSubmit"); btn.disabled = true;
@@ -2872,7 +2881,10 @@ function shipEdit(sid) {
       ${fld("dOff", pk ? "도착지(입고 사무실)" : "출발지(사무실)", d.office, false, "예: 의왕사무실")}
       ${fld("dOffN", pk ? "도착지 담당자" : "출발지 담당자", d.office_name)}
       ${fld("dOffP", pk ? "도착지 담당자 연락처" : "출발지 담당자 연락처", d.office_phone, false, "010-0000-0000")}
-      <div class="f wide"><span>${pk ? "출발지(고객)" : "도착지(고객)"}</span><div class="meta" style="color:var(--fg)">${esc(s.recipient || "")} · ${esc(s.phone || "")} · ${esc(s.address || "")}</div></div>
+      ${fld("cRcp", pk ? "출발지(고객) 담당자" : "도착지(고객) 담당자 · 수령인", s.recipient)}
+      ${fld("cPhone", pk ? "출발지 담당자 연락처" : "수령인 연락처", s.phone, false, "010-0000-0000")}
+      ${fld("cAddr", pk ? "회수지 주소" : "배송지 주소", s.address, true)}
+      <label class="f"><span>${pk ? "회수 희망일" : "도착 희망일"}</span><input type="date" id="cDate" value="${esc(s.requested_date || "")}"></label>
       ${fld("dExtra", "추가 물품 (자산 외)", d.extra_items, true, "예: LED 배너, 배너2, 테이블보, 방명록, 이동형 리드선, 멀티탭2")}
       ${fld("dVeh", "차량 정보", d.vehicle, false, "예: 1톤 12가3456 / 기사 010-…")}
       ${fld("dHand", pk ? "입고자 확인" : "출고자 확인", d.handler)}
@@ -2883,7 +2895,7 @@ function shipEdit(sid) {
     const b = $("#hOk", m), v = id => $("#" + id, m).value.trim();
     b.addEventListener("click", () => busy(b, async () => {
       const dispatch = { depart_time: v("dDep"), arrive_time: v("dArr"), office: v("dOff"), office_name: v("dOffN"), office_phone: v("dOffP"), extra_items: v("dExtra"), vehicle: v("dVeh"), handler: v("dHand") };
-      await must(sb.from("shipments").update({ carrier: v("hCar"), tracking_no: v("hTr"), dispatch }).eq("id", sid));
+      await must(sb.from("shipments").update({ carrier: v("hCar"), tracking_no: v("hTr"), dispatch, recipient: v("cRcp"), phone: v("cPhone"), address: v("cAddr"), requested_date: $("#cDate", m).value || null }).eq("id", sid));
       closeModal(); toast("배차 정보를 저장했어요."); await refresh();
     }));
   });
@@ -3016,14 +3028,17 @@ document.addEventListener("change", e => {
   else if (e.target.dataset.pick) { e.target.checked ? draft.picks.add(e.target.dataset.pick) : draft.picks.delete(e.target.dataset.pick); updatePickCount(); paintPickGroups(); }
   else if (id === "rLoc" || id === "rAvail") { pickF[{ rLoc: "loc", rAvail: "avail" }[id]] = id === "rAvail" ? e.target.checked : e.target.value; applyPickFilter(); }
   else if (id === "rDelivery") { $("#shipBox").hidden = !e.target.checked; }
+  else if (id === "rShipLater") paintShipLater();
   else if (id === "rPurpose") { paintPurpose(); if (e.target.value === "기타") $("#rEtc")?.focus(); }
   else if (id === "rOwner") { draft.owner = e.target.value; }
   else if (id === "rOut") { draft.out = e.target.checked; const keep = collectReqFields(); render(); restoreReqFields(keep); }
 });
 document.addEventListener("submit", e => { if (e.target.id === "reqForm") { e.preventDefault(); submitRequest(); } });
-const REQ_IDS = ["rPurpose","rEtc","rCustomer","rInternal","rExternal","rNote","rDelivery","sName","sPhone","sAddr","sDate","sPick","sMemo"];
+const REQ_IDS = ["rPurpose","rEtc","rCustomer","rInternal","rExternal","rNote","rDelivery","rShipLater","sName","sPhone","sAddr","sDate","sPick","sMemo"];
 function collectReqFields() { const o = {}; for (const id of REQ_IDS) { const n = $("#" + id); if (n) o[id] = n.type === "checkbox" ? n.checked : n.value; } return o; }
-function restoreReqFields(o) { for (const [id, v] of Object.entries(o)) { if (!o.rDelivery && (id === "sDate" || id === "sPick")) continue; const n = $("#" + id); if (!n) continue; if (n.type === "checkbox") n.checked = v; else n.value = v; } const d = $("#rDelivery"); if (d) $("#shipBox").hidden = !d.checked; lockShipFields();  paintPurpose(); syncExt("rExternal"); }
+function restoreReqFields(o) { for (const [id, v] of Object.entries(o)) { if (!o.rDelivery && (id === "sDate" || id === "sPick")) continue; const n = $("#" + id); if (!n) continue; if (n.type === "checkbox") n.checked = v; else n.value = v; } const d = $("#rDelivery"); if (d) $("#shipBox").hidden = !d.checked; lockShipFields();  paintPurpose(); syncExt("rExternal"); paintShipLater(); }
+// ‘나중에 입력’이면 필수 표시(*)를 빼고 안내를 보여 준다
+function paintShipLater() { const c = $("#rShipLater"); if (!c) return; $("#shipLaterTip").hidden = !c.checked; $("#shipFields").querySelectorAll("label.f").forEach(l => { if (["sName","sPhone","sAddr","sDate"].includes(l.querySelector("input")?.id)) l.classList.toggle("req", !c.checked); }); }
 function paintPurpose() { const sel = $("#rPurpose"); if (!sel) return; const pd = $("#rPurposeDesc"); if (pd) pd.textContent = purposeDesc(sel.value); const w = $("#rEtcWrap"); if (w) w.hidden = sel.value !== "기타"; }
 function softRender() {
   if ($("#app").hidden || $("#modalRoot").innerHTML) { renderTabs(); return; }
