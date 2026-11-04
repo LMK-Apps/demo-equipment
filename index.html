@@ -54,6 +54,7 @@ header .wrap{display:flex;align-items:center;gap:12px;padding-block:14px;flex-wr
 .who{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
 .role{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--sunk);color:var(--muted);letter-spacing:.03em}
 .role.admin{background:var(--accent-soft);color:var(--accent)}
+.role.preview{background:var(--warn-soft);color:var(--warn)}
 nav.tabs{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
 nav.tabs .wrap{display:flex;flex-direction:column;padding-block:6px}
 .tab-row{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;align-items:center}
@@ -429,7 +430,7 @@ button.ver{background:none;border:0;padding:0;cursor:pointer;text-decoration:und
 <div id="app" hidden>
   <header class="top"><div class="wrap">
     <div class="brand">데모콕 <span class="tag">LMK DEMO POOL</span> <button class="ver" id="verTop" title="버전 기록 보기"></button></div>
-    <div class="who"><span id="meName"></span><span class="role" id="meRole"></span><button class="btn sm" id="logout">로그아웃</button></div>
+    <div class="who"><span id="meName"></span><span class="role" id="meRole"></span><button class="btn sm" id="asUser" hidden></button><button class="btn sm" id="logout">로그아웃</button></div>
   </div></header>
   <nav class="tabs" aria-label="화면"><div class="wrap" role="tablist" id="tabs"></div></nav>
   <main class="wrap" id="main"><div class="boot">데이터를 불러오는 중…</div></main>
@@ -491,6 +492,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.089", date: "2026-11-04", db: "025_shipment_dispatch.sql", items: ["배송 건 출고: 출고 창에 차량 정보·출고자 확인 칸이 나오고, 출고하면 [물류]의 진행 단계가 ‘배송 중’으로 자동으로 바뀜", "[물류] ‘배차 정보’ 창 추가 (장비 관리자): 출발 시간, 사무실(출발지·입고지)과 담당자·연락처, 도착 시간, 추가 물품(배너·테이블보 등), 차량 정보, 출고·입고자 확인, 물류사·운송장. 빈 칸은 가장 최근 배차의 사무실·담당자·확인자로 미리 채움", "장비 관리자: 머리 줄 [사용자 화면으로 보기]로 신청자 화면을 미리 볼 수 있음. 다시 누르면 관리자 화면. 이 탭에서만 유지됨", "배송·회수 요청 메일을 화물 배차 양식으로 바꿈 (출발시간·출발지·담당자·도착시간·도착지·물품(라벨)·차량정보·출(입)고자 확인). 비어 있는 항목은 ‘(입력 필요)’로 표시"] },
   { v: "v0.088", date: "2026-11-04", items: ["[출납 대장] 장비 줄: 상태 표시와 버튼(출고·반납 확인 등)을 위아래가 아니라 옆으로 나란히 두고 위아래 여백을 줄여 줄 높이를 낮춤"] },
   { v: "v0.087", date: "2026-11-04", items: ["[현황]·[출입고 확인] 신청 묶음 머리: 신청번호 대신 신청자와 고객사·기관을 크게 보여 줌. 신청번호는 아랫줄에 작게", "데모 신청·신청 정보 수정: 외부 요청자를 목록에서 고름(없음·성암메테크·남북의료기·써지칼코리아·기타). ‘기타’를 고르면 직접 입력 칸이 나옴"] },
   { v: "v0.086", date: "2026-11-04", items: ["데이터 사용량 줄이기: 1분마다 하는 자동 새로 고침은 장비·신청·배송 중 바뀐 것만 받아 옴(전에는 전체를 다시 받음). 15분마다, 그리고 [새로 고침]을 누르면 전체를 다시 받음", "로그인 기록(관리자)은 전체를 다시 받을 때만 불러옴"] },
@@ -899,7 +901,7 @@ if (!window.supabase || SUPABASE_KEY.includes("REPLACE_ME")) {
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { flowType: "pkce", persistSession: true, detectSessionInUrl: true } });
 
 let session = null, profile = null;
-let me = { id: null, isAdmin: false };
+let me = { id: null, isAdmin: false, realAdmin: false };   // realAdmin: 실제 권한. isAdmin: 지금 화면 (관리자가 ‘사용자 화면으로 보기’를 켜면 false)
 let equipment = [], loans = [], shipments = [], people = [], logins = [];
 let view = (location.hash || "").slice(1) || "home";
 // QR 라벨 링크(#eq/EQ-0001)로 들어오면 장비 화면을 연다. 로그인하느라 주소가 바뀌어도 기억해 둔다.
@@ -1139,16 +1141,24 @@ function vCheck() {
 }
 // 출고 창: 장비·구성품을 보여 주고, 필요하면 출고 메모를 남긴다. held는 앞 신청 때문에 이번에 빼는 장비
 function checkoutForm(rows, held = []) {
-  const l = rows[0];
+  const l = rows[0], o = l.delivery ? shipOf(l.loan_no, "outbound") : null, od = o ? dispatchDefaults(o) : {};
   modal(`<h2>출고 처리</h2><p class="meta"><span class="mono">${esc(l.loan_no)}</span> · ${esc(nameOf(l.requester_id))} · 장비 ${rows.length}대를 출고해요. 구성품을 확인했는지 봐 주세요.</p>
     <div class="list">${rows.map(x => { const e = eqById(x.equipment_id) || {}; return `<div class="row"><div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span>${compLine(e) ? `<div class="meta">구성품 ${esc(compLine(e))}</div>` : ""}</div></div>`; }).join("")}</div>
     ${held.length ? `<div class="notice">앞 신청이 끝나지 않은 ${held.length}대는 이번에 빼요: ${esc(held.map(x => eqNo(eqById(x.equipment_id)) || eqById(x.equipment_id)?.name || "").join(", "))}</div>` : ""}
+    ${o ? `<div class="notice">외부 물류 배송 건이에요. 출고하면 [물류]의 진행 단계가 ‘배송 중’으로 바뀌어요.</div>
+    <div class="fields"><label class="f"><span>차량 정보</span><input id="coVeh" maxlength="120" value="${esc(od.vehicle)}" placeholder="예: 1톤 12가3456 / 기사 010-…"></label>
+      <label class="f"><span>출고자 확인</span><input id="coHand" maxlength="60" value="${esc(od.handler)}"></label></div>` : ""}
     <div class="fields"><label class="f wide"><span>출고 메모 (선택)</span><textarea id="coNote" rows="2" placeholder="예: 충전기 빠짐, 외관 흠집 사진 찍어 둠"></textarea></label></div>
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="coOk">${rows.length > 1 ? `${rows.length}대 출고` : "출고"}</button></div>`,
     m => { const b = $("#coOk", m); b.addEventListener("click", () => busy(b, async () => {
       const note = $("#coNote", m).value.trim();
       await must(sb.from("loans").update(note ? { status: "out", checkout_note: note } : { status: "out" }).in("id", rows.map(x => x.id)));
-      toast(rows.length > 1 ? `장비 ${rows.length}대를 출고 처리했어요.` : "출고 처리했어요."); closeModal(); await refresh(); })); });
+      let moved = false;
+      if (o) {
+        moved = ["pending", "requested"].includes(o.status);
+        await must(sb.from("shipments").update({ status: moved ? "in_transit" : o.status, dispatch: { ...od, vehicle: $("#coVeh", m).value.trim(), handler: $("#coHand", m).value.trim() } }).eq("id", o.id));
+      }
+      toast(`${rows.length > 1 ? `장비 ${rows.length}대를 출고 처리했어요.` : "출고 처리했어요."}${moved ? " 물류 진행을 ‘배송 중’으로 바꿨어요." : ""}`); closeModal(); await refresh(); })); });
 }
 // 같은 장비의 앞 신청이 아직 끝나지 않았는지(출고 중 또는 반납 확인 중)
 const busyBefore = l => loans.find(x => x.equipment_id === l.equipment_id && x.id !== l.id && (x.status === "out" || x.status === "checking"));
@@ -1829,7 +1839,20 @@ const OUT_STEPS = ["pending", "requested", "in_transit", "delivered"];
 const PICK_STEPS = ["pending", "requested", "done"];   // 반납 신청 전(scheduled)·취소는 버튼 없이 표시만
 const steps = (x, order, map) => { const cur = order.indexOf(x.status);
   return `<div class="steps" role="group" aria-label="진행 단계">${order.map((k, i) => `<button class="step ${i < cur ? "done" : i === cur ? "cur" : ""}" data-act="shipStep" data-sid="${x.id}" data-st="${k}" aria-pressed="${i <= cur}" ${me.isAdmin ? "" : "disabled"}>${i < cur ? "✓ " : ""}${esc(map[k][0])}</button>`).join("")}</div>`; };
-const trackTxt = x => `${x.carrier ? ` · ${esc(x.carrier)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.tracking_no)}</span>` : ""}${me.isAdmin ? ` · <button class="linkbtn" data-act="shipEdit" data-sid="${x.id}">${x.tracking_no ? "운송장 수정" : "운송장 입력"}</button>` : ""}`;
+// 화물 배차 정보 (shipments.dispatch). 배송은 사무실 → 고객, 회수는 고객 → 사무실
+const DSP = s => (s && s.dispatch) || {};
+const lastDispatch = exceptId => shipments.filter(x => x.id !== exceptId && DSP(x).office).sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
+const shortDate = d => d ? `${d.slice(2, 4)}.${+d.slice(5, 7)}.${+d.slice(8, 10)}` : "";
+const longDate = d => d ? `${d.slice(0, 4)}.${+d.slice(5, 7)}.${+d.slice(8, 10)}` : "";
+function dispatchDefaults(s) {
+  const d = DSP(s), last = DSP(lastDispatch(s.id));
+  const g = loans.filter(l => l.loan_no === s.loan_no), loc = eqById(g[0]?.equipment_id)?.location || "";
+  return { depart_time: d.depart_time ?? (s.direction === "outbound" ? longDate(s.requested_date) : ""), office: d.office ?? (last.office || (LOCS.includes(loc) ? `${loc}사무실` : loc)),
+    office_name: d.office_name ?? (last.office_name || ""), office_phone: d.office_phone ?? (last.office_phone || ""),
+    arrive_time: d.arrive_time ?? (s.direction === "outbound" ? shortDate(s.requested_date) : ""), extra_items: d.extra_items ?? "",
+    vehicle: d.vehicle ?? "", handler: d.handler ?? (last.handler || "") };
+}
+const trackTxt = x => `${x.carrier ? ` · ${esc(x.carrier)}` : ""}${x.tracking_no ? ` · 운송장 <span class="mono">${esc(x.tracking_no)}</span>` : ""}${DSP(x).vehicle ? ` · 차량 ${esc(DSP(x).vehicle)}` : ""}${me.isAdmin ? ` · <button class="linkbtn" data-act="shipEdit" data-sid="${x.id}">${DSP(x).office ? "배차 정보 수정" : "배차 정보 입력"}</button>` : ""}`;
 function vShip() {
   // 배송 정보는 관리자와 신청한 본인만 볼 수 있다 (DB 권한과 같음)
   const groups = groupBy(loans.filter(l => l.status !== "cancelled" && (me.isAdmin || l.requester_id === me.id) && (l.delivery || shipOf(l.loan_no, "pickup"))), "loan_no").sort((a, b) => a[0].start_date.localeCompare(b[0].start_date));
@@ -2726,18 +2749,40 @@ function inspectBulk(l, group) {
 }
 
 function mailText(no, dir) {
-  const g = loans.filter(l => l.loan_no === no).sort(loanEqCmp), l = g[0], s = shipOf(no, dir) || {};
-  const items = g.map((x, i) => `  ${i + 1}. ${eqById(x.equipment_id)?.name} / ${[eqById(x.equipment_id)?.internal_id, eqById(x.equipment_id)?.label, assetNo(eqById(x.equipment_id)) && `자산번호 ${assetNo(eqById(x.equipment_id))}`].filter(Boolean).join(" / ")} / 1대`).join("\n");
-  const locs = [...new Set(g.map(x => eqById(x.equipment_id)?.location).filter(Boolean))].join(", ") || "확인 필요";
-  const dest = [...new Set(g.map(x => x.return_method === "pickup" ? x.return_place : "").filter(Boolean))].join(", ") || locs;
-  if (dir === "pickup") return `제목: [Laerdal Medical Korea] 데모장비 회수 요청 – ${no}\n\n안녕하세요. 아래 데모장비 회수를 요청드립니다.\n\n■ 신청번호: ${no}\n■ 장비\n${items}\n■ 회수지: ${s.address}\n■ 담당자: ${s.recipient} / ${s.phone}\n■ 회수 희망일: ${s.requested_date || "협의"}\n■ 입고지: ${dest}\n■ 메모: ${s.memo || "없음"}\n\n회수 일정과 운송장 번호를 회신 부탁드립니다.\n감사합니다.`;
-  return `제목: [Laerdal Medical Korea] 데모장비 배송 요청 – ${no}\n\n안녕하세요. 아래 데모장비 배송을 요청드립니다.\n\n■ 신청번호: ${no}\n■ 장비\n${items}\n■ 출발지: ${locs}\n■ 배송지: ${s.address}\n■ 수령인: ${s.recipient} / ${s.phone}\n■ 도착 희망일: ${s.requested_date}\n■ 사용 기간: ${l.start_date} ~ ${l.due_date}\n■ 메모: ${s.memo || "없음"}\n\n출고 일정과 운송장 번호를 회신 부탁드립니다.\n감사합니다.`;
+  const g = loans.filter(l => l.loan_no === no).sort(loanEqCmp), l = g[0], s = shipOf(no, dir) || {}, d = dispatchDefaults(s);
+  const need = v => (v || "").trim() || "(입력 필요)";
+  const items = [...g.map(x => { const e = eqById(x.equipment_id) || {}; return [e.label, e.name].filter(Boolean).join(" "); }), ...(d.extra_items ? [d.extra_items] : [])].join(", ");
+  const ext = l.external_requester && !(s.recipient || "").includes(l.external_requester) ? `(${l.external_requester})` : "";
+  const cust = { name: `${s.recipient || ""}${ext}`, phone: s.phone, place: s.address };
+  const office = { name: d.office_name, phone: d.office_phone, place: d.office };
+  const [from, to] = dir === "pickup" ? [cust, office] : [office, cust];
+  const title = dir === "pickup" ? "회수" : "배송";
+  return `제목: [Laerdal Medical Korea] 데모장비 ${title} 배차 요청 – ${no}
+
+안녕하세요. 아래 데모장비 ${title} 배차를 요청드립니다.
+
+출발시간 : ${need(d.depart_time)}
+출발지 : ${need(from.place)}
+출발지 담당자 : ${need(from.name)}
+출발지 담당자 연락처 : ${need(from.phone)}
+최종 도착지 도착시간 : ${need(d.arrive_time)}
+도착지 담당자 : ${need(to.name)}
+도착지 담당자 연락처 : ${need(to.phone)}
+도착지 : ${need(to.place)}
+도착지 물품(라벨 넘버 기재요망) : ${need(items)}
+차량정보 : ${d.vehicle || ""}
+출(입)고자 확인 : ${d.handler || ""}
+
+신청번호 ${no}${s.memo ? ` · 메모: ${s.memo}` : ""}
+감사합니다.`;
 }
 function mail(no, dir) {
   const text = mailText(no, dir);
   modal(`<h2>${dir === "pickup" ? "회수" : "배송"} 요청 메일</h2><p class="meta">복사해서 물류사에 메일로 보내 주세요. 보낸 뒤 상태를 ‘요청 완료’로 바꿔 주세요.</p>
+    ${text.includes("(입력 필요)") ? `<div class="notice">‘(입력 필요)’ 항목이 있어요. [배차 정보]에서 채운 뒤 복사해 주세요.${me.isAdmin && shipOf(no, dir) ? ` <button class="linkbtn" id="mDsp">배차 정보 입력</button>` : ""}</div>` : ""}
     <pre class="mail" id="mText">${esc(text)}</pre>
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="mCopy">문안 복사</button></div>`, m => {
+    $("#mDsp", m)?.addEventListener("click", () => shipEdit(shipOf(no, dir).id));
     $("#mCopy", m).addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(text); toast("메일 문안을 복사했어요."); }
       catch { const r = document.createRange(); r.selectNodeContents($("#mText")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("문안을 선택했어요. 복사해 주세요."); }
@@ -2746,17 +2791,28 @@ function mail(no, dir) {
 }
 function shipEdit(sid) {
   const s = shipments.find(x => x.id === sid); if (!s) return;
-  const opts = s.direction === "pickup" ? PICK_STATUS : OUT_STATUS;
-  modal(`<h2>${s.direction === "pickup" ? "회수" : "출고 배송"} 운송장</h2><p class="meta"><span class="mono">${esc(s.loan_no)}</span> · 지금 단계: ${esc(opts[s.status]?.[0] || s.status)}</p>
+  const opts = s.direction === "pickup" ? PICK_STATUS : OUT_STATUS, d = dispatchDefaults(s), pk = s.direction === "pickup";
+  const fld = (id, label, v, wide, ph = "") => `<label class="f${wide ? " wide" : ""}"><span>${label}</span><input id="${id}" value="${esc(v || "")}" placeholder="${esc(ph)}" maxlength="120"></label>`;
+  modal(`<h2>${pk ? "회수" : "배송"} 배차 정보</h2><p class="meta"><span class="mono">${esc(s.loan_no)}</span> · 지금 단계: ${esc(opts[s.status]?.[0] || s.status)} · ${pk ? "고객 → 사무실" : "사무실 → 고객"}. 요청 메일에 그대로 들어가요.</p>
     <div class="fields">
-      <label class="f"><span>물류사</span><input id="hCar" value="${esc(s.carrier)}"></label>
-      <label class="f wide"><span>운송장 번호</span><input id="hTr" value="${esc(s.tracking_no)}"></label>
+      ${fld("dDep", "출발 시간", d.depart_time, false, "예: 2026.11.4 오전")}
+      ${fld("dArr", "최종 도착지 도착 시간", d.arrive_time, false, "예: 26.11.4 오후 4시")}
+      ${fld("dOff", pk ? "도착지(입고 사무실)" : "출발지(사무실)", d.office, false, "예: 의왕사무실")}
+      ${fld("dOffN", pk ? "도착지 담당자" : "출발지 담당자", d.office_name)}
+      ${fld("dOffP", pk ? "도착지 담당자 연락처" : "출발지 담당자 연락처", d.office_phone, false, "010-0000-0000")}
+      <div class="f wide"><span>${pk ? "출발지(고객)" : "도착지(고객)"}</span><div class="meta" style="color:var(--fg)">${esc(s.recipient || "")} · ${esc(s.phone || "")} · ${esc(s.address || "")}</div></div>
+      ${fld("dExtra", "추가 물품 (자산 외)", d.extra_items, true, "예: LED 배너, 배너2, 테이블보, 방명록, 이동형 리드선, 멀티탭2")}
+      ${fld("dVeh", "차량 정보", d.vehicle, false, "예: 1톤 12가3456 / 기사 010-…")}
+      ${fld("dHand", pk ? "입고자 확인" : "출고자 확인", d.handler)}
+      ${fld("hCar", "물류사", s.carrier)}
+      ${fld("hTr", "운송장·배차 번호", s.tracking_no)}
     </div>
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="hOk">저장</button></div>`, m => {
-    const b = $("#hOk", m);
+    const b = $("#hOk", m), v = id => $("#" + id, m).value.trim();
     b.addEventListener("click", () => busy(b, async () => {
-      await must(sb.from("shipments").update({ carrier: $("#hCar").value.trim(), tracking_no: $("#hTr").value.trim() }).eq("id", sid));
-      closeModal(); toast("운송장을 저장했어요."); await refresh();
+      const dispatch = { depart_time: v("dDep"), arrive_time: v("dArr"), office: v("dOff"), office_name: v("dOffN"), office_phone: v("dOffP"), extra_items: v("dExtra"), vehicle: v("dVeh"), handler: v("dHand") };
+      await must(sb.from("shipments").update({ carrier: v("hCar"), tracking_no: v("hTr"), dispatch }).eq("id", sid));
+      closeModal(); toast("배차 정보를 저장했어요."); await refresh();
     }));
   });
 }
@@ -2922,6 +2978,24 @@ function hideSplash() {
   }, Math.max(0, SPLASH_MIN - performance.now()));
 }
 
+/* ---------- 사용자 화면으로 보기 (장비 관리자) ---------- */
+// 화면만 신청자처럼 바꾼다. DB 권한은 그대로라 일부 목록에는 관리자에게만 보이는 데이터가 남을 수 있다.
+function paintRole() {
+  const r = $("#meRole"), b = $("#asUser");
+  r.textContent = me.isAdmin ? "장비 관리자" : me.realAdmin ? "신청자 화면으로 보는 중" : "신청자";
+  r.classList.toggle("admin", me.isAdmin); r.classList.toggle("preview", me.realAdmin && !me.isAdmin);
+  b.hidden = !me.realAdmin; b.textContent = me.isAdmin ? "사용자 화면으로 보기" : "관리자 화면으로";
+}
+$("#asUser").addEventListener("click", async () => {
+  me.isAdmin = !me.isAdmin;
+  try { me.isAdmin ? sessionStorage.removeItem("asUser") : sessionStorage.setItem("asUser", "1"); } catch {}
+  if (draft.edit) draft = newDraft();
+  if (!me.isAdmin && ADMIN_VIEWS.includes(view)) view = "home";
+  paintRole(); render(); window.scrollTo(0, 0);
+  toast(me.isAdmin ? "관리자 화면으로 돌아왔어요." : "신청자 화면으로 보고 있어요. 위의 [관리자 화면으로]를 누르면 돌아가요.");
+  if (me.isAdmin) await refresh(true, true);
+});
+
 /* ---------- 시작 ---------- */
 async function start() {
   const params = new URLSearchParams(location.search);
@@ -2943,10 +3017,12 @@ async function start() {
   } catch (e) { showGate("error", esc(errText(e))); return; }
   if (!profile || profile.status === "pending") { showGate("pending"); return; }
   if (profile.status === "disabled") { showGate("disabled"); return; }
-  me.isAdmin = profile.role === "admin";
+  me.realAdmin = profile.role === "admin";
+  let asUser = false; try { asUser = me.realAdmin && sessionStorage.getItem("asUser") === "1"; } catch {}
+  me.isAdmin = me.realAdmin && !asUser;
   $("#gate").hidden = true; $("#app").hidden = false;
   $("#meName").textContent = profile.display_name || "나";
-  const r = $("#meRole"); r.textContent = me.isAdmin ? "장비 관리자" : "신청자"; r.classList.toggle("admin", me.isAdmin);
+  paintRole();
   renderTabs();
   try { await loadAll(); render(); hideSplash(); } catch (e) { showGate("error", esc(errText(e))); return; }
   try { pendingEq = pendingEq || localStorage.getItem("pendingEq"); localStorage.removeItem("pendingEq"); } catch {}
