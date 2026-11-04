@@ -391,7 +391,7 @@ const WORDS = Object.entries({
   "데모 신청": "Request", "장비 등록": "Equipment added", "보관 위치": "Location", "상태": "Status", "점검 기록": "Check log", "출고": "Out", "예약": "Booked",
   "사용 가능": "Available", "대여 중": "On loan", "점검 중": "Checking", "수리 중": "In repair", "수리 필요": "Needs repair", "폐기": "Retired",
   "고객 데모": "Customer demo", "전시회": "Exhibition", "교육·워크숍": "Training / workshop", "학회": "Conference", "내부 교육": "Internal training",
-  "시뮬레이터": "Simulator", "의왕": "Uiwang", "문정": "Munjeong", "미확인": "Unconfirmed", "기타": "Other", "충전어뎁터": "Charging adapter", "충전기": "charger",
+  "시뮬레이터": "Simulator", "비품": "Supplies", "의왕": "Uiwang", "문정": "Munjeong", "미확인": "Unconfirmed", "기타": "Other", "충전어뎁터": "Charging adapter", "충전기": "charger",
   "정상": "OK", "경미한 손상": "Minor damage", "파손 또는 수리 필요": "Damaged / needs repair", "구성품 누락": "Missing parts",
   "배송": "delivery", "회수": "pickup", "연장": "Extended", "승인": "Approve", "사용 중지": "Disable", "다시 사용": "Re-enable", "관리자로 지정": "Make admin", "관리자 해제": "Remove admin",
   "희망일": "date", "요청 전": "not requested", "외부": "ext.", "내부": "int.", "기간": "Period", "신청": "Request", "없음": "none",
