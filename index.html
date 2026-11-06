@@ -516,6 +516,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.114", date: "2026-11-06", items: ["배차 정보 출발·도착 시간을 10분 단위로 고를 수 있게 함 (오전 8시 ~ 오후 7시 50분). 배송·회수 모두 적용, 메시지에는 ‘오후 2시 10분’처럼 들어감"] },
   { v: "v0.113", date: "2026-11-06", items: ["장비 관리자: [사용자 화면으로 보기]에서 사용자를 골라 그 사람이 보는 화면(내 신청·물류·현황 등)을 그대로 볼 수 있음. 맨 위 주황 띠에 누구 화면인지 표시", "다른 사람 화면에서는 보기만 됨: 반납·연장·취소·예약 수정·출고·도착 확인 등 저장하는 동작은 막고 안내. ‘나’를 고르면 전처럼 내 신청자 화면(저장 가능)"] },
   { v: "v0.112", date: "2026-11-04", items: ["반납 신청 같은 단계형 전체 화면 창에서 오른쪽 스크롤바를 숨김 (스크롤은 그대로 됨)"] },
   { v: "v0.111", date: "2026-11-04", items: ["반납 신청 마지막 버튼 이름을 다시 [반납 신청]으로 되돌림"] },
@@ -1942,7 +1943,9 @@ const steps = (x, order, map) => { const cur = order.indexOf(x.status);
 const DSP = s => (s && s.dispatch) || {};
 const lastDispatch = exceptId => shipments.filter(x => x.id !== exceptId && DSP(x).office).sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
 // 배차 시간: 날짜 + 시간대 (오전·오후·정각). 메시지에는 "2026.11.10 오전", "26.11.10 오후 4시"처럼 들어간다
-const SLOTS = ["오전", "오후", ...[8, 9, 10, 11].map(h => `오전 ${h}시`), "오후 12시", ...[1, 2, 3, 4, 5, 6, 7].map(h => `오후 ${h}시`)];
+// 오전 8시 ~ 오후 7시 50분, 10분 단위 (예: "오후 2시", "오후 2시 10분")
+const SLOTS = ["오전", "오후", ...Array.from({ length: 72 }, (_, i) => { const h = 8 + Math.floor(i / 6), mi = (i % 6) * 10;
+  return `${h < 12 ? "오전" : "오후"} ${h > 12 ? h - 12 : h}시${mi ? ` ${mi}분` : ""}`; })];
 const slotTxt = (date, slot, fmt) => date ? `${fmt(date)} ${slot || "(시간 입력 필요)"}` : "";
 const shortDate = d => d ? `${d.slice(2, 4)}.${+d.slice(5, 7)}.${+d.slice(8, 10)}` : "";
 const longDate = d => d ? `${d.slice(0, 4)}.${+d.slice(5, 7)}.${+d.slice(8, 10)}` : "";
