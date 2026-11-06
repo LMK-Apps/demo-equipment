@@ -140,6 +140,7 @@ h3{font-size:14px;margin:0;font-weight:600}
 .when2{display:flex;gap:6px}.when2 input{flex:1.3;min-width:0}.when2 select{flex:1;min-width:0}
 .th-sort{font:inherit;font-weight:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}.th-sort .arr{font-size:10px;opacity:.35}.th-sort.on{color:var(--accent)}.th-sort.on .arr{opacity:1}.th-sort:hover .arr{opacity:.8}
 .st-more td{cursor:pointer;background:var(--sunk);color:var(--muted)}.st-more td b{color:var(--fg)}.st-more .lg-toggle{margin-left:8px}.st-more.open .grp-arrow{transform:rotate(90deg)}
+.viewbar{position:sticky;top:0;z-index:60;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:7px 12px;background:var(--warn-soft);color:var(--warn);font-size:13.5px}.viewbar b{color:var(--fg)}
 .lg-chips{display:flex;flex-direction:column;gap:8px}
 .lg-chip-lb{font-size:11.5px;font-weight:600;color:var(--muted);min-width:58px;align-self:center}
 .lg-arrow{color:var(--muted);font-size:12px;align-self:center}
@@ -515,6 +516,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.113", date: "2026-11-06", items: ["장비 관리자: [사용자 화면으로 보기]에서 사용자를 골라 그 사람이 보는 화면(내 신청·물류·현황 등)을 그대로 볼 수 있음. 맨 위 주황 띠에 누구 화면인지 표시", "다른 사람 화면에서는 보기만 됨: 반납·연장·취소·예약 수정·출고·도착 확인 등 저장하는 동작은 막고 안내. ‘나’를 고르면 전처럼 내 신청자 화면(저장 가능)"] },
   { v: "v0.112", date: "2026-11-04", items: ["반납 신청 같은 단계형 전체 화면 창에서 오른쪽 스크롤바를 숨김 (스크롤은 그대로 됨)"] },
   { v: "v0.111", date: "2026-11-04", items: ["반납 신청 마지막 버튼 이름을 다시 [반납 신청]으로 되돌림"] },
   { v: "v0.110", date: "2026-11-04", items: ["반납 신청 마지막 확인 화면의 버튼 이름을 [반납 신청] → [반납 완료]로 바꿈"] },
@@ -950,9 +952,16 @@ if (!window.supabase || SUPABASE_KEY.includes("REPLACE_ME")) {
   return;
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { flowType: "pkce", persistSession: true, detectSessionInUrl: true } });
+// 다른 사용자 화면으로 볼 때는 읽기만: 저장 요청(쓰기 RPC·insert·update·delete)을 서버로 보내지 않는다
+const VIEW_ERR = { message: "다른 사람 화면에서는 볼 수만 있어요. 위의 [관리자 화면으로]를 누른 뒤 처리해 주세요.", code: "VIEWAS" };
+const READ_RPC = new Set(["session_check", "equipment_history"]);
+const viewBlocked = () => { const r = { data: null, error: VIEW_ERR }; const p = new Proxy(function () {}, { get: (t, k) => k === "then" ? (ok, bad) => Promise.resolve(r).then(ok, bad) : () => p, apply: () => p }); return p; };
+{ const rpc0 = sb.rpc.bind(sb), from0 = sb.from.bind(sb);
+  sb.rpc = (n, a, o) => me.viewAs && !READ_RPC.has(n) ? viewBlocked() : rpc0(n, a, o);
+  sb.from = t => { const q = from0(t); if (me.viewAs) ["insert", "update", "upsert", "delete"].forEach(k => { q[k] = () => viewBlocked(); }); return q; }; }
 
 let session = null, profile = null;
-let me = { id: null, isAdmin: false, realAdmin: false };   // realAdmin: 실제 권한. isAdmin: 지금 화면 (관리자가 ‘사용자 화면으로 보기’를 켜면 false)
+let me = { id: null, isAdmin: false, realAdmin: false, realId: null, viewAs: null };   // viewAs: 관리자가 다른 사용자 화면으로 볼 때 그 사용자 id (me.id도 그 사람으로 바뀜)   // realAdmin: 실제 권한. isAdmin: 지금 화면 (관리자가 ‘사용자 화면으로 보기’를 켜면 false)
 let equipment = [], loans = [], shipments = [], people = [], logins = [];
 let view = (location.hash || "").slice(1) || "home";
 // QR 라벨 링크(#eq/EQ-0001)로 들어오면 장비 화면을 연다. 로그인하느라 주소가 바뀌어도 기억해 둔다.
@@ -1038,6 +1047,12 @@ function langSwitch() {
 $("#langSw").innerHTML = langSwitch();   // 버전을 붙여 예전 매뉴얼이 보이지 않게
 
 /* ---------- 데이터 ---------- */
+// 배송은 받은 그대로 shipAll에 두고, 다른 사용자 화면으로 볼 때는 그 사람이 볼 수 있는 것만 shipments에 둔다 (서버 권한과 같게)
+let shipAll = [];
+function applyView() {
+  shipments = me.viewAs ? shipAll.filter(x => loans.some(l => l.loan_no === x.loan_no && l.requester_id === me.viewAs)) : shipAll;
+  paintRole();
+}
 // 자동 새로 고침은 바뀐 행(updated_at)만 받는다. 15분마다, 그리고 [새로 고침]을 누르면 전체를 다시 받는다
 // (전체 받기 때 지워진 행이 정리됨). 늦게 커밋된 변경을 놓치지 않게 마지막 시각보다 2분 앞부터 다시 받는다.
 const FULL_EVERY = 15 * 60 * 1000;
@@ -1054,7 +1069,7 @@ async function loadChanged() {
   ]);
   equipment = mergeRows(equipment, e).sort((a, b) => (a.internal_id || "").localeCompare(b.internal_id || ""));
   loans = mergeRows(loans, l).sort((a, b) => b.start_date.localeCompare(a.start_date));
-  shipments = mergeRows(shipments, s); people = p;
+  shipAll = mergeRows(shipAll, s); people = p; applyView();
   syncAt = { equipment: maxUpd(e, syncAt.equipment), loans: maxUpd(l, syncAt.loans), shipments: maxUpd(s, syncAt.shipments) };
 }
 async function loadAll(full) {
@@ -1065,7 +1080,7 @@ async function loadAll(full) {
     must(sb.from("shipments").select("*")),
     must(sb.from("profiles").select("id,display_name,kakao_name,role,status,created_at").order("created_at")),
   ]);
-  equipment = e; loans = l; shipments = s; people = p;
+  equipment = e; loans = l; shipAll = s; people = p; applyView();
   syncAt = { equipment: maxUpd(e), loans: maxUpd(l), shipments: maxUpd(s) }; fullAt = Date.now();
   if (me.isAdmin) {   // 로그인 기록은 관리자만. 표가 없거나 실패해도 앱은 계속 쓴다
     try { const r = await sb.from("login_log").select("user_id,at,user_agent,kicked").order("at", { ascending: false }).limit(1000); logins = r.error ? [] : r.data || []; }
@@ -1096,7 +1111,7 @@ function deviceOf(ua = "") {
 // 관리자가 내 역할·상태를 바꾸면 1분 안에(또는 앱을 다시 볼 때) 새 권한으로 앱을 다시 연다
 async function roleGuard() {
   try {
-    const { data, error } = await sb.from("profiles").select("role,status,display_name").eq("id", me.id);
+    const { data, error } = await sb.from("profiles").select("role,status,display_name").eq("id", me.realId || me.id);
     if (error || !data) return false;
     const p = data[0];
     if (!p || p.status !== "active" || p.role !== profile.role) {
@@ -2404,6 +2419,7 @@ function eqView(id) {
 async function submitRequest() {
   const err = $("#reqErr"), show = m => { err.textContent = m; err.hidden = false; err.scrollIntoView({ block: "nearest" }); };
   err.hidden = true;
+  if (me.viewAs) return show(VIEW_ERR.message);
   const start = $("#rStart").value, due = $("#rDue").value;
   if (!start || !due || due < start) return show("사용 기간을 확인해 주세요. 반납 예정일은 시작일과 같거나 그 뒤여야 해요.");
   const proxy = me.isAdmin && !draft.edit, outReg = proxy && draft.out, owner = proxy && draft.owner && draft.owner !== me.id ? draft.owner : null;
@@ -3014,6 +3030,7 @@ function exportCsv() {
 document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
   const a = e.target.closest("[data-act]"); if (!a) return;
+  if (me.viewAs && ["return", "extend", "cancel", "editRes", "checkout", "checkoutAll", "inspect", "shipStep", "shipArrive", "shipEdit", "retDate", "eqNew", "eqBulk"].includes(a.dataset.act)) { e.preventDefault(); toast(VIEW_ERR.message); return; }
   const l = loans.find(x => x.id === a.dataset.id);
   const eqName = l ? `${esc(eqById(l.equipment_id)?.name)} ${eqParen(eqById(l.equipment_id))}` : "";
   switch (a.dataset.act) {
@@ -3179,19 +3196,38 @@ function hideSplash() {
 /* ---------- 사용자 화면으로 보기 (장비 관리자) ---------- */
 // 화면만 신청자처럼 바꾼다. DB 권한은 그대로라 일부 목록에는 관리자에게만 보이는 데이터가 남을 수 있다.
 function paintRole() {
-  const r = $("#meRole"), b = $("#asUser");
-  r.textContent = me.isAdmin ? "장비 관리자" : me.realAdmin ? "신청자 화면으로 보는 중" : "신청자";
+  const r = $("#meRole"), b = $("#asUser"), who = me.viewAs ? (people.find(p => p.id === me.viewAs)?.display_name || "사용자") : "";
+  r.textContent = me.isAdmin ? "장비 관리자" : me.viewAs ? `${who} 화면 · 보기만` : me.realAdmin ? "신청자 화면으로 보는 중" : "신청자";
   r.classList.toggle("admin", me.isAdmin); r.classList.toggle("preview", me.realAdmin && !me.isAdmin);
   b.hidden = !me.realAdmin; b.textContent = me.isAdmin ? "사용자 화면으로 보기" : "관리자 화면으로";
+  let bar = $("#viewBar");
+  if (me.viewAs) {
+    if (!bar) { bar = document.createElement("div"); bar.id = "viewBar"; bar.className = "viewbar"; document.body.prepend(bar); }
+    bar.innerHTML = `<span><b>${esc(who)}</b> 님이 보는 화면이에요 · 보기만 할 수 있어요</span><button class="btn sm" id="viewBarBack">관리자 화면으로</button>`;
+    $("#viewBarBack").onclick = () => setView("admin");
+  } else if (bar) bar.remove();
 }
-$("#asUser").addEventListener("click", async () => {
-  me.isAdmin = !me.isAdmin;
-  try { me.isAdmin ? sessionStorage.removeItem("asUser") : sessionStorage.setItem("asUser", "1"); } catch {}
-  if (draft.edit) draft = newDraft();
+// 화면 전환: "admin" | "self"(내 신청자 화면, 저장 가능) | 사용자 id(그 사람 화면, 보기만)
+async function setView(mode) {
+  const wasOther = !!me.viewAs;
+  me.viewAs = mode !== "admin" && mode !== "self" && mode !== me.realId ? mode : null;
+  me.id = me.viewAs || me.realId;
+  me.isAdmin = mode === "admin";
+  try { me.isAdmin ? sessionStorage.removeItem("asUser") : sessionStorage.setItem("asUser", me.viewAs ? `u:${me.viewAs}` : "1"); } catch {}
+  draft = newDraft(); closeModal();
   if (!me.isAdmin && ADMIN_VIEWS.includes(view)) view = "home";
-  paintRole(); render(); window.scrollTo(0, 0);
-  toast(me.isAdmin ? "관리자 화면으로 돌아왔어요." : "신청자 화면으로 보고 있어요. 위의 [관리자 화면으로]를 누르면 돌아가요.");
-  if (me.isAdmin) await refresh(true, true);
+  applyView(); render(); window.scrollTo(0, 0);
+  toast(me.isAdmin ? "관리자 화면으로 돌아왔어요." : me.viewAs ? "이 사용자가 보는 화면이에요. 보기만 할 수 있어요." : "신청자 화면으로 보고 있어요. 위의 [관리자 화면으로]를 누르면 돌아가요.");
+  if (me.isAdmin || wasOther) await refresh(true, true);
+}
+$("#asUser").addEventListener("click", () => {
+  if (!me.isAdmin) return setView("admin");
+  const ps = people.filter(p => p.status === "active" && p.id !== me.realId).sort((a, b) => (a.display_name || "").localeCompare(b.display_name || "", "ko"));
+  modal(`<h2>누구의 화면으로 볼까요?</h2><p class="meta">고른 사람이 보는 화면 그대로 보여 줘요. 다른 사람 화면에서는 볼 수만 있고 저장은 안 돼요.</p>
+    <div class="list"><button class="row clickable" data-vs="self" style="width:100%;text-align:left;font:inherit;background:none;border:0"><div class="main"><b>나 (${esc(profile.display_name || "")})</b><div class="meta">신청자 화면 · 지금처럼 신청·반납 가능</div></div></button>
+    ${ps.map(p => `<button class="row clickable" data-vs="${p.id}" style="width:100%;text-align:left;font:inherit;background:none;border:0"><div class="main"><b>${esc(p.display_name || "")}</b><div class="meta">${p.role === "admin" ? "장비 관리자 · 신청자 화면으로" : "신청자"} · ${loans.filter(l => l.requester_id === p.id && !["done", "cancelled"].includes(l.status)).length}건 진행 중</div></div></button>`).join("")}</div>
+    <div class="actions"><button class="btn" data-close-btn>닫기</button></div>`,
+    m => m.querySelectorAll("[data-vs]").forEach(b => b.addEventListener("click", () => { closeModal(); setView(b.dataset.vs); })));
 });
 
 /* ---------- 시작 ---------- */
@@ -3207,7 +3243,7 @@ async function start() {
     return;
   }
   if (location.search) { try { history.replaceState(null, "", location.pathname + location.hash); } catch {} }
-  me.id = session.user.id;
+  me.id = me.realId = session.user.id;
   if (await sessionGuard(true)) return;
   try {
     const rows = await must(sb.from("profiles").select("*").eq("id", me.id));
@@ -3216,8 +3252,9 @@ async function start() {
   if (!profile || profile.status === "pending") { showGate("pending"); return; }
   if (profile.status === "disabled") { showGate("disabled"); return; }
   me.realAdmin = profile.role === "admin";
-  let asUser = false; try { asUser = me.realAdmin && sessionStorage.getItem("asUser") === "1"; } catch {}
+  let asUser = ""; try { asUser = me.realAdmin ? sessionStorage.getItem("asUser") || "" : ""; } catch {}
   me.isAdmin = me.realAdmin && !asUser;
+  if (asUser.startsWith("u:")) { me.viewAs = asUser.slice(2); me.id = me.viewAs; }
   $("#gate").hidden = true; $("#app").hidden = false;
   $("#meName").textContent = profile.display_name || "나";
   paintRole();
