@@ -141,6 +141,8 @@ h3{font-size:14px;margin:0;font-weight:600}
 .th-sort{font:inherit;font-weight:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}.th-sort .arr{font-size:10px;opacity:.35}.th-sort.on{color:var(--accent)}.th-sort.on .arr{opacity:1}.th-sort:hover .arr{opacity:.8}
 .st-more td{cursor:pointer;background:var(--sunk);color:var(--muted)}.st-more td b{color:var(--fg)}.st-more .lg-toggle{margin-left:8px}.st-more.open .grp-arrow{transform:rotate(90deg)}
 .viewbar{position:sticky;top:0;z-index:60;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:7px 12px;background:var(--warn-soft);color:var(--warn);font-size:13.5px}.viewbar b{color:var(--fg)}
+.mine-act{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:640px){.hg-h:has(.mine-act){flex-wrap:wrap}.hg-h .mine-act{width:100%;justify-content:flex-start;margin-top:6px}}
 .lg-chips{display:flex;flex-direction:column;gap:8px}
 .lg-chip-lb{font-size:11.5px;font-weight:600;color:var(--muted);min-width:58px;align-self:center}
 .lg-arrow{color:var(--muted);font-size:12px;align-self:center}
@@ -525,6 +527,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.117", date: "2026-11-09", items: ["[내 신청]을 상태별 구역으로 나눔: 사용 중(반납일 가까운 순) → 출고 전(출고일 가까운 순) → 반납 확인 중 → 지난 신청(반납 완료·취소, 접어 둠)", "같은 신청번호는 카드 하나로 묶고 장비를 그 아래 나열. [연장]·[반납 신청 N대]·[수정]·[취소]는 카드에 한 번만. 연장·취소는 그 신청의 장비 전체에 적용", "카드에 날짜 배지: 반납 D-3·오늘 반납·연체 N일, 출고 D-5·내일 출고"] },
   { v: "v0.116", date: "2026-11-09", items: ["QR 라벨: 폼텍 3108 라벨지(A4 14칸, 101.6×38.1mm, 2열 7행) 추가하고 기본으로 함. 받은 서식 파일의 여백·칸 크기 그대로. 기존 24칸도 고를 수 있고, 마지막에 고른 라벨지를 기억함", "3108에서는 QR 32mm, 제품 이름 13pt로 더 크게"] },
   { v: "v0.115", date: "2026-11-09", items: ["QR 라벨: 제품 이름을 크고 굵게(최대 3줄, 넘치면 잘림) 맨 위로, 라벨은 그 아래, 내부 ID(EQ-0001)는 맨 아래 작게"] },
   { v: "v0.114", date: "2026-11-06", items: ["배차 정보 출발·도착 시간을 10분 단위로 고를 수 있게 함 (오전 8시 ~ 오후 7시 50분). 배송·회수 모두 적용, 메시지에는 ‘오후 2시 10분’처럼 들어감"] },
@@ -1919,28 +1922,42 @@ function updatePickCount(shown, total) {
   c.innerHTML = `<b>선택 ${draft.picks.size}대</b>${names.length ? ` · ${esc(names.join(", "))}` : ""}<br><span>전체 ${total}대 중 ${shown}대 표시</span>`;
 }
 
+let mineOldOpen = false;
+// [내 신청]: 상태별 구역(사용 중 → 출고 전 → 반납 확인 중 → 지난 신청), 구역 안에서는 신청번호별 카드
 function vMine() {
-  const mineAll = loans.filter(l => l.requester_id === me.id);
-  const noAt = new Map(); mineAll.forEach(l => { const c = l.created_at || ""; if (!noAt.has(l.loan_no) || c < noAt.get(l.loan_no)) noAt.set(l.loan_no, c); });
-  // 최근 신청이 위로, 같은 신청 안에서는 장비 순서 규칙대로
-  const mine = mineAll.sort((a, b) => noAt.get(b.loan_no).localeCompare(noAt.get(a.loan_no)) || b.loan_no.localeCompare(a.loan_no) || loanEqCmp(a, b));
-  const open = mine.filter(l => l.status !== "done" && l.status !== "cancelled");
-  const past = mine.filter(l => !open.includes(l)).slice(0, 30);
-  const actions = l => {
-    if (l.status === "reserved") return `${canEditRes(l) ? `<button class="btn sm" data-act="editRes" data-id="${l.id}">수정</button>` : `<button class="btn sm" data-act="extend" data-id="${l.id}">연장</button>`}<button class="btn sm danger" data-act="cancel" data-id="${l.id}">취소</button>`;
-    if (l.status === "out") return `<button class="btn sm" data-act="extend" data-id="${l.id}">연장</button><button class="btn sm pri" data-act="return" data-id="${l.id}">반납 신청</button>`;
-    return "";
-  };
-  const line = l => { const e = eqById(l.equipment_id) || {}, ri = reqInfo(l); return `<div class="row clickable" data-act="loanView" data-id="${l.id}"><div class="main"><b>${esc(e.name)}</b> <span class="mono">${esc(eqNo(e))}</span>
-      <div class="meta"><span class="mono">${esc(l.loan_no)}</span> · ${esc(l.customer || l.purpose)}${ri ? ` · ${esc(ri)}` : ""} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}${l.delivery ? " · 배송" : ""}</div></div>
-      ${isOverdue(l) ? `<span class="pill p-bad">연체 ${daysBetween(l.due_date, todayStr())}일</span>` : pill(LOAN_STATUS, l.status)} ${actions(l)}</div>`; };
+  const t = todayStr(), mine = loans.filter(l => l.requester_id === me.id);
+  const groups = st => groupByNo(mine.filter(l => st.includes(l.status)));
+  const minOf = (g, k) => g.map(x => x[k]).sort()[0] || "";
+  const maxOf = (g, k) => g.map(x => x[k]).sort().pop() || "";
+  const when = (g, kind) => { const d = kind === "out" ? minOf(g, "due_date") : minOf(g, "start_date"), n = daysBetween(t, d), w = kind === "out" ? "반납" : "출고";
+    const txt = n < 0 ? (kind === "out" ? `연체 ${-n}일` : `출고일 ${-n}일 지남`) : n === 0 ? `오늘 ${w}` : n === 1 ? `내일 ${w}` : `${w} D-${n}`;
+    return `<span class="pill ${n < 0 ? "p-bad" : n <= 1 ? "p-warn" : kind === "out" ? "p-info" : "p-ok"}">${txt}</span>`; };
+  const btns = (g, kind) => { const l = g[0];
+    if (kind === "out") return `<button class="btn sm" data-act="extendGrp" data-no="${esc(l.loan_no)}">연장</button><button class="btn sm pri" data-act="return" data-id="${l.id}">반납 신청${g.length > 1 ? ` ${g.length}대` : ""}</button>`;
+    if (kind === "reserved") return `${canEditRes(l) ? `<button class="btn sm" data-act="editRes" data-id="${l.id}">수정</button>` : `<button class="btn sm" data-act="extendGrp" data-no="${esc(l.loan_no)}">연장</button>`}<button class="btn sm danger" data-act="cancelGrp" data-no="${esc(l.loan_no)}">취소</button>`;
+    return ""; };
+  const card = (g, kind) => { const l = g[0], ri = reqInfo(l), o = shipOf(l.loan_no, "outbound");
+    return `<div class="hg">
+      <div class="hg-h"><div class="main"><b class="hg-who">${esc(l.customer || purposeText(l))}</b> <span class="grp-n">장비 ${g.length}대</span>
+        <div class="meta"><span class="mono">${esc(l.loan_no)}</span>${l.customer ? ` · ${esc(purposeText(l))}` : ""}${ri ? ` · ${esc(ri)}` : ""} · ${fmtD(minOf(g, "start_date"))}–${fmtD(maxOf(g, "due_date"))}${l.delivery ? ` · ${o ? `배송 ${esc((OUT_STATUS[o.status] || [o.status])[0]).replace(/^배송 /, "")}` : "배송"}` : ""}${kind === "checking" && l.returned_at ? ` · 반납 ${fmtT(l.returned_at)}` : ""}</div></div>
+        <div class="mine-act">${kind === "out" || kind === "reserved" ? when(g, kind) : kind === "old" ? pill(LOAN_STATUS, l.status) : ""}${btns(g, kind)}</div></div>
+      <div class="hg-items">${g.map(x => { const e = eqById(x.equipment_id) || {}; return `<div class="hg-item" data-act="loanView" data-id="${x.id}"><span class="main">${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}</span></div>`; }).join("")}</div></div>`; };
+  const SECS = [["out", "사용 중", ["out"], "지금 가지고 있는 장비예요. 다 쓰면 [반납 신청]을 눌러 주세요."],
+    ["reserved", "출고 전", ["reserved"], "예약된 신청이에요. 출고 전에는 수정하거나 취소할 수 있어요."],
+    ["checking", "반납 확인 중", ["checking"], "반납 신청을 했어요. 장비 관리자가 확인하면 끝나요."]];
+  const sorted = { out: g => minOf(g, "due_date"), reserved: g => minOf(g, "start_date"), checking: g => g[0].returned_at || "" };
+  const old = groups(["done", "cancelled"]).sort((a, b) => maxOf(b, "start_date").localeCompare(maxOf(a, "start_date"))).slice(0, 30);
+  const any = SECS.some(([k, , st]) => groups(st).length);
   return `
-  <div class="head"><div class="grow"><h2>내 신청</h2><p class="sub">반납을 누르면 반납 방법과 장비 상태를 적는 반납 신청서가 열려요. 장비 관리자가 점검하면 반납이 완료돼요.</p></div></div>
+  <div class="head"><div class="grow"><h2>내 신청</h2><p class="sub">신청을 상태별로 나눠 보여 줘요. 장비 줄을 누르면 자세히 볼 수 있어요.</p></div></div>
   ${(() => { const coming = shipments.filter(x => x.direction === "outbound" && x.status === "in_transit" && loans.some(l => l.loan_no === x.loan_no && l.requester_id === me.id && l.status !== "cancelled"));
     return coming.length ? `<div class="panel"><h3>배송 중 ${coming.length}건</h3><p class="meta" style="margin:0 0 6px">장비를 받았으면 [도착 확인]을 눌러 주세요. 장비 관리자에게 알림이 가요.</p><div class="list">${coming.map(x => { const l = loans.find(y => y.loan_no === x.loan_no && y.status !== "cancelled") || {};
       return `<div class="row"><div class="main"><b>${esc(l.customer || l.purpose || "")}</b><div class="meta"><span class="mono">${esc(x.loan_no)}</span> · 도착 희망 ${fmtD(x.requested_date) || "–"}${x.address ? ` · ${esc(x.address)}` : ""}</div></div><button class="btn sm pri" data-act="shipArrive" data-sid="${x.id}">도착 확인</button></div>`; }).join("")}</div></div>` : ""; })()}
-  <div class="panel"><h3>진행 중 ${open.length}건</h3><div class="list">${open.map(line).join("") || `<div class="empty">진행 중인 신청이 없어요. ‘데모 신청’에서 장비를 빌려 보세요.</div>`}</div></div>
-  <div class="panel"><h3>지난 신청</h3><div class="list">${past.map(line).join("") || `<div class="empty">지난 신청이 없어요.</div>`}</div></div>`;
+  ${any ? "" : `<div class="panel"><div class="empty">진행 중인 신청이 없어요. ‘데모 신청’에서 장비를 빌려 보세요.</div></div>`}
+  ${SECS.map(([k, title, st, sub]) => { const gs = groups(st).sort((a, b) => sorted[k](a).localeCompare(sorted[k](b)));
+    return gs.length ? `<div class="panel"><h3>${title} <span class="grp-n">${gs.length}건</span></h3><p class="meta" style="margin:0 0 8px">${sub}</p><div class="list">${gs.map(g => card(g, k)).join("")}</div></div>` : ""; }).join("")}
+  <div class="panel"><button type="button" class="lg-more" data-act="mineOld" aria-expanded="${mineOldOpen}"><span class="grp-arrow" aria-hidden="true">▸</span> <b>지난 신청</b> <span class="grp-n">${old.length}건</span> <span class="meta">반납 완료·취소</span> <span class="lg-toggle" style="margin-left:auto">${mineOldOpen ? "접기 ▲" : "펼쳐 보기 ▼"}</span></button>
+    ${mineOldOpen ? `<div class="list" style="margin-top:10px">${old.map(g => card(g, "old")).join("") || `<div class="empty">지난 신청이 없어요.</div>`}</div>` : ""}</div>`;
 }
 
 function groupBy(arr, k) { const m = new Map(); for (const x of arr) { if (!m.has(x[k])) m.set(x[k], []); m.get(x[k]).push(x); } return [...m.values()]; }
@@ -2494,8 +2511,11 @@ async function submitRequest() {
   } catch (e) { btn.disabled = false; show(errText(e)); await refresh(true); }
 }
 
-function extend(l) {
-  modal(`<h2>반납 예정일 연장</h2><p class="meta">${esc(eqById(l.equipment_id)?.name)} · 현재 반납 예정일 ${fmtD(l.due_date)}</p>
+function extend(l0, group) {
+  // 여러 대면 가장 늦은 반납 예정일·가장 이른 시작일 기준으로 한 번에 연장한다
+  const g = group && group.length ? group : [l0];
+  const l = { ...l0, due_date: g.map(x => x.due_date).sort().pop(), start_date: g.map(x => x.start_date).sort()[0] };
+  modal(`<h2>반납 예정일 연장</h2><p class="meta">${g.length > 1 ? `장비 ${g.length}대` : esc(eqById(l.equipment_id)?.name)} · 현재 반납 예정일 ${fmtD(l.due_date)}</p>
     <label class="f"><span>새 반납 예정일</span><input type="date" id="xDue" value="${esc(me.isAdmin || addDays(l.due_date, 3) <= addMonth1(l.start_date) ? addDays(l.due_date, 3) : addMonth1(l.start_date))}" min="${esc(addDays(l.due_date, 1))}" ${me.isAdmin ? "" : `max="${addMonth1(l.start_date)}"`}></label>
     <div class="meta">${me.isAdmin ? "관리자는 1달을 넘겨 연장할 수 있어요." : `시작일부터 1달(${fullD(addMonth1(l.start_date))})까지 연장할 수 있어요.`}</div>
     <div class="notice bad" id="xErr" hidden></div>
@@ -2506,7 +2526,7 @@ function extend(l) {
       if (!nd || nd <= l.due_date) { err.textContent = "지금 반납 예정일보다 뒤 날짜를 골라 주세요."; err.hidden = false; return; }
       if (!me.isAdmin && nd > addMonth1(l.start_date)) { err.textContent = `연장은 시작일부터 1달(${fullD(addMonth1(l.start_date))})까지 할 수 있어요. 더 길게 쓰려면 장비 관리자에게 요청해 주세요.`; err.hidden = false; return; }
       b.disabled = true;
-      const { error } = await sb.from("loans").update({ due_date: nd }).eq("id", l.id);
+      const { error } = await sb.from("loans").update({ due_date: nd }).in("id", g.map(x => x.id));
       b.disabled = false;
       if (error) { err.textContent = errText(error); err.hidden = false; return; }
       closeModal(); toast("반납 예정일을 연장했어요."); await refresh();
@@ -3053,7 +3073,7 @@ function exportCsv() {
 document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if (g) { go(g.dataset.go); return; }
   const a = e.target.closest("[data-act]"); if (!a) return;
-  if (me.viewAs && ["return", "extend", "cancel", "editRes", "checkout", "checkoutAll", "inspect", "shipStep", "shipArrive", "shipEdit", "retDate", "eqNew", "eqBulk"].includes(a.dataset.act)) { e.preventDefault(); toast(VIEW_ERR.message); return; }
+  if (me.viewAs && ["return", "extend", "extendGrp", "cancelGrp", "cancel", "editRes", "checkout", "checkoutAll", "inspect", "shipStep", "shipArrive", "shipEdit", "retDate", "eqNew", "eqBulk"].includes(a.dataset.act)) { e.preventDefault(); toast(VIEW_ERR.message); return; }
   const l = loans.find(x => x.id === a.dataset.id);
   const eqName = l ? `${esc(eqById(l.equipment_id)?.name)} ${eqParen(eqById(l.equipment_id))}` : "";
   switch (a.dataset.act) {
@@ -3104,6 +3124,12 @@ document.addEventListener("click", e => {
     case "return": l && returnForm(l); break;
     case "inspect": l && inspect(l); break;
     case "extend": l && extend(l); break;
+    case "extendGrp": { const g = loans.filter(x => x.loan_no === a.dataset.no && (x.status === "out" || x.status === "reserved") && (x.requester_id === me.id || me.isAdmin)); if (g.length) extend(g[0], g); break; }
+    case "cancelGrp": { const g = loans.filter(x => x.loan_no === a.dataset.no && x.status === "reserved");
+      if (g.length) confirmBox("예약 취소", `<span class="mono">${esc(a.dataset.no)}</span> · 장비 ${g.length}대 예약을 모두 취소해요.<br><br>${g.map(x => esc(eqById(x.equipment_id)?.name || "")).join("<br>")}`, "예약 취소",
+        async () => { await must(sb.from("loans").update({ status: "cancelled" }).in("id", g.map(x => x.id))); toast("예약을 취소했어요."); }, true);
+      break; }
+    case "mineOld": mineOldOpen = !mineOldOpen; render(); break;
     case "editRes": l && editReservation(l); break;
     case "addOut": l && addOutItems(l); break;
     case "checkoutAll": checkoutAll(a.dataset.no); break;
