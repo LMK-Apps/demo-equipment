@@ -339,9 +339,9 @@ pre.mail{white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;backgroun
   .lbl svg{width:27mm;height:27mm;flex:none}
   .lbl .tx{display:flex;flex-direction:column;gap:.8mm;min-width:0}
   .lbl .app{font-size:6.5pt;color:#555;letter-spacing:.3pt}
-  .lbl .iid{font-family:"IBM Plex Mono",monospace;font-size:12pt;font-weight:700}
-  .lbl .nm{font-size:7.5pt;line-height:1.25;max-height:2.5em;overflow:hidden}
-  .lbl .lb{font-family:"IBM Plex Mono",monospace;font-size:8pt;font-weight:700}
+  .lbl .nm{font-size:9.5pt;font-weight:700;line-height:1.2;max-height:3.6em;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere}
+  .lbl .lb{font-family:"IBM Plex Mono",monospace;font-size:9pt;font-weight:700}
+  .lbl .iid{font-family:"IBM Plex Mono",monospace;font-size:6.5pt;color:#555}
 }
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
 .app-foot{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;padding:28px 16px calc(28px + env(safe-area-inset-bottom,0px));font-size:12.5px;color:var(--muted)}
@@ -516,6 +516,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.115", date: "2026-11-09", items: ["QR 라벨: 제품 이름을 크고 굵게(최대 3줄, 넘치면 잘림) 맨 위로, 라벨은 그 아래, 내부 ID(EQ-0001)는 맨 아래 작게"] },
   { v: "v0.114", date: "2026-11-06", items: ["배차 정보 출발·도착 시간을 10분 단위로 고를 수 있게 함 (오전 8시 ~ 오후 7시 50분). 배송·회수 모두 적용, 메시지에는 ‘오후 2시 10분’처럼 들어감"] },
   { v: "v0.113", date: "2026-11-06", items: ["장비 관리자: [사용자 화면으로 보기]에서 사용자를 골라 그 사람이 보는 화면(내 신청·물류·현황 등)을 그대로 볼 수 있음. 맨 위 주황 띠에 누구 화면인지 표시", "다른 사람 화면에서는 보기만 됨: 반납·연장·취소·예약 수정·출고·도착 확인 등 저장하는 동작은 막고 안내. ‘나’를 고르면 전처럼 내 신청자 화면(저장 가능)"] },
   { v: "v0.112", date: "2026-11-04", items: ["반납 신청 같은 단계형 전체 화면 창에서 오른쪽 스크롤바를 숨김 (스크롤은 그대로 됨)"] },
@@ -2271,7 +2272,7 @@ function printLabels(rows, skip, cut) {
   for (let i = 0; i < cells.length; i += LABEL_PER_SHEET) sheets.push(cells.slice(i, i + LABEL_PER_SHEET));
   let area = $("#printArea"); if (!area) { area = document.createElement("div"); area.id = "printArea"; document.body.appendChild(area); }
   area.innerHTML = sheets.map(sh => `<div class="lbl-sheet">${sh.map(e => e ? `<div class="lbl ${cut ? "cut" : ""}">${qrSvg(eqLink(e.internal_id))}
-      <div class="tx"><span class="app">데모콕 · LMK</span><span class="iid">${esc(e.internal_id)}</span>${e.label ? `<span class="lb">${esc(e.label)}</span>` : ""}<span class="nm">${esc(e.name)}</span></div></div>`
+      <div class="tx"><span class="app">데모콕 · LMK</span><span class="nm">${esc(e.name)}</span>${e.label ? `<span class="lb">${esc(e.label)}</span>` : ""}<span class="iid">${esc(e.internal_id)}</span></div></div>`
     : `<div class="lbl"></div>`).join("")}</div>`).join("");
   const done = () => { area.innerHTML = ""; window.removeEventListener("afterprint", done); };
   window.addEventListener("afterprint", done);
