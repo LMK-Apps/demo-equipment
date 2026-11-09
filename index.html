@@ -334,6 +334,15 @@ pre.mail{white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;backgroun
   #printArea{display:block}
   .lbl-sheet{width:210mm;height:297mm;box-sizing:border-box;padding:12.9mm 6.5mm;display:grid;grid-template-columns:repeat(3,64mm);grid-auto-rows:33.9mm;column-gap:2.5mm;page-break-after:always;break-after:page}
   .lbl-sheet:last-child{page-break-after:auto;break-after:auto}
+  /* 폼텍 3108 (서식 파일 기준): 위 13.8mm, 왼쪽 4.7mm, 칸 101.56×38.07mm, 간격 없음 */
+  .lbl-sheet.f3108{padding:13.8mm 0 0 4.7mm;grid-template-columns:repeat(2,101.56mm);grid-auto-rows:38.07mm;column-gap:0}
+  .f3108 .lbl{gap:4mm;padding:2.5mm 5mm}
+  .f3108 .lbl svg{width:32mm;height:32mm}
+  .f3108 .lbl .tx{gap:1mm}
+  .f3108 .lbl .app{font-size:7.5pt}
+  .f3108 .lbl .nm{font-size:13pt;max-height:3.6em}
+  .f3108 .lbl .lb{font-size:11pt}
+  .f3108 .lbl .iid{font-size:7.5pt}
   .lbl{box-sizing:border-box;display:flex;align-items:center;gap:2.5mm;padding:2mm 3mm;overflow:hidden;color:#000;font-family:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif}
   .lbl.cut{outline:.2mm dashed #999;outline-offset:-.1mm}
   .lbl svg{width:27mm;height:27mm;flex:none}
@@ -516,6 +525,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.116", date: "2026-11-09", items: ["QR 라벨: 폼텍 3108 라벨지(A4 14칸, 101.6×38.1mm, 2열 7행) 추가하고 기본으로 함. 받은 서식 파일의 여백·칸 크기 그대로. 기존 24칸도 고를 수 있고, 마지막에 고른 라벨지를 기억함", "3108에서는 QR 32mm, 제품 이름 13pt로 더 크게"] },
   { v: "v0.115", date: "2026-11-09", items: ["QR 라벨: 제품 이름을 크고 굵게(최대 3줄, 넘치면 잘림) 맨 위로, 라벨은 그 아래, 내부 ID(EQ-0001)는 맨 아래 작게"] },
   { v: "v0.114", date: "2026-11-06", items: ["배차 정보 출발·도착 시간을 10분 단위로 고를 수 있게 함 (오전 8시 ~ 오후 7시 50분). 배송·회수 모두 적용, 메시지에는 ‘오후 2시 10분’처럼 들어감"] },
   { v: "v0.113", date: "2026-11-06", items: ["장비 관리자: [사용자 화면으로 보기]에서 사용자를 골라 그 사람이 보는 화면(내 신청·물류·현황 등)을 그대로 볼 수 있음. 맨 위 주황 띠에 누구 화면인지 표시", "다른 사람 화면에서는 보기만 됨: 반납·연장·취소·예약 수정·출고·도착 확인 등 저장하는 동작은 막고 안내. ‘나’를 고르면 전처럼 내 신청자 화면(저장 가능)"] },
@@ -2242,8 +2252,12 @@ async function scanQR() {
   });
 }
 
-// QR 라벨 출력 (A4 24칸 라벨지: 64×33.9mm, 3열 8행)
-const LABEL_PER_SHEET = 24;
+// QR 라벨 출력. 라벨지 2종: 폼텍 3108(A4 14칸, 101.6×38.1mm, 2열 7행 · 기본)과 A4 24칸(64×33.9mm, 3열 8행)
+const LABEL_FORMATS = {
+  f3108: { name: "폼텍 3108 · 14칸 (101.6×38.1mm, 2열 7행)", per: 14, cols: 2 },
+  f24: { name: "A4 24칸 (64×33.9mm, 3열 8행)", per: 24, cols: 3 },
+};
+const labelFmt = () => { try { return LABEL_FORMATS[localStorage.getItem("lblFmt")] ? localStorage.getItem("lblFmt") : "f3108"; } catch { return "f3108"; } };
 function qrSvg(text) {
   const q = window.qrcode(0, "M"); q.addData(text); q.make();
   const n = q.getModuleCount(); let d = "";
@@ -2253,25 +2267,30 @@ function qrSvg(text) {
 function labelForm(ids) {
   const rows = ids.map(eqById).filter(e => e && e.internal_id).sort((a, b) => a.internal_id.localeCompare(b.internal_id));
   if (!rows.length) return toast("내부 ID가 있는 장비를 골라 주세요.");
-  modal(`<h2>QR 라벨 출력</h2><p class="meta">장비 ${rows.length}대. A4 24칸 라벨지(한 칸 64×33.9mm, 3열 8행) 기준이에요. 처음에는 일반 종이에 뽑아서 라벨지에 겹쳐 보고 칸이 맞는지 확인해 주세요.</p>
+  let fmt = labelFmt();
+  const startOpts = () => { const F = LABEL_FORMATS[fmt]; return Array.from({ length: F.per }, (_, i) => `<option value="${i}">${i + 1}번째 칸 (${Math.floor(i / F.cols) + 1}줄 ${i % F.cols + 1}번째)</option>`).join(""); };
+  const info = () => `라벨 ${rows.length}장 · A4 ${Math.ceil(rows.length / LABEL_FORMATS[fmt].per)}장. 인쇄 창에서 <b>배율 100%(실제 크기)</b>, <b>여백 없음</b>으로 맞춰 주세요. 오래 쓰려면 투명 테이프로 덮어 주세요.`;
+  modal(`<h2>QR 라벨 출력</h2><p class="meta">장비 ${rows.length}대. 처음에는 일반 종이에 뽑아서 라벨지에 겹쳐 보고 칸이 맞는지 확인해 주세요.</p>
     <div class="fields">
-      <label class="f"><span>시작 칸 (이미 쓴 칸 건너뛰기)</span><select id="lbStart">${Array.from({ length: LABEL_PER_SHEET }, (_, i) => `<option value="${i}">${i + 1}번째 칸 (${Math.floor(i / 3) + 1}줄 ${i % 3 + 1}번째)</option>`).join("")}</select></label>
+      <label class="f wide"><span>라벨지</span><select id="lbFmt">${Object.entries(LABEL_FORMATS).map(([k, F]) => `<option value="${k}" ${k === fmt ? "selected" : ""}>${F.name}</option>`).join("")}</select></label>
+      <label class="f"><span>시작 칸 (이미 쓴 칸 건너뛰기)</span><select id="lbStart">${startOpts()}</select></label>
       <label class="f"><span>종이</span><select id="lbCut"><option value="0">라벨지 (선 없음)</option><option value="1">일반 종이 (자르는 선 표시)</option></select></label>
     </div>
-    <div class="notice">라벨 ${rows.length}장 · A4 ${Math.ceil(rows.length / LABEL_PER_SHEET)}장. 인쇄 창에서 <b>배율 100%(실제 크기)</b>, <b>여백 없음</b>으로 맞춰 주세요. 오래 쓰려면 투명 테이프로 덮어 주세요.</div>
+    <div class="notice" id="lbInfo">${info()}</div>
     <div class="notice bad" id="lbErr" hidden></div>
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="lbGo">인쇄</button></div>`, m => {
+    $("#lbFmt", m).addEventListener("change", e => { fmt = e.target.value; try { localStorage.setItem("lblFmt", fmt); } catch {} $("#lbStart", m).innerHTML = startOpts(); $("#lbInfo", m).innerHTML = info(); });
     $("#lbGo", m).addEventListener("click", () => {
       if (!window.qrcode) { $("#lbErr", m).textContent = "QR 도구를 아직 불러오지 못했어요. 잠시 뒤에 다시 눌러 주세요."; $("#lbErr", m).hidden = false; return; }
-      printLabels(rows, +$("#lbStart", m).value, $("#lbCut", m).value === "1");
+      printLabels(rows, +$("#lbStart", m).value, $("#lbCut", m).value === "1", fmt);
     });
   });
 }
-function printLabels(rows, skip, cut) {
-  const cells = [...Array(skip).fill(null), ...rows], sheets = [];
-  for (let i = 0; i < cells.length; i += LABEL_PER_SHEET) sheets.push(cells.slice(i, i + LABEL_PER_SHEET));
+function printLabels(rows, skip, cut, fmt = labelFmt()) {
+  const per = LABEL_FORMATS[fmt].per, cells = [...Array(skip).fill(null), ...rows], sheets = [];
+  for (let i = 0; i < cells.length; i += per) sheets.push(cells.slice(i, i + per));
   let area = $("#printArea"); if (!area) { area = document.createElement("div"); area.id = "printArea"; document.body.appendChild(area); }
-  area.innerHTML = sheets.map(sh => `<div class="lbl-sheet">${sh.map(e => e ? `<div class="lbl ${cut ? "cut" : ""}">${qrSvg(eqLink(e.internal_id))}
+  area.innerHTML = sheets.map(sh => `<div class="lbl-sheet ${fmt}">${sh.map(e => e ? `<div class="lbl ${cut ? "cut" : ""}">${qrSvg(eqLink(e.internal_id))}
       <div class="tx"><span class="app">데모콕 · LMK</span><span class="nm">${esc(e.name)}</span>${e.label ? `<span class="lb">${esc(e.label)}</span>` : ""}<span class="iid">${esc(e.internal_id)}</span></div></div>`
     : `<div class="lbl"></div>`).join("")}</div>`).join("");
   const done = () => { area.innerHTML = ""; window.removeEventListener("afterprint", done); };
