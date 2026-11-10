@@ -129,7 +129,8 @@ h3{font-size:14px;margin:0;font-weight:600}
 .lg-eqs{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:15.5px;min-width:0;flex:1 1 180px}.lg-eq{display:inline-flex;gap:6px;align-items:center}.lg-eq b{font-weight:700}.lg-more-n{font-size:13px;font-weight:600;color:var(--muted)}
 .lg-who2{padding-left:26px;font-size:13.5px;font-weight:600;color:var(--fg)}
 .lg-tag{font-family:var(--mono);font-size:11.5px;padding:1px 6px;border-radius:5px;background:var(--accent-soft);color:var(--accent)}
-.lg-h1 .btn{flex:none}
+.lg-h1 .btn{flex:none}.lg-btns{display:inline-flex;gap:6px}.lg-btns-m{display:none}
+@media (max-width:640px){.lg-h1 .lg-btns{display:none}.lg-btns-m{display:flex;gap:6px;justify-content:flex-end;margin-top:4px}}
 .lg-grp.lg-later{border:1.5px dashed color-mix(in srgb,var(--accent) 45%,var(--line))}
 .lg-toggle{font-size:12.5px;font-weight:600;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));background:var(--surface);border-radius:6px;padding:4px 10px;white-space:nowrap}.lg-later>.lg-h .hg-who{color:var(--muted)}.lg-later.open>.lg-h .hg-who{color:var(--fg)}
 .lg-later-b{padding:12px;background:var(--sunk)}
@@ -527,6 +528,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.118", date: "2026-11-10", items: ["출납 대장 휴대폰 화면: [출고 처리]·[반납 확인] 버튼을 장비 이름과 신청자 줄 사이에서 카드 맨 아래 오른쪽으로 옮김 (PC는 그대로)", "출납 대장의 ‘배송 배송 중’ 중복 글자를 ‘배송 중’으로 고침"] },
   { v: "v0.117", date: "2026-11-09", items: ["[내 신청]을 상태별 구역으로 나눔: 사용 중(반납일 가까운 순) → 출고 전(출고일 가까운 순) → 반납 확인 중 → 지난 신청(반납 완료·취소, 접어 둠)", "같은 신청번호는 카드 하나로 묶고 장비를 그 아래 나열. [연장]·[반납 신청 N대]·[수정]·[취소]는 카드에 한 번만. 연장·취소는 그 신청의 장비 전체에 적용", "카드에 날짜 배지: 반납 D-3·오늘 반납·연체 N일, 출고 D-5·내일 출고"] },
   { v: "v0.116", date: "2026-11-09", items: ["QR 라벨: 폼텍 3108 라벨지(A4 14칸, 101.6×38.1mm, 2열 7행) 추가하고 기본으로 함. 받은 서식 파일의 여백·칸 크기 그대로. 기존 24칸도 고를 수 있고, 마지막에 고른 라벨지를 기억함", "3108에서는 QR 32mm, 제품 이름 13pt로 더 크게"] },
   { v: "v0.115", date: "2026-11-09", items: ["QR 라벨: 제품 이름을 크고 굵게(최대 3줄, 넘치면 잘림) 맨 위로, 라벨은 그 아래, 내부 ID(EQ-0001)는 맨 아래 작게"] },
@@ -2087,9 +2089,9 @@ function vLedger() {
     const btns = !me.isAdmin ? "" : `${reserved.length ? (reserved.length > 1 ? `<button class="btn sm pri" data-act="checkoutAll" data-no="${esc(l.loan_no)}">출고 처리 ${reserved.length}대</button>` : `<button class="btn sm pri" data-act="checkout" data-id="${reserved[0].id}">출고 처리</button>`) : ""}${checking.length ? `<button class="btn sm pri" data-act="inspect" data-id="${checking[0].id}">반납 확인${checking.length > 1 ? ` ${checking.length}대` : ""}</button>` : ""}`;
     return `<div class="lg-h${late ? " late" : ""}${open ? " open" : ""}" data-act="lgGrp" data-k="${esc(l.loan_no)}" role="button" aria-expanded="${open}">
       <div class="lg-h1"><span class="grp-arrow" aria-hidden="true">▸</span><span class="lg-eqs">${eqLine}</span>
-        <span class="lg-st">${whenPill(all)}${stPills}</span>${btns}</div>
+        <span class="lg-st">${whenPill(all)}${stPills}</span>${btns ? `<span class="lg-btns">${btns}</span>` : ""}</div>
       <div class="lg-who2">${esc(nameOf(l.requester_id))} · ${esc(l.customer || purposeText(l))}</div>
-      <div class="r2-l2 lg-h2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(purposeText(l))}${ri ? ` · ${esc(ri)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0])}${shipMissing(o) ? ` <span class="pill p-warn">정보 입력 전</span>` : ""}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div></div>`; };
+      <div class="r2-l2 lg-h2"><span class="mono">${esc(l.loan_no)}</span><span>${esc(purposeText(l))}${ri ? ` · ${esc(ri)}` : ""}</span><span class="mono">${fmtD(l.start_date)}–${fmtD(end)}</span>${l.delivery && o ? `<span>배송 ${esc((OUT_STATUS[o.status] || [o.status])[0]).replace(/^배송 /, "")}${shipMissing(o) ? ` <span class="pill p-warn">정보 입력 전</span>` : ""}</span>` : l.delivery ? "<span>배송</span>" : "<span>직접 수령</span>"}${co ? `<span>출고 <span class="mono">${fmtT(co)}</span></span>` : ""}</div>${btns ? `<div class="lg-btns-m">${btns}</div>` : ""}</div>`; };
   return `
   <div class="head"><div class="grow"><h2>출납 대장</h2><p class="sub">대여번호(신청번호)별로 묶어서 보여 줘요. 번호 줄을 누르면 장비 목록이 펼쳐지고, 장비 줄을 누르면 자세히 볼 수 있어요.${me.isAdmin ? "" : " 출고·점검은 장비 관리자만 할 수 있어요."}</p></div>
     <button class="btn" data-act="csv">CSV 내보내기</button></div>
