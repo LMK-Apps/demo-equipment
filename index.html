@@ -530,6 +530,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.121", date: "2026-11-10", items: ["상태 이름 ‘사용불가’를 맞춤법에 맞게 ‘사용 불가’로 띄어 씀"] },
   { v: "v0.120", date: "2026-11-10", db: "031_status_partial.sql", items: ["장비 상태 ‘구성품 누락’ 추가: 신청·출고는 받고, 데모 신청 목록에 노란 ‘구성품 누락’ 배지와 빠진 내용 안내 표시", "장비 상태 이름 ‘수리 중·수리 필요’를 ‘사용불가’로 변경 (신청 막음은 그대로)", "반납 확인·상태 점검의 장비 판정을 사용 가능 · 구성품 누락 · 사용불가 3가지로. 점검 결과 ‘구성품 누락’이면 자동으로 구성품 누락, ‘파손 또는 수리 필요’면 사용불가", "[자산] 숫자 카드에 ‘구성품 누락’ 추가, 여러 대 상태 변경에도 추가"] },
   { v: "v0.119", date: "2026-11-10", db: "030_shipment_move.sql", items: ["사용 중 이동 배차 요청: 반납 전에 장비를 다른 곳으로 옮길 때 [내 신청] 사용 중 카드나 세부 정보 창의 [이동 요청]으로 요청. 출발지(지금 장비가 있는 곳)·도착지·받는 사람·도착 희망일 입력. 한 신청에 여러 번 가능", "[물류]에 ‘이동 N’ 줄과 진행 단계(이동 요청 전 → 요청 완료 → 이동 중 → 도착), 관리자용 [이동 요청 메시지]·배차 정보 입력 추가. 신청자는 이동 중일 때 [도착 확인] 가능", "신청자는 ‘이동 요청 전’ 단계까지, 장비 관리자는 도착 전까지 이동 취소 가능. 이동 요청 시 Teams 알림", "이동해서 도착한 곳이 있으면 반납 때 회수지 기본값을 그곳으로 채움"] },
   { v: "v0.118", date: "2026-11-10", items: ["출납 대장 휴대폰 화면: [출고 처리]·[반납 확인] 버튼을 장비 이름과 신청자 줄 사이에서 카드 맨 아래 오른쪽으로 옮김 (PC는 그대로)", "출납 대장의 ‘배송 배송 중’ 중복 글자를 ‘배송 중’으로 고침"] },
@@ -863,11 +864,11 @@ const fullD = s => { const d = new Date(s + "T00:00:00"); return `${s.replace(/-
 const fmtT = iso => { if (!iso) return "–"; const d = new Date(iso); return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const daysBetween = (a, b) => Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 864e5);
 
-// repair 값은 그대로 두고 화면 이름만 ‘사용불가’. partial(구성품 누락)은 신청 가능, 경고만
-const EQ_STATUS = { available:["사용 가능","p-ok"], partial:["구성품 누락","p-warn"], onloan:["대여 중","p-info"], inspect:["점검 중","p-warn"], repair:["사용불가","p-bad"], retired:["폐기",""] };
+// repair 값은 그대로 두고 화면 이름만 ‘사용 불가’. partial(구성품 누락)은 신청 가능, 경고만
+const EQ_STATUS = { available:["사용 가능","p-ok"], partial:["구성품 누락","p-warn"], onloan:["대여 중","p-info"], inspect:["점검 중","p-warn"], repair:["사용 불가","p-bad"], retired:["폐기",""] };
 // 점검 결과 → 장비 판정 기본값
 const verdictOf = cond => cond === "broken" ? "repair" : cond === "missing" ? "partial" : "ok";
-const VERDICT_TXT = { ok: "사용 가능", partial: "구성품 누락", repair: "사용불가" };
+const VERDICT_TXT = { ok: "사용 가능", partial: "구성품 누락", repair: "사용 불가" };
 const LOAN_STATUS = { reserved:["예약","p-acc"], out:["출고","p-info"], checking:["반납 확인 중","p-warn"], done:["반납 완료","p-ok"], cancelled:["취소",""] };
 const OUT_STATUS = { pending:["요청 전","p-warn"], requested:["요청 완료","p-acc"], in_transit:["배송 중","p-info"], delivered:["도착","p-ok"] };
 const PICK_STATUS = { scheduled:["반납 신청 전",""], pending:["회수 요청 전","p-warn"], requested:["회수 요청 완료","p-acc"], done:["회수 완료","p-ok"], cancelled:["회수 취소",""] };
@@ -1325,7 +1326,7 @@ function vHome() {
   <div class="stats">
     <div class="stat"><b>${cnt("available") + cnt("partial")}</b><span>사용 가능 장비</span></div>
     <div class="stat"><b>${cnt("onloan")}</b><span>대여 중</span></div>
-    <div class="stat"><b>${cnt("repair") + cnt("inspect")}</b><span>점검 중·사용불가</span></div>
+    <div class="stat"><b>${cnt("repair") + cnt("inspect")}</b><span>점검 중·사용 불가</span></div>
     <div class="stat ${out.length ? "alert" : ""}"><b>${out.length}</b><span>연체</span></div>
   </div>
   <div class="grid2">
@@ -1514,7 +1515,7 @@ function histText(ev, loanAts) {
   if (ev.action === "insert") return `데모 신청 · ${dt(d.start_date)}–${dt(d.due_date)} · ${esc(d.purpose || "")}${d.customer ? ` · ${esc(d.customer)}` : ""}${no}`;
   if (d.status === "out") return `출고${no}`;
   if (d.status === "checking") return `반납 신청${d.return_method ? ` · ${esc(retLabel(d))}` : ""}${d.return_self_check ? ` · 자가점검 <b>${esc(CONDS[d.return_self_check])}</b>` : ""}${d.return_self_note ? ` (${esc(d.return_self_note)})` : ""}${no}`;
-  if (d.status === "done") return `반납 확인 · <b>${esc(CONDS[d.return_condition] || "–")}</b>${d.return_note ? ` · ${esc(d.return_note)}` : ""}${d.repair_needed === true ? " · 사용불가" : ""}${no}`;
+  if (d.status === "done") return `반납 확인 · <b>${esc(CONDS[d.return_condition] || "–")}</b>${d.return_note ? ` · ${esc(d.return_note)}` : ""}${d.repair_needed === true ? " · 사용 불가" : ""}${no}`;
   if (d.status === "cancelled") return `예약 취소${no}`;
   if (d.due_date) return `반납 예정일 연장 → ${dt(d.due_date)}${no}`;
   return null;
@@ -1644,7 +1645,7 @@ function vEquip() {
   <div class="stats">
     <button class="stat stat-btn ${anyF ? "" : "on"}" data-act="eqCard" data-k="all" aria-pressed="${!anyF}"><b>${equipment.filter(e => e.status !== "retired").length}</b><span>전체 보기</span></button>
     ${byLoc.map(([k, n]) => `<button class="stat stat-btn ${filters.eqLoc === k ? "on" : ""}" data-act="eqCard" data-k="loc:${k}" aria-pressed="${filters.eqLoc === k}"><b>${n}</b><span>${k} 보관</span></button>`).join("")}
-    <button class="stat stat-btn ${needRepair ? "alert" : ""} ${filters.eqSt === "repair" ? "on" : ""}" data-act="eqCard" data-k="st:repair" aria-pressed="${filters.eqSt === "repair"}"><b>${needRepair}</b><span>사용불가</span></button>
+    <button class="stat stat-btn ${needRepair ? "alert" : ""} ${filters.eqSt === "repair" ? "on" : ""}" data-act="eqCard" data-k="st:repair" aria-pressed="${filters.eqSt === "repair"}"><b>${needRepair}</b><span>사용 불가</span></button>
     <button class="stat stat-btn ${filters.eqSt === "partial" ? "on" : ""}" data-act="eqCard" data-k="st:partial" aria-pressed="${filters.eqSt === "partial"}"><b>${nPartial}</b><span>구성품 누락</span></button>
     ${me.isAdmin ? xCard("nocheck", "관리자 점검 없음") + xCard("noasset", "자산번호 없음") : ""}</div>
   <div class="toolbar">
@@ -1660,7 +1661,7 @@ function vEquip() {
       if (g.items.length === 1) return eqRow(g.items[0], t, false, false);
       const open = eqOpen.has(g.k) || !!q || !!eqSel, f = g.items[0];
       const cnt = st => g.items.filter(e => e.status === st).length;
-      const sum = [["available", "사용 가능"], ["partial", "구성품 누락"], ["onloan", "대여 중"], ["inspect", "점검 중"], ["repair", "사용불가"]].map(([k, tx]) => cnt(k) ? `<span>${tx} ${cnt(k)}</span>` : "").join("");
+      const sum = [["available", "사용 가능"], ["partial", "구성품 누락"], ["onloan", "대여 중"], ["inspect", "점검 중"], ["repair", "사용 불가"]].map(([k, tx]) => cnt(k) ? `<span>${tx} ${cnt(k)}</span>` : "").join("");
       const tags = g.items.map(e => esc(e.label || "")).filter(Boolean).join(", ");
       return `<div class="r2 grp${open ? " open" : ""}" data-act="eqGrp" data-k="${esc(g.k)}" aria-expanded="${open}">
         <span class="grp-arrow" aria-hidden="true">▸</span>
@@ -1824,7 +1825,7 @@ function vRequest() {
     const od = !badRange && !own && due >= todayStr() ? loans.find(x => x.equipment_id === e.id && isOverdue(x)) : null;
     const blocked = (!own && (e.status === "repair" || e.status === "inspect")) || c.length > 0 || busyNow || !!od;
     if (blocked) draft.picks.delete(e.id);
-    const why = e.status === "repair" ? "사용불가" : e.status === "inspect" ? "점검 중" : od ? "연체 중" : c.length ? "예약 겹침" : busyNow ? "대여 중" : "";
+    const why = e.status === "repair" ? "사용 불가" : e.status === "inspect" ? "점검 중" : od ? "연체 중" : c.length ? "예약 겹침" : busyNow ? "대여 중" : "";
     const title = c.length ? `${c[0].loan_no} (${fmtD(c[0].start_date)}–${fmtD(c[0].due_date)})` : why;
     const detail = od ? `반납 예정일(${fmtD(od.due_date)})이 지났는데 아직 돌아오지 않았어요.` : c.length ? (() => { const nf = nextFreeStart(e.id, start, due);
       return `${c.map(x => `${fmtD(x.start_date)}–${fmtD(x.due_date)}`).slice(0, 2).join(", ")}${c.length > 2 ? ` 외 ${c.length - 2}건` : ""} 예약돼 있어요.${nf ? ` ${fmtD(nf)}부터 쓸 수 있어요.` : ""}`; })() : "";
@@ -2461,7 +2462,7 @@ function verdictHtml(cond) {
   const v = verdictOf(cond);
   return `<div><h3>장비 판정</h3><div class="fields" style="margin-top:6px">
     ${Object.entries(VERDICT_TXT).map(([k, t]) => `<label class="check"><input type="radio" name="vd" value="${k}" ${v === k ? "checked" : ""}> ${t}</label>`).join("")}</div>
-    <div class="meta">구성품 누락은 ‘구성품 누락’(신청은 받고 경고 표시), 파손 또는 수리 필요는 ‘사용불가’(신청 막음)로 자동 선택돼요. 필요하면 바꿔 주세요.</div></div>`;
+    <div class="meta">구성품 누락은 ‘구성품 누락’(신청은 받고 경고 표시), 파손 또는 수리 필요는 ‘사용 불가’(신청 막음)로 자동 선택돼요. 필요하면 바꿔 주세요.</div></div>`;
 }
 function bindVerdict(m, condName) {
   let touched = false;
@@ -2937,7 +2938,7 @@ function inspect(l, single) {
       if (error) return show(errText(error));
       // DB는 점검 결과로 판정한다(누락→구성품 누락). 관리자가 다르게 고른 경우만 장비 상태를 맞춘다
       if (!repair && (vd === "partial") !== (cond === "missing")) await sb.from("equipment").update({ status: vd === "partial" ? "partial" : "available" }).eq("id", l.equipment_id);
-      closeModal(); toast(repair ? `반납을 확인하고 장비를 사용불가로 표시했어요. (${loc})` : vd === "partial" ? `반납을 확인했어요. 장비를 구성품 누락으로 표시했어요. (${loc})` : `반납을 확인했어요. 장비를 다시 빌릴 수 있어요. (${loc})`); await refresh();
+      closeModal(); toast(repair ? `반납을 확인하고 장비를 사용 불가로 표시했어요. (${loc})` : vd === "partial" ? `반납을 확인했어요. 장비를 구성품 누락으로 표시했어요. (${loc})` : `반납을 확인했어요. 장비를 다시 빌릴 수 있어요. (${loc})`); await refresh();
     });
   });
 }
@@ -3039,7 +3040,7 @@ function inspectBulk(l, group) {
       await refresh();
       if (fails.length) { err.textContent = `${todo.length - fails.length}대는 확인했어요. 확인하지 못한 장비: ${fails.join(" / ")}`; err.hidden = false; ok.disabled = false; return; }
       const nRep = todo.filter(x => plan(x).repair).length, nPart = todo.filter(x => plan(x).v === "partial").length;
-      closeModal(); toast(nRep || nPart ? `${todo.length}대 반납을 확인했어요.${nRep ? ` ${nRep}대는 사용불가로` : ""}${nPart ? ` ${nPart}대는 구성품 누락으로` : ""} 표시했어요.` : `${todo.length}대 반납을 확인했어요. 다시 빌릴 수 있어요.`);
+      closeModal(); toast(nRep || nPart ? `${todo.length}대 반납을 확인했어요.${nRep ? ` ${nRep}대는 사용 불가로` : ""}${nPart ? ` ${nPart}대는 구성품 누락으로` : ""} 표시했어요.` : `${todo.length}대 반납을 확인했어요. 다시 빌릴 수 있어요.`);
     });
   });
 }
