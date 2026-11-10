@@ -143,6 +143,7 @@ h3{font-size:14px;margin:0;font-weight:600}
 .st-more td{cursor:pointer;background:var(--sunk);color:var(--muted)}.st-more td b{color:var(--fg)}.st-more .lg-toggle{margin-left:8px}.st-more.open .grp-arrow{transform:rotate(90deg)}
 .viewbar{position:sticky;top:0;z-index:60;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:7px 12px;background:var(--warn-soft);color:var(--warn);font-size:13.5px}.viewbar b{color:var(--fg)}
 .mv-lines{display:flex;flex-direction:column;gap:4px;margin:6px 0 0 6px}.mv-line{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.why.warn{color:var(--warn,#9a6700)}
 .mine-act{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 @media (max-width:640px){.hg-h:has(.mine-act){flex-wrap:wrap}.hg-h .mine-act{width:100%;justify-content:flex-start;margin-top:6px}}
 .lg-chips{display:flex;flex-direction:column;gap:8px}
@@ -529,6 +530,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.120", date: "2026-11-10", db: "031_status_partial.sql", items: ["장비 상태 ‘구성품 누락’ 추가: 신청·출고는 받고, 데모 신청 목록에 노란 ‘구성품 누락’ 배지와 빠진 내용 안내 표시", "장비 상태 이름 ‘수리 중·수리 필요’를 ‘사용불가’로 변경 (신청 막음은 그대로)", "반납 확인·상태 점검의 장비 판정을 사용 가능 · 구성품 누락 · 사용불가 3가지로. 점검 결과 ‘구성품 누락’이면 자동으로 구성품 누락, ‘파손 또는 수리 필요’면 사용불가", "[자산] 숫자 카드에 ‘구성품 누락’ 추가, 여러 대 상태 변경에도 추가"] },
   { v: "v0.119", date: "2026-11-10", db: "030_shipment_move.sql", items: ["사용 중 이동 배차 요청: 반납 전에 장비를 다른 곳으로 옮길 때 [내 신청] 사용 중 카드나 세부 정보 창의 [이동 요청]으로 요청. 출발지(지금 장비가 있는 곳)·도착지·받는 사람·도착 희망일 입력. 한 신청에 여러 번 가능", "[물류]에 ‘이동 N’ 줄과 진행 단계(이동 요청 전 → 요청 완료 → 이동 중 → 도착), 관리자용 [이동 요청 메시지]·배차 정보 입력 추가. 신청자는 이동 중일 때 [도착 확인] 가능", "신청자는 ‘이동 요청 전’ 단계까지, 장비 관리자는 도착 전까지 이동 취소 가능. 이동 요청 시 Teams 알림", "이동해서 도착한 곳이 있으면 반납 때 회수지 기본값을 그곳으로 채움"] },
   { v: "v0.118", date: "2026-11-10", items: ["출납 대장 휴대폰 화면: [출고 처리]·[반납 확인] 버튼을 장비 이름과 신청자 줄 사이에서 카드 맨 아래 오른쪽으로 옮김 (PC는 그대로)", "출납 대장의 ‘배송 배송 중’ 중복 글자를 ‘배송 중’으로 고침"] },
   { v: "v0.117", date: "2026-11-09", items: ["[내 신청]을 상태별 구역으로 나눔: 사용 중(반납일 가까운 순) → 출고 전(출고일 가까운 순) → 반납 확인 중 → 지난 신청(반납 완료·취소, 접어 둠)", "같은 신청번호는 카드 하나로 묶고 장비를 그 아래 나열. [연장]·[반납 신청 N대]·[수정]·[취소]는 카드에 한 번만. 연장·취소는 그 신청의 장비 전체에 적용", "카드에 날짜 배지: 반납 D-3·오늘 반납·연체 N일, 출고 D-5·내일 출고"] },
@@ -861,7 +863,11 @@ const fullD = s => { const d = new Date(s + "T00:00:00"); return `${s.replace(/-
 const fmtT = iso => { if (!iso) return "–"; const d = new Date(iso); return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const daysBetween = (a, b) => Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 864e5);
 
-const EQ_STATUS = { available:["사용 가능","p-ok"], onloan:["대여 중","p-info"], inspect:["점검 중","p-warn"], repair:["수리 중","p-bad"], retired:["폐기",""] };
+// repair 값은 그대로 두고 화면 이름만 ‘사용불가’. partial(구성품 누락)은 신청 가능, 경고만
+const EQ_STATUS = { available:["사용 가능","p-ok"], partial:["구성품 누락","p-warn"], onloan:["대여 중","p-info"], inspect:["점검 중","p-warn"], repair:["사용불가","p-bad"], retired:["폐기",""] };
+// 점검 결과 → 장비 판정 기본값
+const verdictOf = cond => cond === "broken" ? "repair" : cond === "missing" ? "partial" : "ok";
+const VERDICT_TXT = { ok: "사용 가능", partial: "구성품 누락", repair: "사용불가" };
 const LOAN_STATUS = { reserved:["예약","p-acc"], out:["출고","p-info"], checking:["반납 확인 중","p-warn"], done:["반납 완료","p-ok"], cancelled:["취소",""] };
 const OUT_STATUS = { pending:["요청 전","p-warn"], requested:["요청 완료","p-acc"], in_transit:["배송 중","p-info"], delivered:["도착","p-ok"] };
 const PICK_STATUS = { scheduled:["반납 신청 전",""], pending:["회수 요청 전","p-warn"], requested:["회수 요청 완료","p-acc"], done:["회수 완료","p-ok"], cancelled:["회수 취소",""] };
@@ -1265,7 +1271,7 @@ function checkoutForm(rows, held = []) {
 // 같은 장비의 앞 신청이 아직 끝나지 않았는지(출고 중 또는 반납 확인 중)
 const busyBefore = l => loans.find(x => x.equipment_id === l.equipment_id && x.id !== l.id && (x.status === "out" || x.status === "checking"));
 // 같은 모델이고 그 기간에 쓸 수 있는 다른 장비
-const freeSameModel = (e, start, due, ignoreId) => equipment.filter(x => x.id !== e.id && x.status === "available" && modelKey(x) === modelKey(e) && !conflictsFor(x.id, start, due, ignoreId).length);
+const freeSameModel = (e, start, due, ignoreId) => equipment.filter(x => x.id !== e.id && (x.status === "available" || x.status === "partial") && modelKey(x) === modelKey(e) && !conflictsFor(x.id, start, due, ignoreId).length);
 // 연체 장비를 기다리는 뒤 예약(최대 2건)과 대체 장비
 function affectHtml(l) {
   const e = eqById(l.equipment_id); if (!e) return "";
@@ -1317,9 +1323,9 @@ function vHome() {
   <div class="head"><div class="grow"><h2>오늘 현황</h2><p class="sub">${t.replace(/-/g, ".")} 기준. 연체는 반납 예정일이 지났는데 아직 출고 상태인 건이에요.</p></div>
     <button class="btn" data-act="refresh">새로 고침</button><button class="btn" data-act="scanQR">QR 찍기</button>${me.isAdmin && checkCount() ? `<button class="btn pri" data-go="check">출입고 확인 ${checkCount()}건</button>` : ""}<button class="btn pri" data-go="request">데모 신청</button></div>
   <div class="stats">
-    <div class="stat"><b>${cnt("available")}</b><span>사용 가능 장비</span></div>
+    <div class="stat"><b>${cnt("available") + cnt("partial")}</b><span>사용 가능 장비</span></div>
     <div class="stat"><b>${cnt("onloan")}</b><span>대여 중</span></div>
-    <div class="stat"><b>${cnt("repair") + cnt("inspect")}</b><span>점검·수리 중</span></div>
+    <div class="stat"><b>${cnt("repair") + cnt("inspect")}</b><span>점검 중·사용불가</span></div>
     <div class="stat ${out.length ? "alert" : ""}"><b>${out.length}</b><span>연체</span></div>
   </div>
   <div class="grid2">
@@ -1508,7 +1514,7 @@ function histText(ev, loanAts) {
   if (ev.action === "insert") return `데모 신청 · ${dt(d.start_date)}–${dt(d.due_date)} · ${esc(d.purpose || "")}${d.customer ? ` · ${esc(d.customer)}` : ""}${no}`;
   if (d.status === "out") return `출고${no}`;
   if (d.status === "checking") return `반납 신청${d.return_method ? ` · ${esc(retLabel(d))}` : ""}${d.return_self_check ? ` · 자가점검 <b>${esc(CONDS[d.return_self_check])}</b>` : ""}${d.return_self_note ? ` (${esc(d.return_self_note)})` : ""}${no}`;
-  if (d.status === "done") return `반납 확인 · <b>${esc(CONDS[d.return_condition] || "–")}</b>${d.return_note ? ` · ${esc(d.return_note)}` : ""}${d.repair_needed === true ? " · 수리 필요" : ""}${no}`;
+  if (d.status === "done") return `반납 확인 · <b>${esc(CONDS[d.return_condition] || "–")}</b>${d.return_note ? ` · ${esc(d.return_note)}` : ""}${d.repair_needed === true ? " · 사용불가" : ""}${no}`;
   if (d.status === "cancelled") return `예약 취소${no}`;
   if (d.due_date) return `반납 예정일 연장 → ${dt(d.due_date)}${no}`;
   return null;
@@ -1628,7 +1634,7 @@ function vEquip() {
   const list = equipment.filter(e => (!xTest || xTest(e)) && (!filters.eqSt || e.status === filters.eqSt) && (!filters.eqCat || e.category === filters.eqCat) && (!filters.eqLoc || locGroup(e.location) === filters.eqLoc) && (!q || `${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.name} ${e.model || ""} ${e.item_no} ${e.serial_no} ${e.location}`.toLowerCase().includes(q))).sort(eqCmp);
   const t = todayStr();
   const byLoc = [...LOCS, "기타"].map(k => [k, equipment.filter(e => locGroup(e.location) === k && e.status !== "retired").length]);
-  const needRepair = equipment.filter(e => e.status === "repair").length;
+  const needRepair = equipment.filter(e => e.status === "repair").length, nPartial = equipment.filter(e => e.status === "partial").length;
   const anyF = !!(filters.eqQ.trim() || filters.eqCat || filters.eqLoc || filters.eqSt || xTest);
   const xCard = (k, label) => { const n = equipment.filter(X_TEST[k]).length;
     return `<button class="stat stat-btn ${filters.eqX === k ? "on" : ""}" data-act="eqCard" data-k="x:${k}" aria-pressed="${filters.eqX === k}"><b>${n}</b><span>${label}</span></button>`; };
@@ -1638,7 +1644,8 @@ function vEquip() {
   <div class="stats">
     <button class="stat stat-btn ${anyF ? "" : "on"}" data-act="eqCard" data-k="all" aria-pressed="${!anyF}"><b>${equipment.filter(e => e.status !== "retired").length}</b><span>전체 보기</span></button>
     ${byLoc.map(([k, n]) => `<button class="stat stat-btn ${filters.eqLoc === k ? "on" : ""}" data-act="eqCard" data-k="loc:${k}" aria-pressed="${filters.eqLoc === k}"><b>${n}</b><span>${k} 보관</span></button>`).join("")}
-    <button class="stat stat-btn ${needRepair ? "alert" : ""} ${filters.eqSt === "repair" ? "on" : ""}" data-act="eqCard" data-k="st:repair" aria-pressed="${filters.eqSt === "repair"}"><b>${needRepair}</b><span>수리 필요</span></button>
+    <button class="stat stat-btn ${needRepair ? "alert" : ""} ${filters.eqSt === "repair" ? "on" : ""}" data-act="eqCard" data-k="st:repair" aria-pressed="${filters.eqSt === "repair"}"><b>${needRepair}</b><span>사용불가</span></button>
+    <button class="stat stat-btn ${filters.eqSt === "partial" ? "on" : ""}" data-act="eqCard" data-k="st:partial" aria-pressed="${filters.eqSt === "partial"}"><b>${nPartial}</b><span>구성품 누락</span></button>
     ${me.isAdmin ? xCard("nocheck", "관리자 점검 없음") + xCard("noasset", "자산번호 없음") : ""}</div>
   <div class="toolbar">
     <input id="eqQ" type="search" placeholder="제품명·자산번호·위치 검색" value="${esc(filters.eqQ)}" style="flex:1;min-width:200px">
@@ -1647,13 +1654,13 @@ function vEquip() {
   </div>
   <div class="chip-bar">${catChips("eq", filters.eqCat)}
     <div class="toolbar chip-acts"><button class="btn" data-act="scanQR">QR 찍기</button>${me.isAdmin ? `<button class="btn" data-act="eqSelMode">${eqSel ? "선택 끝내기" : "여러 대 선택"}</button><button class="btn pri" data-act="eqNew">장비 등록</button>` : ""}</div></div>
-  ${anyF ? `<p class="meta" style="margin:-4px 0 0">${list.length}대 표시 중${filters.eqSt === "repair" ? " · 수리 필요만" : ""}${xTest ? (filters.eqX === "nocheck" ? " · 관리자 점검 없음만" : " · 자산번호 없음만") : ""}</p>` : ""}
+  ${anyF ? `<p class="meta" style="margin:-4px 0 0">${list.length}대 표시 중${filters.eqSt ? ` · ${esc(EQ_STATUS[filters.eqSt]?.[0] || filters.eqSt)}만` : ""}${xTest ? (filters.eqX === "nocheck" ? " · 관리자 점검 없음만" : " · 자산번호 없음만") : ""}</p>` : ""}
   ${equipment.length === 0 ? `<div class="panel"><div class="empty">아직 등록된 장비가 없어요. ${me.isAdmin ? "‘장비 등록’으로 첫 장비를 추가해 주세요." : "장비 관리자가 장비를 등록하면 여기에 나타나요."}</div></div>` : `
   <div class="list2">${groupByModel(list).map(g => {
       if (g.items.length === 1) return eqRow(g.items[0], t, false, false);
       const open = eqOpen.has(g.k) || !!q || !!eqSel, f = g.items[0];
       const cnt = st => g.items.filter(e => e.status === st).length;
-      const sum = [["available", "사용 가능"], ["onloan", "대여 중"], ["inspect", "점검 중"], ["repair", "수리 중"]].map(([k, tx]) => cnt(k) ? `<span>${tx} ${cnt(k)}</span>` : "").join("");
+      const sum = [["available", "사용 가능"], ["partial", "구성품 누락"], ["onloan", "대여 중"], ["inspect", "점검 중"], ["repair", "사용불가"]].map(([k, tx]) => cnt(k) ? `<span>${tx} ${cnt(k)}</span>` : "").join("");
       const tags = g.items.map(e => esc(e.label || "")).filter(Boolean).join(", ");
       return `<div class="r2 grp${open ? " open" : ""}" data-act="eqGrp" data-k="${esc(g.k)}" aria-expanded="${open}">
         <span class="grp-arrow" aria-hidden="true">▸</span>
@@ -1671,7 +1678,7 @@ function vEquip() {
 
 /* ---------- 장비 일괄 변경 (관리자) ---------- */
 // 대여 중이거나 반납 확인을 기다리는 장비는 상태를 바꾸지 않는다 (출고·반납 확인 흐름이 상태를 정한다).
-const BULK_ST = ["available", "inspect", "repair", "retired"];
+const BULK_ST = ["available", "partial", "inspect", "repair", "retired"];
 function eqBulk() {
   const ids = [...eqSel], rows = ids.map(eqById).filter(Boolean);
   const held = rows.filter(e => e.status === "onloan" || loans.some(l => l.equipment_id === e.id && ["out", "checking"].includes(l.status)));
@@ -1765,7 +1772,7 @@ function exitEdit() { draft = newDraft(); go("mine"); }
 function addOutItems(l) {
   if (!me.isAdmin || l.status !== "out") return;
   const inNo = new Set(loans.filter(x => x.loan_no === l.loan_no && x.status !== "cancelled").map(x => x.equipment_id));
-  const rows = equipment.filter(e => e.status === "available" && !inNo.has(e.id))
+  const rows = equipment.filter(e => (e.status === "available" || e.status === "partial") && !inNo.has(e.id))
     .filter(e => !loans.some(x => x.equipment_id === e.id && ACTIVE(x.status) && x.start_date <= l.due_date && l.start_date <= x.due_date))
     .sort(eqCmp);
   modal(`<h2>출고 장비 추가 <span class="mono" style="font-size:.7em">${esc(l.loan_no)}</span></h2>
@@ -1817,14 +1824,14 @@ function vRequest() {
     const od = !badRange && !own && due >= todayStr() ? loans.find(x => x.equipment_id === e.id && isOverdue(x)) : null;
     const blocked = (!own && (e.status === "repair" || e.status === "inspect")) || c.length > 0 || busyNow || !!od;
     if (blocked) draft.picks.delete(e.id);
-    const why = e.status === "repair" ? "수리 중" : e.status === "inspect" ? "점검 중" : od ? "연체 중" : c.length ? "예약 겹침" : busyNow ? "대여 중" : "";
+    const why = e.status === "repair" ? "사용불가" : e.status === "inspect" ? "점검 중" : od ? "연체 중" : c.length ? "예약 겹침" : busyNow ? "대여 중" : "";
     const title = c.length ? `${c[0].loan_no} (${fmtD(c[0].start_date)}–${fmtD(c[0].due_date)})` : why;
     const detail = od ? `반납 예정일(${fmtD(od.due_date)})이 지났는데 아직 돌아오지 않았어요.` : c.length ? (() => { const nf = nextFreeStart(e.id, start, due);
       return `${c.map(x => `${fmtD(x.start_date)}–${fmtD(x.due_date)}`).slice(0, 2).join(", ")}${c.length > 2 ? ` 외 ${c.length - 2}건` : ""} 예약돼 있어요.${nf ? ` ${fmtD(nf)}부터 쓸 수 있어요.` : ""}`; })() : "";
     const hay = `${e.name} ${e.model || ""} ${e.internal_id || ""} ${e.label || ""} ${e.asset_no} ${e.item_no} ${e.serial_no} ${e.location} ${e.category}`.toLowerCase();
     return `<label class="${blocked ? "off" : ""}" data-hay="${esc(hay)}" data-cat="${esc(e.category)}" data-loc="${esc(locGroup(e.location))}" data-ok="${blocked ? "0" : "1"}"><input type="checkbox" data-pick="${e.id}" ${draft.picks.has(e.id) ? "checked" : ""} ${blocked ? "disabled" : ""}>
-      <div class="main">${child ? `${frontTag(e)}${showName ? ` <b class="sub">${esc(e.name)}</b>` : ""} ${backId(e)}` : `${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}`}<div class="meta">${child ? "" : `${esc(catName(e.category))} · `}${esc(e.location)}</div>${blocked && detail ? `<div class="why">${esc(detail)}</div>` : ""}${compLine(e) ? `<div class="r2-comp" title="${esc(e.components)}"><span>구성품</span> ${esc(compLine(e))}</div>` : ""}</div>
-      ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
+      <div class="main">${child ? `${frontTag(e)}${showName ? ` <b class="sub">${esc(e.name)}</b>` : ""} ${backId(e)}` : `${frontTag(e)} <b>${esc(e.name)}</b> ${backId(e)}`}<div class="meta">${child ? "" : `${esc(catName(e.category))} · `}${esc(e.location)}</div>${blocked && detail ? `<div class="why">${esc(detail)}</div>` : ""}${!blocked && e.status === "partial" ? `<div class="why warn">구성품 누락${e.last_check_note ? `: ${esc(e.last_check_note.replace(/^\[아니오\][^\n]*\n?/, "").trim() || e.last_check_note)}` : ""}. 빠진 구성품을 확인하고 신청해 주세요.</div>` : ""}${compLine(e) ? `<div class="r2-comp" title="${esc(e.components)}"><span>구성품</span> ${esc(compLine(e))}</div>` : ""}</div>
+      ${blocked ? `<span class="pill p-bad" title="${esc(title)}">${esc(why)}</span>` : e.status === "partial" ? `<span class="pill p-warn">구성품 누락</span>` : `<span class="pill p-ok">가능</span>`}</label>`;
   };
   // 같은 모델이 2대 이상이면 모델 줄 하나로 묶고, 펼치면 실제 장비를 고른다
   const pickHtml = groupByModel(rows).map(g => g.items.length === 1 ? pickRow(g.items[0], false) : `${(() => { const op = pickOpen.has(g.k) || g.items.some(e => draft.picks.has(e.id)); return `<div class="pgrp" data-grp="${esc(g.k)}" data-open="${op ? 1 : 0}">`; })()}
@@ -2451,19 +2458,17 @@ function eqForm(e, defCat) {
 }
 
 function verdictHtml(cond) {
-  const repair = cond === "broken" || cond === "missing";
+  const v = verdictOf(cond);
   return `<div><h3>장비 판정</h3><div class="fields" style="margin-top:6px">
-    <label class="check"><input type="radio" name="vd" value="ok" ${repair ? "" : "checked"}> 사용 가능</label>
-    <label class="check"><input type="radio" name="vd" value="repair" ${repair ? "checked" : ""}> 수리 필요</label></div>
-    <div class="meta">파손 또는 수리 필요·구성품 누락이면 ‘수리 필요’로 자동 선택돼요. 필요하면 바꿔 주세요.</div></div>`;
+    ${Object.entries(VERDICT_TXT).map(([k, t]) => `<label class="check"><input type="radio" name="vd" value="${k}" ${v === k ? "checked" : ""}> ${t}</label>`).join("")}</div>
+    <div class="meta">구성품 누락은 ‘구성품 누락’(신청은 받고 경고 표시), 파손 또는 수리 필요는 ‘사용불가’(신청 막음)로 자동 선택돼요. 필요하면 바꿔 주세요.</div></div>`;
 }
 function bindVerdict(m, condName) {
   let touched = false;
   m.querySelectorAll('input[name="vd"]').forEach(r => r.addEventListener("change", () => touched = true));
   m.querySelectorAll(`input[name="${condName}"]`).forEach(r => r.addEventListener("change", () => {
     if (touched || !r.checked) return;
-    const rep = r.value === "broken" || r.value === "missing";
-    m.querySelector(`input[name="vd"][value="${rep ? "repair" : "ok"}"]`).checked = true;
+    m.querySelector(`input[name="vd"][value="${verdictOf(r.value)}"]`).checked = true;
   }));
 }
 function eqCheck(e) {
@@ -2482,7 +2487,7 @@ function eqCheck(e) {
       if (cond !== "ok" && !note) { err.textContent = "손상이나 누락이 있으면 내용을 메모에 적어 주세요."; err.hidden = false; return; }
       if (!loc) { err.textContent = "기타를 골랐다면 위치를 직접 입력해 주세요."; err.hidden = false; return; }
       const d = { last_check: cond, last_check_note: note, last_check_source: "admin", last_check_by: me.id, last_check_at: new Date().toISOString(), location: loc };
-      if (!lent) d.status = m.querySelector('input[name="vd"]:checked').value === "repair" ? "repair" : (e.status === "repair" ? "available" : e.status);
+      if (!lent) { const v = m.querySelector('input[name="vd"]:checked').value; d.status = v === "repair" ? "repair" : v === "partial" ? "partial" : (["repair", "partial"].includes(e.status) ? "available" : e.status); }
       busy(b, async () => { await must(sb.from("equipment").update(d).eq("id", e.id)); closeModal(); toast("점검 결과를 기록했어요."); await refresh(); });
     });
   });
@@ -2898,13 +2903,13 @@ function inspect(l, single) {
   const e = eqById(l.equipment_id) || {};
   const self = l.return_self_check, selfNote = l.return_self_note || "";
   const defLoc = placeOf(l) || e.location;
-  const defRepair = self === "broken" || self === "missing";
+  const defV = verdictOf(self);
   modal(`<h2>반납 확인</h2><p class="meta">${esc(e.name)} ${eqParen(e)} · ${esc(nameOf(l.requester_id))} · ${fmtD(l.start_date)}–${fmtD(l.due_date)}</p>
     ${self ? `<div class="panel" style="gap:6px">
       <h3>반납자 자가점검</h3>
       <div><span class="pill ${CHECK_PILL[self] || ""}">${esc(CONDS[self])}</span> <span class="meta">${esc(retLabel(l) || "–")} · ${fmtT(l.returned_at)}</span></div>
       <div style="white-space:pre-wrap">${selfNote ? esc(selfNote) : `<span class="meta">메모 없음</span>`}</div>
-      <div class="meta">확인하면 → 장비 ${defRepair ? "<b>수리 필요</b>" : "<b>사용 가능</b>"} · 보관 위치 <b>${esc(defLoc)}</b></div>
+      <div class="meta">확인하면 → 장비 <b${defV === "repair" ? ' class="t-bad"' : ""}>${VERDICT_TXT[defV]}</b> · 보관 위치 <b>${esc(defLoc)}</b></div>
     </div>` : `<div class="notice">반납자 자가점검 기록이 없어요. 아래에서 직접 점검해 주세요.</div>`}
     <div id="iEdit" ${self ? "hidden" : ""} style="display:flex;flex-direction:column;gap:14px">
       ${e.components ? `<div><h3>구성품 기준</h3><div class="meta" style="white-space:pre-wrap">${esc(e.components)}</div></div>` : ""}
@@ -2922,7 +2927,7 @@ function inspect(l, single) {
     $("#iEditBtn", m)?.addEventListener("click", ev => { $("#iEdit", m).hidden = false; ev.target.remove(); b.textContent = "수정한 내용으로 확인"; $("#iNote", m).focus(); });
     b.addEventListener("click", async () => {
       const cond = m.querySelector('input[name="cond"]:checked').value, note = $("#iNote", m).value.trim(), err = $("#iErr", m);
-      const repair = m.querySelector('input[name="vd"]:checked').value === "repair", loc = locValue(m, "i");
+      const vd = m.querySelector('input[name="vd"]:checked').value, repair = vd === "repair", loc = locValue(m, "i");
       const show = t => { err.textContent = t; err.hidden = false; $("#iEdit", m).hidden = false; };
       if (cond !== "ok" && !note) return show("손상이나 누락이 있으면 내용을 메모에 적어 주세요.");
       if (!loc) return show("기타를 골랐다면 보관 위치를 직접 입력해 주세요.");
@@ -2930,7 +2935,9 @@ function inspect(l, single) {
       const { error } = await sb.from("loans").update({ status: "done", return_condition: cond, return_note: note, repair_needed: repair, return_location: loc }).eq("id", l.id);
       b.disabled = false;
       if (error) return show(errText(error));
-      closeModal(); toast(repair ? `반납을 확인하고 장비를 수리 필요로 표시했어요. (${loc})` : `반납을 확인했어요. 장비를 다시 빌릴 수 있어요. (${loc})`); await refresh();
+      // DB는 점검 결과로 판정한다(누락→구성품 누락). 관리자가 다르게 고른 경우만 장비 상태를 맞춘다
+      if (!repair && (vd === "partial") !== (cond === "missing")) await sb.from("equipment").update({ status: vd === "partial" ? "partial" : "available" }).eq("id", l.equipment_id);
+      closeModal(); toast(repair ? `반납을 확인하고 장비를 사용불가로 표시했어요. (${loc})` : vd === "partial" ? `반납을 확인했어요. 장비를 구성품 누락으로 표시했어요. (${loc})` : `반납을 확인했어요. 장비를 다시 빌릴 수 있어요. (${loc})`); await refresh();
     });
   });
 }
@@ -3002,7 +3009,7 @@ function retDateEdit(l) {
 }
 function inspectBulk(l, group) {
   const rows = [...group].sort(loanEqCmp);
-  const plan = x => { const e = eqById(x.equipment_id) || {}; return { e, self: x.return_self_check, repair: x.return_self_check === "broken" || x.return_self_check === "missing", loc: placeOf(x) || e.location }; };
+  const plan = x => { const e = eqById(x.equipment_id) || {}; return { e, self: x.return_self_check, repair: x.return_self_check === "broken", v: verdictOf(x.return_self_check), loc: placeOf(x) || e.location }; };
   const sel = new Set(rows.filter(x => x.return_self_check).map(x => x.id));
   modal(`<h2>반납 확인 <span class="mono" style="font-size:.7em">${esc(l.loan_no)}</span></h2>
     <p class="meta">${esc(nameOf(l.requester_id))} · ${fmtD(l.start_date)}–${fmtD(l.due_date)} · 반납 확인 중 ${rows.length}대. 자가점검대로 확인할 장비를 골라 주세요. 내용을 고칠 장비는 [개별 확인]을 눌러 주세요.</p>
@@ -3011,7 +3018,7 @@ function inspectBulk(l, group) {
       <div class="main"><b>${esc(p.e.name)}</b> <span class="mono meta">${esc(eqNo(p.e))}</span>
         <div>${p.self ? `<span class="pill ${CHECK_PILL[p.self] || ""}">${esc(CONDS[p.self])}</span>` : `<span class="pill">자가점검 없음</span>`} <span class="meta">${esc(retLabel(x) || "–")}</span></div>
         ${x.return_self_note ? `<div class="meta" style="white-space:pre-wrap">${esc(x.return_self_note)}</div>` : ""}
-        <div class="meta">${p.self ? `확인하면 → 장비 ${p.repair ? "<b class=\"t-bad\">수리 필요</b>" : "<b>사용 가능</b>"} · 보관 위치 <b>${esc(p.loc)}</b>` : "직접 점검해야 해요. [개별 확인]을 눌러 주세요."}</div></div>
+        <div class="meta">${p.self ? `확인하면 → 장비 <b${p.repair ? ' class="t-bad"' : ""}>${VERDICT_TXT[p.v]}</b> · 보관 위치 <b>${esc(p.loc)}</b>` : "직접 점검해야 해요. [개별 확인]을 눌러 주세요."}</div></div>
       <button class="btn sm" data-ib-one="${x.id}">개별 확인</button></div>`; }).join("")}</div>
     <div class="notice bad" id="ibErr" hidden></div>
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="ibOk"></button></div>`, m => {
@@ -3031,8 +3038,8 @@ function inspectBulk(l, group) {
       }
       await refresh();
       if (fails.length) { err.textContent = `${todo.length - fails.length}대는 확인했어요. 확인하지 못한 장비: ${fails.join(" / ")}`; err.hidden = false; ok.disabled = false; return; }
-      const nRep = todo.filter(x => plan(x).repair).length;
-      closeModal(); toast(nRep ? `${todo.length}대 반납을 확인했어요. ${nRep}대는 수리 필요로 표시했어요.` : `${todo.length}대 반납을 확인했어요. 다시 빌릴 수 있어요.`);
+      const nRep = todo.filter(x => plan(x).repair).length, nPart = todo.filter(x => plan(x).v === "partial").length;
+      closeModal(); toast(nRep || nPart ? `${todo.length}대 반납을 확인했어요.${nRep ? ` ${nRep}대는 사용불가로` : ""}${nPart ? ` ${nPart}대는 구성품 누락으로` : ""} 표시했어요.` : `${todo.length}대 반납을 확인했어요. 다시 빌릴 수 있어요.`);
     });
   });
 }
