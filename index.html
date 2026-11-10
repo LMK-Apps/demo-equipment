@@ -530,6 +530,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v0.122", date: "2026-11-10", items: ["상태 점검 기록·반납 확인: ‘구성품 누락’이 점검 결과와 장비 판정에 두 번 보이던 것을 정리. 장비 상태는 점검 결과로 자동으로 정하고 ‘저장하면 장비 상태 → 구성품 누락’ 한 줄로 보여 줌. 다르게 하려면 [바꾸기]"] },
   { v: "v0.121", date: "2026-11-10", items: ["상태 이름 ‘사용불가’를 맞춤법에 맞게 ‘사용 불가’로 띄어 씀"] },
   { v: "v0.120", date: "2026-11-10", db: "031_status_partial.sql", items: ["장비 상태 ‘구성품 누락’ 추가: 신청·출고는 받고, 데모 신청 목록에 노란 ‘구성품 누락’ 배지와 빠진 내용 안내 표시", "장비 상태 이름 ‘수리 중·수리 필요’를 ‘사용불가’로 변경 (신청 막음은 그대로)", "반납 확인·상태 점검의 장비 판정을 사용 가능 · 구성품 누락 · 사용불가 3가지로. 점검 결과 ‘구성품 누락’이면 자동으로 구성품 누락, ‘파손 또는 수리 필요’면 사용불가", "[자산] 숫자 카드에 ‘구성품 누락’ 추가, 여러 대 상태 변경에도 추가"] },
   { v: "v0.119", date: "2026-11-10", db: "030_shipment_move.sql", items: ["사용 중 이동 배차 요청: 반납 전에 장비를 다른 곳으로 옮길 때 [내 신청] 사용 중 카드나 세부 정보 창의 [이동 요청]으로 요청. 출발지(지금 장비가 있는 곳)·도착지·받는 사람·도착 희망일 입력. 한 신청에 여러 번 가능", "[물류]에 ‘이동 N’ 줄과 진행 단계(이동 요청 전 → 요청 완료 → 이동 중 → 도착), 관리자용 [이동 요청 메시지]·배차 정보 입력 추가. 신청자는 이동 중일 때 [도착 확인] 가능", "신청자는 ‘이동 요청 전’ 단계까지, 장비 관리자는 도착 전까지 이동 취소 가능. 이동 요청 시 Teams 알림", "이동해서 도착한 곳이 있으면 반납 때 회수지 기본값을 그곳으로 채움"] },
@@ -2458,15 +2459,20 @@ function eqForm(e, defCat) {
   });
 }
 
+// 장비 상태는 점검 결과에서 자동으로 정한다. 다르게 하고 싶을 때만 [바꾸기]로 펼친다
 function verdictHtml(cond) {
   const v = verdictOf(cond);
-  return `<div><h3>장비 판정</h3><div class="fields" style="margin-top:6px">
+  return `<div class="vd-box"><div class="vd-line">저장하면 장비 상태 → <b class="vd-now${v === "repair" ? " t-bad" : ""}">${VERDICT_TXT[v]}</b> <button type="button" class="linkbtn vd-open">바꾸기</button></div>
+    <div class="vd-pick" hidden><div class="fields" style="margin-top:6px">
     ${Object.entries(VERDICT_TXT).map(([k, t]) => `<label class="check"><input type="radio" name="vd" value="${k}" ${v === k ? "checked" : ""}> ${t}</label>`).join("")}</div>
-    <div class="meta">구성품 누락은 ‘구성품 누락’(신청은 받고 경고 표시), 파손 또는 수리 필요는 ‘사용 불가’(신청 막음)로 자동 선택돼요. 필요하면 바꿔 주세요.</div></div>`;
+    <div class="meta">사용 가능·구성품 누락은 신청을 받고, 사용 불가는 신청을 막아요.</div></div></div>`;
 }
 function bindVerdict(m, condName) {
   let touched = false;
-  m.querySelectorAll('input[name="vd"]').forEach(r => r.addEventListener("change", () => touched = true));
+  const now = () => { const c = m.querySelector('input[name="vd"]:checked'), b = m.querySelector(".vd-now"); if (c && b) { b.textContent = VERDICT_TXT[c.value]; b.className = "vd-now" + (c.value === "repair" ? " t-bad" : ""); } };
+  m.querySelector(".vd-open")?.addEventListener("click", ev => { m.querySelector(".vd-pick").hidden = false; ev.target.remove(); });
+  m.querySelectorAll('input[name="vd"]').forEach(r => r.addEventListener("change", () => { touched = true; now(); }));
+  m.querySelectorAll(`input[name="${condName}"]`).forEach(r => r.addEventListener("change", () => setTimeout(now)));
   m.querySelectorAll(`input[name="${condName}"]`).forEach(r => r.addEventListener("change", () => {
     if (touched || !r.checked) return;
     m.querySelector(`input[name="vd"][value="${verdictOf(r.value)}"]`).checked = true;
