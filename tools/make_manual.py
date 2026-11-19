@@ -92,7 +92,7 @@ ol,ul{{padding-left:22px}} li{{margin:4px 0}}
 </style>
 </head>
 <body>
-<div class="top"><b>데모콕 사용 설명서</b><a href="../">앱으로 돌아가기 →</a></div>
+<div class="top"><b>데모톡 사용 설명서</b><a href="../">앱으로 돌아가기 →</a></div>
 <main>
 {body.replace('</h1>', '</h1>' + stamp + '<nav class="toc">' + toc_html + '</nav>', 1)}
 <p class="foot">최종 업데이트 {today} · 앱 {ver} 기준<br>내용이 앱과 다르면 장비 관리자에게 알려 주세요.</p>
