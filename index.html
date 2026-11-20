@@ -530,6 +530,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v1.001", date: "2026-11-20", items: ["캘린더에 장비 검색 칸 추가: 장비 이름·라벨·내부 ID·모델로 찾기 (대소문자·띄어쓰기 무시). 달력과 장비별 보기 모두 적용되고, 분류·위치·내 신청만과 함께 쓸 수 있음"] },
   { v: "v1.000", date: "2026-11-20", items: ["정식 운영 시작 (v1.000). 앱 이름 ‘데모톡’, 시범 운영 기간(v0.001~v0.125) 마침", "사용 설명서의 ‘시범 운영 안내’를 ‘운영 안내’로 바꿈"] },
   { v: "v0.125", date: "2026-11-20", items: ["사용 설명서 그림 9장을 지금 화면(데모톡)으로 다시 찍음: 로그인·승인 대기, 홈 화면에 추가 안내, 자산, QR 찍기, 데모 신청, 내 신청(상태별 구역), 반납 신청 8단계, 물류·캘린더"] },
   { v: "v0.124", date: "2026-11-19", items: ["앱 이름을 ‘데모콕’에서 ‘데모톡’으로 변경 (화면 제목, 로그인 화면, 브라우저 탭, 홈 화면 앱 이름, 사용 설명서, QR 라벨)", "앱 아이콘과 첫 로딩 화면 글자를 ‘콕’에서 ‘톡’으로 변경 (초록 바탕·노란 점은 그대로)"] },
@@ -1016,7 +1017,10 @@ const DEFAULT_DAYS = 3;
 const defaultDue = start => addDays(start, DEFAULT_DAYS - 1);
 let draft = { start: todayStr(), due: defaultDue(todayStr()), dueSet: false, picks: new Set() };
 let pickF = { q: "", cat: "", loc: "", avail: false };
-let cal = { ym: todayStr().slice(0, 7), mode: "month", mine: false, loc: "", cat: "" };
+let cal = { ym: todayStr().slice(0, 7), mode: "month", mine: false, loc: "", cat: "", q: "" };
+// 캘린더 장비 검색: 장비 이름·라벨·내부 ID·모델에 검색어가 들어 있으면 보인다 (대소문자·띄어쓰기 무시)
+const calHit = e => { const q = cal.q.trim().toLowerCase().replace(/\s+/g, ""); if (!q) return true; if (!e) return false;
+  return [e.name, e.label, e.internal_id, e.model].some(v => String(v || "").toLowerCase().replace(/\s+/g, "").includes(q)); };
 
 const isOverdue = l => l.status === "out" && l.due_date < todayStr();
 const eqById = id => equipment.find(e => e.id === id);
@@ -1351,7 +1355,8 @@ function calLoans(anyCat) {
   return loans.filter(l => l.status !== "cancelled"
     && (!cal.mine || l.requester_id === me.id)
     && (anyCat || !cal.cat || eqById(l.equipment_id)?.category === cal.cat)
-    && (!cal.loc || locGroup(eqById(l.equipment_id)?.location) === cal.loc))
+    && (!cal.loc || locGroup(eqById(l.equipment_id)?.location) === cal.loc)
+    && calHit(eqById(l.equipment_id)))
     .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.loan_no.localeCompare(b.loan_no) || loanEqCmp(a, b));
 }
 const onDay = (list, d) => list.filter(l => l.start_date <= d && d <= loanEnd(l));
@@ -1371,6 +1376,7 @@ function vCal() {
   <div class="toolbar">
     <div class="calnav"><button class="btn sm" data-act="calPrev" aria-label="이전 달">◀</button><b>${y}년 ${m}월</b><button class="btn sm" data-act="calNext" aria-label="다음 달">▶</button><button class="btn sm" data-act="calToday">이번 달</button></div>
     <span style="flex:1"></span>
+    <input id="calQ" type="search" placeholder="장비 이름·라벨 검색" value="${esc(cal.q)}" aria-label="장비 검색" style="min-width:180px;flex:0 1 220px">
     <div class="seg" role="group" aria-label="보기"><button data-act="calMode" data-v="month" aria-pressed="${cal.mode === "month"}">달력</button><button data-act="calMode" data-v="equip" aria-pressed="${cal.mode === "equip"}">장비별</button></div>
     <select id="calLoc"><option value="">전체 위치</option>${[...LOCS, "기타"].map(c => `<option ${cal.loc === c ? "selected" : ""}>${c}</option>`).join("")}</select>
     <label class="check"><input type="checkbox" id="calMine" ${cal.mine ? "checked" : ""}> 내 신청만</label>
@@ -1380,7 +1386,7 @@ function vCal() {
 
   if (cal.mode === "equip") {
     const days = []; for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) days.push(new Date(d));
-    const eqs = equipment.filter(e => e.status !== "retired" && (!cal.loc || locGroup(e.location) === cal.loc) && (!cal.cat || e.category === cal.cat))
+    const eqs = equipment.filter(e => e.status !== "retired" && (!cal.loc || locGroup(e.location) === cal.loc) && (!cal.cat || e.category === cal.cat) && calHit(e))
       .filter(e => !cal.mine || monthLoans.some(l => l.equipment_id === e.id))
       .sort(eqCmp);
     // 대여 기간은 칸을 합쳐(colspan) 막대 하나로 그린다. 막대 안에 신청자·고객사를 넣고, 좁으면 말줄임
@@ -3259,6 +3265,7 @@ document.addEventListener("click", e => {
 document.addEventListener("input", e => {
   const id = e.target.id;
   if (id === "rQ") { pickF.q = e.target.value; applyPickFilter(); return; }
+  if (id === "calQ") { const pos = e.target.selectionStart; cal.q = e.target.value; render(); const n = $("#calQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } return; }
   if (id === "eqQ" || id === "lgQ") {
     const pos = e.target.selectionStart;
     filters[id === "eqQ" ? "eqQ" : "ledgerQ"] = e.target.value; render();
@@ -3304,7 +3311,7 @@ function softRender() {
   if ($("#app").hidden || $("#modalRoot").innerHTML) { renderTabs(); return; }
   if (view === "request" && $("#reqForm")) { const keep = collectReqFields(); render(); restoreReqFields(keep); return; }
   const a = document.activeElement?.id; render();
-  if (a === "eqQ" || a === "lgQ") { const n = $("#" + a); n && n.focus(); }
+  if (a === "eqQ" || a === "lgQ" || a === "calQ") { const n = $("#" + a); n && n.focus(); }
 }
 
 /* ---------- 로딩 화면 ---------- */
