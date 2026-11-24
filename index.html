@@ -144,15 +144,19 @@ h3{font-size:14px;margin:0;font-weight:600}
 .viewbar{position:sticky;top:0;z-index:60;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:7px 12px;background:var(--warn-soft);color:var(--warn);font-size:13.5px}.viewbar b{color:var(--fg)}
 .mv-lines{display:flex;flex-direction:column;gap:4px;margin:6px 0 0 6px}.mv-line{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .why.warn{color:var(--warn,#9a6700)}
-.nt-panel{border-left:4px solid var(--acc,#0f6b5c)}
-.nt-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}.nt-head h3{margin:0}
+.nt-wrap{margin:0 0 18px;padding:0 0 12px;border-bottom:1px solid var(--line,#e5e7e3)}
+.nt-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}.nt-head h3{margin:0;font-size:13px;color:var(--mut,#5f6b66);font-weight:600}
+.nt-head .btn.sm{padding:3px 9px;font-size:12px}
 .nt-list{display:flex;flex-direction:column}
-.nt-item{padding:10px 4px;border-top:1px solid var(--line,#e5e7e3);cursor:pointer}.nt-item:first-child{border-top:0;padding-top:2px}
+.nt-item{padding:5px 0;cursor:pointer}
 .nt-item:hover .nt-title{text-decoration:underline}
-.nt-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.nt-title{font-size:15px}.nt-date{margin-left:auto}
-.nt-new{font-size:10px;font-weight:700;color:#fff;background:#d93025;border-radius:4px;padding:1px 5px;letter-spacing:.3px}
-.nt-body{margin-top:3px;color:var(--mut,#5f6b66);font-size:13.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
+.nt-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.nt-title{font-size:13.5px;font-weight:600}.nt-date{margin-left:auto;font-size:12px}
+.nt-top .pill{font-size:11px;padding:0 6px}
+.nt-new{font-size:9.5px;font-weight:700;color:#fff;background:#d93025;border-radius:4px;padding:0 4px;letter-spacing:.3px}
+.nt-body{margin-top:1px;color:var(--mut,#5f6b66);font-size:12.5px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
 .nt-item.imp .nt-title{color:var(--bad,#b42318)}
+.nt-wrap .empty{padding:4px 0;font-size:12.5px;text-align:left}
+.nt-wrap .linkbtn{font-size:12.5px}
 .nt-full{white-space:pre-wrap;line-height:1.7;margin:8px 0 4px;word-break:break-word}
 .mine-act{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 @media (max-width:640px){.hg-h:has(.mine-act){flex-wrap:wrap}.hg-h .mine-act{width:100%;justify-content:flex-start;margin-top:6px}}
@@ -540,6 +544,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v1.003", date: "2026-11-24", items: ["현황 화면: 공지사항을 ‘오늘 현황’ 제목 위로 옮김", "공지사항 영역을 테두리 없이 배경 위 글자로 바꾸고 글자 크기를 줄임. 내용 미리 보기는 1줄"] },
   { v: "v1.002", date: "2026-11-24", db: "032_notices.sql", items: ["현황(메인) 화면 위쪽에 공지사항 추가: 최근·중요 공지 3건을 보여 주고 더 있으면 [더 보기]. 공지를 누르면 전체 내용(주소는 눌러서 열림)", "장비 관리자: [공지 쓰기]로 제목·내용·게시 기간(시작일, 종료일)·중요(빨간 배지)·맨 위 고정을 정해 올리고, 고치고, 지울 수 있음. 시작일을 뒤로 잡으면 예약 게시. [지난·예약 공지]에서 모두 확인", "게시 2일 안의 공지에 NEW 표시"] },
   { v: "v1.001", date: "2026-11-20", items: ["캘린더에 장비 검색 칸 추가: 장비 이름·라벨·내부 ID·모델로 찾기 (대소문자·띄어쓰기 무시). 달력과 장비별 보기 모두 적용되고, 분류·위치·내 신청만과 함께 쓸 수 있음"] },
   { v: "v1.000", date: "2026-11-20", items: ["정식 운영 시작 (v1.000). 앱 이름 ‘데모톡’, 시범 운영 기간(v0.001~v0.125) 마침", "사용 설명서의 ‘시범 운영 안내’를 ‘운영 안내’로 바꿈"] },
@@ -1353,10 +1358,10 @@ function noticePanel() {
   const item = n => `<div class="nt-item${n.level === "important" ? " imp" : ""}" data-act="noticeView" data-id="${n.id}" role="button" tabindex="0">
       <div class="nt-top">${n.pinned ? `<span class="nt-pin" title="맨 위 고정">📌</span>` : ""}${n.level === "important" ? `<span class="pill p-bad">중요</span>` : ""}<b class="nt-title">${esc(n.title)}</b>${noticeNew(n) ? `<span class="nt-new">NEW</span>` : ""}<span class="meta nt-date">${fmtD(n.starts_on)}</span></div>
       ${n.body ? `<div class="nt-body">${esc(n.body)}</div>` : ""}</div>`;
-  return `<div class="panel nt-panel"><div class="nt-head"><h3>공지사항 ${live.length ? `<span class="grp-n">${live.length}건</span>` : ""}</h3>
+  return `<section class="nt-wrap" aria-label="공지사항"><div class="nt-head"><h3>공지사항 ${live.length ? `<span class="grp-n">${live.length}건</span>` : ""}</h3>
       ${me.isAdmin ? `<span style="margin-left:auto;display:flex;gap:6px">${other ? `<button class="btn sm" data-act="noticeAll">지난·예약 공지 ${other}건</button>` : ""}<button class="btn sm pri" data-act="noticeEdit">공지 쓰기</button></span>` : ""}</div>
     ${live.length ? `<div class="nt-list">${shown.map(item).join("")}</div>` : `<div class="empty">게시 중인 공지가 없어요. [공지 쓰기]로 올려 주세요.</div>`}
-    ${live.length > NOTICE_SHOW ? `<button type="button" class="linkbtn" data-act="noticeMore" style="margin-top:6px">${noticeMore ? "접기 ▲" : `공지 ${live.length - NOTICE_SHOW}건 더 보기 ▼`}</button>` : ""}</div>`;
+    ${live.length > NOTICE_SHOW ? `<button type="button" class="linkbtn" data-act="noticeMore" style="margin-top:6px">${noticeMore ? "접기 ▲" : `공지 ${live.length - NOTICE_SHOW}건 더 보기 ▼`}</button>` : ""}</section>`;
 }
 function noticeView(n) {
   modal(`<h2>${n.level === "important" ? `<span class="pill p-bad" style="vertical-align:middle">중요</span> ` : ""}${esc(n.title)}</h2>
@@ -1408,10 +1413,9 @@ function vHome() {
   const dueToday = loans.filter(l => l.status === "out" && l.due_date === t);
   const checking = loans.filter(l => l.status === "checking");
   const cnt = k => equipment.filter(e => e.status === k).length;
-  return `
+  return `${noticePanel()}
   <div class="head"><div class="grow"><h2>오늘 현황</h2><p class="sub">${t.replace(/-/g, ".")} 기준. 연체는 반납 예정일이 지났는데 아직 출고 상태인 건이에요.</p></div>
     <button class="btn" data-act="refresh">새로 고침</button><button class="btn" data-act="scanQR">QR 찍기</button>${me.isAdmin && checkCount() ? `<button class="btn pri" data-go="check">출입고 확인 ${checkCount()}건</button>` : ""}<button class="btn pri" data-go="request">데모 신청</button></div>
-  ${noticePanel()}
   <div class="stats">
     <div class="stat"><b>${cnt("available") + cnt("partial")}</b><span>사용 가능 장비</span></div>
     <div class="stat"><b>${cnt("onloan")}</b><span>대여 중</span></div>
