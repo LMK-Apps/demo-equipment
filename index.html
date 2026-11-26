@@ -547,6 +547,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v1.007", date: "2026-11-26", items: ["[물류] 물류·회수·이동 요청 메시지를 신청자도 본인 신청 건에서 열고 복사할 수 있게 함. 배차 정보 입력과 진행 단계 변경은 지금처럼 장비 관리자만", "신청자용 안내: ‘(입력 필요)’ 항목은 복사한 뒤 직접 채워서 보내고, 보낸 뒤 장비 관리자에게 알려 주세요"] },
   { v: "v1.006", date: "2026-11-26", db: "033_user_last_seen.sql", items: ["관리자 [사용자] 화면에 ‘최근 접속’ 열 추가: 앱을 열어 둔 마지막 시각(로그인 갱신 기준, 약 1시간 단위)과 ‘오늘·N일 전’. 머리글을 눌러 정렬. 로그인을 유지한 채 쓰는 사람도 실제로 언제 들어왔는지 볼 수 있음"] },
   { v: "v1.005", date: "2026-11-26", items: ["휴대폰 화면: ‘앞 건 반납 전’ 배지가 장비 이름과 겹치던 문제 수정. 배지를 장비 이름 아래 줄로 내림. PC에서도 배지가 길면 줄바꿈"] },
   { v: "v1.004", date: "2026-11-26", items: ["‘앞 건 반납 전’ 배지에 앞 신청자와 상태를 함께 표시: 예) 앞 건 반납 전 · [B] Howard · 반납 예정 11/24 / 연체 2일 / 반납 확인 대기. 배지를 누르면 그 앞 신청의 세부 정보가 열림"] },
@@ -2173,13 +2174,13 @@ function vShip() {
       ${!o.id && !p ? "" : shipMissing(o) ? `<div class="notice">배송 정보(수령인·연락처·주소·도착 희망일)가 아직 없어요.${me.isAdmin ? ` <button class="linkbtn" data-act="shipEdit" data-sid="${o.id}">지금 입력</button>` : canEditRes(l) ? ` <button class="linkbtn" data-act="editRes" data-id="${l.id}">예약 수정에서 입력</button>` : " 장비 관리자에게 알려 주세요."}</div>`
         : `<div class="meta">${o.id ? "수령" : "회수 담당"} ${esc(c.recipient)} · ${esc(c.phone)} · ${esc(c.address)}</div>`}
       ${o.id ? `<div class="row"><div class="main"><b>출고 배송</b><div class="meta">도착 희망 ${fmtD(o.requested_date)}${trackTxt(o)}</div></div>
-        ${me.isAdmin ? `<button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="outbound">물류 요청 메시지</button>` : ""}
+        ${me.isAdmin || l.requester_id === me.id ? `<button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="outbound">물류 요청 메시지</button>` : ""}
         <div class="steps-line">${!me.isAdmin && o.status === "in_transit" && l.requester_id === me.id ? `<button class="btn sm pri" data-act="shipArrive" data-sid="${o.id}">받았어요 · 도착 확인</button>` : ""}${steps(o, OUT_STEPS, OUT_STATUS)}</div></div>` : ""}
       ${p ? `<div class="row"><div class="main"><b>회수</b><div class="meta">회수 희망 ${fmtD(p.requested_date)}${trackTxt(p)}</div></div>
-        ${me.isAdmin ? `<button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="pickup">회수 요청 메시지</button>` : ""}
+        ${me.isAdmin || l.requester_id === me.id ? `<button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="pickup">회수 요청 메시지</button>` : ""}
         <div class="steps-line">${["cancelled", "scheduled"].includes(p.status) ? pill(PICK_STATUS, p.status) : steps(p, PICK_STEPS, PICK_STATUS)}</div></div>` : ""}
       ${movesOf(l.loan_no).filter(m => m.status !== "cancelled").map((m, i) => `<div class="row"><div class="main"><b>이동 ${i + 1}</b><div class="meta">${esc(m.origin_address)} → <b>${esc(m.address)}</b> · 받는 사람 ${esc(m.recipient)} ${esc(m.phone)}</div><div class="meta">도착 희망 ${fmtD(m.requested_date)}${m.memo ? ` · ${esc(m.memo)}` : ""}${trackTxt(m)}${openMove(m) && (me.isAdmin || m.status === "pending") ? ` · <button class="linkbtn" data-act="moveCancel" data-sid="${m.id}">이동 취소</button>` : ""}</div></div>
-        ${me.isAdmin ? `<button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="move" data-sid="${m.id}">이동 요청 메시지</button>` : ""}
+        ${me.isAdmin || l.requester_id === me.id ? `<button class="btn sm" data-act="mail" data-no="${esc(l.loan_no)}" data-dir="move" data-sid="${m.id}">이동 요청 메시지</button>` : ""}
         <div class="steps-line">${!me.isAdmin && m.status === "in_transit" && l.requester_id === me.id ? `<button class="btn sm pri" data-act="shipArrive" data-sid="${m.id}">받았어요 · 도착 확인</button>` : ""}${steps(m, OUT_STEPS, MOVE_STATUS)}</div></div>`).join("")}
     </div>`;
   };
@@ -3202,8 +3203,8 @@ function mailText(no, dir, sid) {
 }
 function mail(no, dir, sid) {
   const text = mailText(no, dir, sid), sh = (sid && shipments.find(x => x.id === sid)) || shipOf(no, dir);
-  modal(`<h2>${dir === "pickup" ? "회수 요청 메시지" : dir === "move" ? "이동 요청 메시지" : "물류 요청 메시지"}</h2><p class="meta">복사해서 물류사에 메일·문자로 보내 주세요. 보낸 뒤 진행 단계를 ‘요청 완료’로 바꿔 주세요.</p>
-    ${text.includes("(입력 필요)") ? `<div class="notice">‘(입력 필요)’ 항목이 있어요. 장비 관리자가 배차 정보에 채운 뒤 복사해 주세요.${me.isAdmin && sh ? ` <button class="linkbtn" id="mDsp">배차 정보 입력</button>` : ""}</div>` : ""}
+  modal(`<h2>${dir === "pickup" ? "회수 요청 메시지" : dir === "move" ? "이동 요청 메시지" : "물류 요청 메시지"}</h2><p class="meta">복사해서 물류사에 메일·문자로 보내 주세요. ${me.isAdmin ? "보낸 뒤 진행 단계를 ‘요청 완료’로 바꿔 주세요." : "직접 보냈다면 장비 관리자에게 알려 주세요. 진행 단계는 장비 관리자가 바꿔요."}</p>
+    ${text.includes("(입력 필요)") ? `<div class="notice">‘(입력 필요)’ 항목이 있어요. ${me.isAdmin ? "배차 정보에 채운 뒤 복사해 주세요." : "배차 정보는 장비 관리자가 넣어요. 직접 보낼 때는 복사한 뒤 빈 항목을 채워 주세요."}${me.isAdmin && sh ? ` <button class="linkbtn" id="mDsp">배차 정보 입력</button>` : ""}</div>` : ""}
     <pre class="mail" id="mText">${esc(text)}</pre>
     <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="mCopy">메시지 복사</button></div>`, m => {
     $("#mDsp", m)?.addEventListener("click", () => shipEdit(sh.id));
