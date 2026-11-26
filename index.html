@@ -547,6 +547,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v1.008", date: "2026-11-26", items: ["물류·회수·이동 요청 메시지: 배차를 ‘요청’하는 문안이라 아직 정해지지 않은 항목은 ‘(입력 필요)’ 대신 빈칸으로 둠. 배차 정보를 채우라는 안내 상자 삭제. 관리자용 [배차 정보 입력]은 창 아래 왼쪽 버튼으로", "출발·도착 시간이 비어 있으면 도착(회수) 희망일을 ‘(희망)’으로 넣음. 시간을 안 고르면 날짜만 표시"] },
   { v: "v1.007", date: "2026-11-26", items: ["[물류] 물류·회수·이동 요청 메시지를 신청자도 본인 신청 건에서 열고 복사할 수 있게 함. 배차 정보 입력과 진행 단계 변경은 지금처럼 장비 관리자만", "신청자용 안내: ‘(입력 필요)’ 항목은 복사한 뒤 직접 채워서 보내고, 보낸 뒤 장비 관리자에게 알려 주세요"] },
   { v: "v1.006", date: "2026-11-26", db: "033_user_last_seen.sql", items: ["관리자 [사용자] 화면에 ‘최근 접속’ 열 추가: 앱을 열어 둔 마지막 시각(로그인 갱신 기준, 약 1시간 단위)과 ‘오늘·N일 전’. 머리글을 눌러 정렬. 로그인을 유지한 채 쓰는 사람도 실제로 언제 들어왔는지 볼 수 있음"] },
   { v: "v1.005", date: "2026-11-26", items: ["휴대폰 화면: ‘앞 건 반납 전’ 배지가 장비 이름과 겹치던 문제 수정. 배지를 장비 이름 아래 줄로 내림. PC에서도 배지가 길면 줄바꿈"] },
@@ -2146,7 +2147,7 @@ const lastDispatch = exceptId => shipments.filter(x => x.id !== exceptId && DSP(
 // 오전 8시 ~ 오후 7시 50분, 10분 단위 (예: "오후 2시", "오후 2시 10분")
 const SLOTS = ["오전", "오후", ...Array.from({ length: 72 }, (_, i) => { const h = 8 + Math.floor(i / 6), mi = (i % 6) * 10;
   return `${h < 12 ? "오전" : "오후"} ${h > 12 ? h - 12 : h}시${mi ? ` ${mi}분` : ""}`; })];
-const slotTxt = (date, slot, fmt) => date ? `${fmt(date)} ${slot || "(시간 입력 필요)"}` : "";
+const slotTxt = (date, slot, fmt) => date ? `${fmt(date)}${slot ? " " + slot : ""}` : "";
 const shortDate = d => d ? `${d.slice(2, 4)}.${+d.slice(5, 7)}.${+d.slice(8, 10)}` : "";
 const longDate = d => d ? `${d.slice(0, 4)}.${+d.slice(5, 7)}.${+d.slice(8, 10)}` : "";
 function dispatchDefaults(s) {
@@ -3174,7 +3175,10 @@ function inspectBulk(l, group) {
 function mailText(no, dir, sid) {
   const g = loans.filter(l => l.loan_no === no && (dir !== "move" || l.status === "out")).sort(loanEqCmp), l = g[0] || loans.find(x => x.loan_no === no), s = (sid && shipments.find(x => x.id === sid)) || shipOf(no, dir) || {}, d = dispatchDefaults(s);
   if (DSP(s).depart_date !== undefined) { d.depart_time = slotTxt(d.depart_date, d.depart_slot, longDate); d.arrive_time = slotTxt(d.arrive_date, d.arrive_slot, shortDate); }
-  const need = v => (v || "").trim() || "(입력 필요)";
+  // 배차 ‘요청’ 메시지라 물류사가 정할 값(시간·차량 등)은 비워 둔다. 시간은 희망일이 있으면 날짜만 넣는다
+  const need = v => (v || "").trim();
+  if (!d.depart_time && dir !== "outbound" && s.requested_date) d.depart_time = `${longDate(s.requested_date)} (희망)`;
+  if (!d.arrive_time && dir !== "pickup" && s.requested_date) d.arrive_time = `${shortDate(s.requested_date)} (희망)`;
   const items = [...g.map(x => { const e = eqById(x.equipment_id) || {}; return [e.label && `[${e.label}]`, e.name].filter(Boolean).join(" "); }), ...(d.extra_items ? [d.extra_items] : [])].join(", ");
   const ext = l.external_requester && !(s.recipient || "").includes(l.external_requester) ? `(${l.external_requester})` : "";
   const cust = { name: `${s.recipient || ""}${ext}`, phone: s.phone, place: s.address };
@@ -3204,9 +3208,8 @@ function mailText(no, dir, sid) {
 function mail(no, dir, sid) {
   const text = mailText(no, dir, sid), sh = (sid && shipments.find(x => x.id === sid)) || shipOf(no, dir);
   modal(`<h2>${dir === "pickup" ? "회수 요청 메시지" : dir === "move" ? "이동 요청 메시지" : "물류 요청 메시지"}</h2><p class="meta">복사해서 물류사에 메일·문자로 보내 주세요. ${me.isAdmin ? "보낸 뒤 진행 단계를 ‘요청 완료’로 바꿔 주세요." : "직접 보냈다면 장비 관리자에게 알려 주세요. 진행 단계는 장비 관리자가 바꿔요."}</p>
-    ${text.includes("(입력 필요)") ? `<div class="notice">‘(입력 필요)’ 항목이 있어요. ${me.isAdmin ? "배차 정보에 채운 뒤 복사해 주세요." : "배차 정보는 장비 관리자가 넣어요. 직접 보낼 때는 복사한 뒤 빈 항목을 채워 주세요."}${me.isAdmin && sh ? ` <button class="linkbtn" id="mDsp">배차 정보 입력</button>` : ""}</div>` : ""}
     <pre class="mail" id="mText">${esc(text)}</pre>
-    <div class="actions"><button class="btn" data-close-btn>닫기</button><button class="btn pri" id="mCopy">메시지 복사</button></div>`, m => {
+    <div class="actions">${me.isAdmin && sh ? `<button class="btn" id="mDsp" style="margin-right:auto">배차 정보 입력</button>` : ""}<button class="btn" data-close-btn>닫기</button><button class="btn pri" id="mCopy">메시지 복사</button></div>`, m => {
     $("#mDsp", m)?.addEventListener("click", () => shipEdit(sh.id));
     $("#mCopy", m).addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(text); toast("메시지를 복사했어요."); }
