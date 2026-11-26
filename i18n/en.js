@@ -321,6 +321,7 @@ const TPL = {
 };
 
 const RULES = [
+  [/^앞 건 반납 전 · (.+) · (반납 확인 대기|연체 (\d+)일|반납 예정 (.+))$/, m => `Earlier loan not returned · ${m[1]} · ${m[3] ? `${m[3]} days overdue` : m[4] ? `due ${m[4]}` : "awaiting return check"}`],
   [/^반납 날짜가 오늘\((\d+)월 (\d+)일\)이 맞나요\?$/, m => `Is the return date today (${MON[+m[1] - 1]} ${m[2]})?`],
   [/^그 이후 (\d+)건 (펼치기|접기)$/, m => `${m[1]} later ${m[2] === "접기" ? "(hide)" : "(show)"}`],
   [/^반납 예정일\((.+)\)이 지났는데 아직 돌아오지 않았어요\.$/, m => `Its return date (${m[1]}) has passed and it is not back yet.`],
