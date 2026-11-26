@@ -158,7 +158,8 @@ h3{font-size:14px;margin:0;font-weight:600}
 .nt-wrap .empty{padding:4px 0;font-size:12.5px;text-align:left}
 .nt-wrap .linkbtn{font-size:12.5px}
 .nt-full{white-space:pre-wrap;line-height:1.7;margin:8px 0 4px;word-break:break-word}
-.busy-pill{border:0;cursor:pointer;font:inherit;font-size:12px;white-space:nowrap}.busy-pill:hover{text-decoration:underline}
+.busy-pill{border:0;cursor:pointer;font:inherit;font-size:12px;white-space:normal;text-align:left;line-height:1.4;max-width:60%}.busy-pill:hover{text-decoration:underline}
+@media (max-width:640px){.hg-item:has(.busy-pill){flex-wrap:wrap}.hg-item:has(.busy-pill) .main{flex:1 1 calc(100% - 90px)}.hg-item .busy-pill{order:3;max-width:100%;margin-top:2px}}
 .mine-act{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 @media (max-width:640px){.hg-h:has(.mine-act){flex-wrap:wrap}.hg-h .mine-act{width:100%;justify-content:flex-start;margin-top:6px}}
 .lg-chips{display:flex;flex-direction:column;gap:8px}
@@ -545,6 +546,7 @@ const SUPABASE_URL = "https://srlbifddjrqjdzqtxesh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_W5dt6MuskUKETmLtqdxMUg_yYuAnIgy";
 /* 버전 기록: 고칠 때마다 맨 위에 한 줄 추가한다. 화면의 버전 번호는 첫 항목에서 자동으로 읽는다. */
 const CHANGELOG = [
+  { v: "v1.005", date: "2026-11-26", items: ["휴대폰 화면: ‘앞 건 반납 전’ 배지가 장비 이름과 겹치던 문제 수정. 배지를 장비 이름 아래 줄로 내림. PC에서도 배지가 길면 줄바꿈"] },
   { v: "v1.004", date: "2026-11-26", items: ["‘앞 건 반납 전’ 배지에 앞 신청자와 상태를 함께 표시: 예) 앞 건 반납 전 · [B] Howard · 반납 예정 11/24 / 연체 2일 / 반납 확인 대기. 배지를 누르면 그 앞 신청의 세부 정보가 열림"] },
   { v: "v1.003", date: "2026-11-24", items: ["현황 화면: 공지사항을 ‘오늘 현황’ 제목 위로 옮김", "공지사항 영역을 테두리 없이 배경 위 글자로 바꾸고 글자 크기를 줄임. 내용 미리 보기는 1줄"] },
   { v: "v1.002", date: "2026-11-24", db: "032_notices.sql", items: ["현황(메인) 화면 위쪽에 공지사항 추가: 최근·중요 공지 3건을 보여 주고 더 있으면 [더 보기]. 공지를 누르면 전체 내용(주소는 눌러서 열림)", "장비 관리자: [공지 쓰기]로 제목·내용·게시 기간(시작일, 종료일)·중요(빨간 배지)·맨 위 고정을 정해 올리고, 고치고, 지울 수 있음. 시작일을 뒤로 잡으면 예약 게시. [지난·예약 공지]에서 모두 확인", "게시 2일 안의 공지에 NEW 표시"] },
